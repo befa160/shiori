@@ -31,8 +31,13 @@ macro_rules! now {
     };
 }
 
+mod browse;
 mod library;
 
+pub use browse::{
+    LibrarySummary, PageInfo, SeriesDetail, SeriesSummary, SeriesVolume, VolumeDetail,
+    VolumeLocation,
+};
 pub use library::{Library, LibraryError};
 
 pub struct Db {

@@ -28,7 +28,7 @@ pub enum LibraryError {
     EmptyName,
     #[error("une bibliothèque s'appelle déjà « {0} »")]
     NameTaken(String),
-    #[error("{0} n'est pas un dossier accessible")]
+    #[error("{0} n'est pas un chemin absolu vers un dossier accessible")]
     NotADirectory(String),
     #[error("{0} chevauche la bibliothèque « {1} »")]
     Overlaps(String, String),
@@ -58,7 +58,8 @@ impl Db {
             return Err(LibraryError::EmptyName);
         }
         let key = root_key(root);
-        if !std::fs::metadata(root).is_ok_and(|m| m.is_dir()) {
+        // Un chemin relatif dépendrait du dossier depuis lequel le serveur a été lancé.
+        if !root.is_absolute() || !std::fs::metadata(root).is_ok_and(|m| m.is_dir()) {
             return Err(LibraryError::NotADirectory(key));
         }
         for other in self.libraries().await? {
