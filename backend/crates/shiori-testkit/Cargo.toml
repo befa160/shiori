@@ -1,0 +1,15 @@
+[package]
+name = "shiori-testkit"
+description = "Fixtures de test de Shiori : CBZ sains et cassés générés par du code"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+image.workspace = true
+zip.workspace = true

@@ -12,8 +12,13 @@ workspace = true
 [dependencies]
 alphanumeric-sort.workspace = true
 blake3.workspace = true
+image.workspace = true
+imagesize.workspace = true
+serde.workspace = true
 thiserror.workspace = true
 zip.workspace = true
 
 [dev-dependencies]
+serde_json.workspace = true
+shiori-testkit.workspace = true
 tempfile.workspace = true

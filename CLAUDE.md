@@ -17,7 +17,7 @@ Backend (depuis `backend/`) :
 - Tests : `cargo test --workspace`
 - Lint : `cargo clippy --workspace --all-targets -- -D warnings`
 - Format : `cargo fmt --all` (vérification : `cargo fmt --all --check`)
-- Couverture (nightly, la couverture des branches y est encore instable) : `cargo +nightly-2026-11-10 llvm-cov --workspace --branch --summary-only --ignore-filename-regex '(/tests\.rs|/tests/)'`
+- Couverture (nightly, la couverture des branches y est encore instable) : `cargo +nightly-2026-11-10 llvm-cov --workspace --branch --summary-only --ignore-filename-regex '(/tests\.rs|/tests/|shiori-testkit/)'`
   (une fois : `rustup toolchain install nightly-2026-11-10 --profile minimal --component llvm-tools`, même date que `NIGHTLY` dans la CI et `cargo install cargo-llvm-cov --locked`)
 
 Front (depuis `web/`) :
@@ -39,7 +39,7 @@ Avant chaque commit : clippy sans avertissement, `cargo fmt` propre, tests verts
 ## Couverture de tests (obligatoire)
 
 - **Minimum 80 % des lignes ET 80 % des branches**, mesuré sur le code de production. Le job CI `coverage` fait échouer la PR en dessous.
-- Les tests unitaires vivent dans un fichier voisin (`src/foo.rs` déclare `#[cfg(test)] mod tests;` → `src/foo/tests.rs`) et les tests d'intégration dans `tests/` : ces fichiers sont exclus de la mesure, qui ne porte que sur le code testé.
+- Les tests unitaires vivent dans un fichier voisin (`src/foo.rs` déclare `#[cfg(test)] mod tests;` → `src/foo/tests.rs`) les tests d'intégration dans `tests/` et les fixtures dans `shiori-testkit` : tout ce code de test est exclu de la mesure, qui ne porte que sur le code testé.
 - Une branche difficile à atteindre se teste quand même (archive patchée, erreur construite à la main) ; on ne baisse pas le seuil et on n'exclut pas de code pour passer.
 - Front : mêmes seuils avec Vitest (coverage v8, `thresholds.lines` et `thresholds.branches` à 80) dès l'arrivée du premier code front applicatif (phase 3).
 

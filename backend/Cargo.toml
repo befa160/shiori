@@ -16,7 +16,17 @@ all = { level = "warn", priority = -1 }
 
 [workspace.dependencies]
 alphanumeric-sort = "1.5"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
+imagesize = "0.15"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 blake3 = { version = "1.8", default-features = false, features = ["std", "pure"] }
 thiserror = "2.0"
 zip = { version = "9.5", default-features = false, features = ["deflate-flate2-zlib-rs", "deflate64", "lzma", "xz", "ppmd"] }
 tempfile = "3.27"
+shiori-testkit = { path = "crates/shiori-testkit" }
+
+# Les fixtures encodent des centaines d'images : on optimise les dépendances même en
+# debug, sinon les tests passent leur temps dans l'encodeur PNG.
+[profile.dev.package."*"]
+opt-level = 3

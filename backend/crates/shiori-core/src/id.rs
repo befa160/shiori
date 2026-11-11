@@ -103,6 +103,12 @@ macro_rules! hex_id {
             }
         }
 
+        impl serde::Serialize for $ty {
+            fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+                s.collect_str(self)
+            }
+        }
+
         impl FromStr for $ty {
             type Err = ParseIdError;
 
