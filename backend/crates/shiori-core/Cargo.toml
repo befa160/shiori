@@ -14,6 +14,7 @@ alphanumeric-sort.workspace = true
 blake3.workspace = true
 image.workspace = true
 imagesize.workspace = true
+regex.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 zip.workspace = true
