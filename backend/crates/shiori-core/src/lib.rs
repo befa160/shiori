@@ -11,6 +11,7 @@ pub mod order;
 pub use archive::{Archive, ArchiveError, CbzArchive, Duplicate, Entry, EntryKind, MAX_ENTRY_SIZE};
 pub use id::{PageId, ParseIdError, VolumeId};
 pub use integrity::{
-    FileReport, Issue, IssueCode, Page, PageStatus, ScanOptions, Severity, Status, scan_file,
+    FileReport, Issue, IssueCode, Page, PageStatus, SCANNER_VERSION, ScanOptions, Severity, Status,
+    scan_file,
 };
 pub use order::compare_entry_names;
