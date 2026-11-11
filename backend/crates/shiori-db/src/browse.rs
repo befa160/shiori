@@ -3,16 +3,17 @@
 
 use std::cmp::Ordering;
 use std::collections::HashSet;
+use std::path::PathBuf;
 
 use serde::Serialize;
 use shiori_core::{
-    Issue, IssueCode, NameKind, PageStatus, ParsedName, Status, VolumeId, compare_entry_names,
-    compare_in_series,
+    Issue, IssueCode, NameKind, PageId, PageStatus, ParsedName, Status, VolumeId,
+    compare_entry_names, compare_in_series,
 };
 use sqlx::Row;
 use sqlx::sqlite::SqliteRow;
 
-use crate::{Db, Error, from_db};
+use crate::{Db, Error, from_db, stamp};
 
 #[derive(Debug, Serialize)]
 pub struct LibrarySummary {
@@ -81,6 +82,28 @@ pub struct PageInfo {
     pub height: Option<u32>,
     pub media_type: Option<String>,
     pub status: PageStatus,
+}
+
+/// Où lire une page, et de quoi vérifier qu'il s'agit bien d'elle.
+#[derive(Debug)]
+pub struct PageSource {
+    pub status: PageStatus,
+    pub media_type: Option<String>,
+    pub archive_index: usize,
+    pub entry_name_raw: Vec<u8>,
+    pub crc32: u32,
+    pub file: PageFile,
+}
+
+/// État des fichiers connus du tome d'une page.
+#[derive(Debug, PartialEq, Eq)]
+pub enum PageFile {
+    /// Un emplacement a encore la taille et la date (ns) du scan.
+    Ready(PathBuf, (i64, i64)),
+    /// Les fichiers existent mais ont changé depuis le scan : il faut rescanner.
+    Changed,
+    /// Aucun emplacement connu n'existe plus.
+    Missing,
 }
 
 /// Emplacements rattachés à des séries, avec leur tome et sa couverture.
@@ -291,6 +314,46 @@ impl Db {
             scanned_at: v.get("scanned_at"),
             locations,
             issues,
+        }))
+    }
+
+    /// Page et fichier où la lire ; `None` si l'ID est inconnu.
+    pub async fn page_source(&self, id: &PageId) -> Result<Option<PageSource>, Error> {
+        let Some(page) = sqlx::query(
+            "SELECT volume_id, status, media_type, archive_index, entry_name_raw, crc32
+             FROM pages WHERE id = ?",
+        )
+        .bind(id.to_string())
+        .fetch_optional(&self.pool)
+        .await?
+        else {
+            return Ok(None);
+        };
+        let locations = sqlx::query(
+            "SELECT path, size, mtime_ns FROM file_locations WHERE volume_id = ? ORDER BY path",
+        )
+        .bind(page.get::<&str, _>("volume_id"))
+        .fetch_all(&self.pool)
+        .await?;
+        let mut file = PageFile::Missing;
+        for l in &locations {
+            let path = PathBuf::from(l.get::<String, _>("path"));
+            match stamp(&path) {
+                Some(found) if found == (l.get("size"), l.get("mtime_ns")) => {
+                    file = PageFile::Ready(path, found);
+                    break;
+                }
+                Some(_) => file = PageFile::Changed,
+                None => {}
+            }
+        }
+        Ok(Some(PageSource {
+            status: from_db(page.get::<&str, _>("status"))?,
+            media_type: page.get("media_type"),
+            archive_index: page.get::<i64, _>("archive_index") as usize,
+            entry_name_raw: page.get("entry_name_raw"),
+            crc32: page.get("crc32"),
+            file,
         }))
     }
 

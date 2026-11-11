@@ -26,6 +26,7 @@ tracing-subscriber.workspace = true
 
 [dev-dependencies]
 http-body-util.workspace = true
+image.workspace = true
 tokio = { workspace = true, features = ["macros"] }
 tower.workspace = true
 shiori-testkit.workspace = true
