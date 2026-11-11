@@ -1433,6 +1433,7 @@ dependencies = [
  "shiori-testkit",
  "sqlx",
  "tempfile",
+ "thiserror",
  "tokio",
 ]
 

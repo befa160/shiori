@@ -11,7 +11,7 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 | 3 | Lecteur web (sens de lecture, webtoon, doubles pages) | ⏳ |
 | 4 | Bibliothèque façon Plex + statuts/filtres + menu d'administration (scans, journaux) + DESIGN_SYSTEM.md | ⏳ |
 | 5 | Métadonnées web + édition manuelle | ⏳ |
-| 6 | Distribution : image Docker, PWA finalisée, binaires Linux/Windows en release, Dependabot | ⏳ |
+| 6 | Distribution : image Docker, PWA finalisée, binaires Linux/Windows en release, Dependabot, documentation (technique, installation, fonctionnelle) | ⏳ |
 
 ## Méthode de travail
 
@@ -458,7 +458,12 @@ Arrêt propre sur Ctrl-C (`with_graceful_shutdown`) : un scan en cours est annul
   - **Essai sur la vraie bibliothèque** (450 CBZ/CBR d'un dossier de téléchargements, 2026-11-11) : les dossiers ont des noms bruités (`Birdmen (01-16) (Tanabe) (2020) [Digital-2100] (TONER-PapriKa+)`). D'où la séparation entre `folder` (premier dossier tel quel, clé de regroupement, Q9) et `series` (nom affiché : ce qui précède le numéro dans le nom du fichier, à défaut le dossier nettoyé sans sa plage de tomes, l'écriture du dossier gagnant à la casse près). Résultat : un seul nom lisible par dossier sur les 34 séries (`Vinland Saga`, `Birdmen`, `World's End Harem`…). Un tag qui ne contient qu'un numéro (`(T39)`) est gardé.
   - Constaté pour le lot 2.2 : environ 60 fichiers sont posés à la racine (`Wind Breaker`, `Berserk`…), et `Berserk` existe à la fois en dossier et à la racine. Proposition : regrouper les fichiers de la racine par nom affiché, et rattacher un fichier de la racine à la série-dossier qui porte le même nom affiché. Nom stocké d'une série = `series` de son premier fichier dans l'ordre `compare_in_series` (déterministe d'un scan à l'autre).
   - 110 cas dans la table, dont 18 noms réels ; `PARSER_VERSION` = 1 figée par un instantané des résultats de la table (le test casse si un résultat change sans incrément).
-- [ ] **2.2** `feat/db-libraries` : migration `0002`, API `Db` des bibliothèques, séries et emplacements analysés ; rattachement au scan ; suppression des emplacements disparus.
+- [x] **2.2** `feat/db-libraries` : migration `0002`, API `Db` des bibliothèques, séries et emplacements analysés ; rattachement au scan ; suppression des emplacements disparus.
+  - Écarts au plan, suite à l'essai sur la vraie bibliothèque (lot 2.1) : `series` a une colonne `folder` (clé de regroupement : index unique `(library_id, folder)`, et `(library_id, name)` pour les fichiers de la racine) au lieu de `UNIQUE (library_id, name)` ; `sort_name` et `file_locations.parser_version` retirés : le job rattachera chaque fichier à chaque passe (analyse du nom gratuite), donc aucune version à suivre, et le tri des séries se fera à l'affichage.
+  - `Db` : `create_library` (nom non vide et unique, racine = dossier existant, racines qui se chevauchent refusées : un fichier n'appartient qu'à une bibliothèque), `libraries`, `delete_library` (emplacements et séries supprimés, tomes et pages conservés), `attach` (emplacement → série, type, numéro), `remove_missing` (emplacements que la passe n'a pas vus, limités à un dossier ; colonne `file_locations.last_seen_run` : un numéro de passe et non un horodatage, deux passes pouvant tomber dans la même milliseconde, défaut trouvé par la CI), `refresh_series` (nom = premier fichier dans l'ordre de la série, fichiers de la racine fusionnés dans la série-dossier de même nom, séries vides supprimées).
+  - Un fichier illisible a un tome en erreur : il est rattaché à sa série pour que l'erreur se voie (principe 4).
+  - Transactions `BEGIN IMMEDIATE` dans `attach` et `refresh_series` (review Ponytail) : une transaction SQLite qui lit avant d'écrire échoue aussitôt (« database is locked ») si un autre fichier écrit en parallèle ; test de 16 rattachements simultanés, qui échoue sans le correctif.
+  - Le branchement dans un parcours de bibliothèque (parcours, `scan`, `attach`, `remove_missing`, `refresh_series`) arrive avec le job de scan (lot 2.6) ; la CLI `shiori scan` reste hors bibliothèque.
 - [ ] **2.3** `feat/server-skeleton` : cible lib du crate `shiori`, commande `serve`, état, erreurs JSON, `TraceLayer`, arrêt propre ; routes `health`, bibliothèques, séries, tomes, liste des pages.
 - [ ] **2.4** `feat/server-pages` : page originale par `archive_index` avec vérifications, en-têtes immuables, codes d'erreur ; **test HTTP de l'invariant d'ordre de lecture** ; mesure d'ouverture de l'annuaire sur le webtoon réel.
 - [ ] **2.5** `feat/image-resize` : `render.rs` + `cache.rs`, largeurs fixes, AVIF + JPEG, sémaphore, plafond de pixels, éviction ; mesures sur le webtoon réel.
@@ -484,6 +489,14 @@ Objectif : piloter les scans depuis l'application et consulter leurs journaux, s
 
 - **Phase 2 (API, lots 2.6 et 2.7)** : lancer un scan (une bibliothèque, un dossier, un tome ; options `deep` et `rehash`), voir le scan en cours (progression, fichier courant), l'annuler ; historique des passes (`scan_runs` : début, fin, options, durée, compteurs ok / avertissement / erreur / inchangés) ; journal détaillé d'une passe (fichiers scannés, problèmes, erreurs fatales). À prévoir : une table de journal par passe (horodatage, niveau, fichier, message) et une durée de conservation configurable.
 - **Phase 4 (UI)** : page « Administration » → « Scans » : bouton « Scanner maintenant », passe en cours avec progression, historique filtrable, détail d'une passe avec ses journaux et un lien vers chaque tome en erreur. Accès réservé aux administrateurs quand les rôles arriveront (phase « Plus tard »).
+
+### Documentation (demandée le 2026-11-11)
+
+À produire en fin de projet (phase 6), à partir de CLAUDE.md, ROADMAP.md, `docs/` et du graphe Graphify (`graphify query`, `explain`, `path`, wiki) :
+
+- **Documentation technique** : architecture (crates, flux scan → base → API → lecteur), schéma SQLite, routes API, identités et invariants, choix de dépendances et leurs raisons.
+- **Documentation d'installation**, expliquée simplement : Docker, binaire Linux/Windows, premier lancement, ajout d'une bibliothèque, mise à jour, sauvegarde de la base.
+- **Documentation fonctionnelle** : bibliothèques et séries, rangement conseillé des fichiers, lecture, scans et leurs journaux, signification de chaque code de diagnostic.
 
 ### Invariant de lecture à vérifier en phase 2
 

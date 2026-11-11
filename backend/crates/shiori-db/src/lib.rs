@@ -31,6 +31,10 @@ macro_rules! now {
     };
 }
 
+mod library;
+
+pub use library::{Library, LibraryError};
+
 pub struct Db {
     pool: SqlitePool,
 }
@@ -149,11 +153,15 @@ impl Db {
             && let Some(report) = self.load_report(&volume, path).await?
         {
             let sql = concat!(
-                "UPDATE file_locations SET last_seen_at = ",
+                "UPDATE file_locations SET last_seen_run = ?, last_seen_at = ",
                 now!(),
                 " WHERE path = ?"
             );
-            sqlx::query(sql).bind(&key).execute(&self.pool).await?;
+            sqlx::query(sql)
+                .bind(run)
+                .bind(&key)
+                .execute(&self.pool)
+                .await?;
             return Ok(Scanned {
                 report,
                 skipped: true,
@@ -213,19 +221,21 @@ impl Db {
             (Some(volume), Some((size, mtime))) => {
                 save_volume(&mut tx, volume, report).await?;
                 let sql = concat!(
-                    "INSERT INTO file_locations (path, volume_id, size, mtime_ns, last_seen_at)
-                     VALUES (?, ?, ?, ?, ",
+                    "INSERT INTO file_locations
+                       (path, volume_id, size, mtime_ns, last_seen_run, last_seen_at)
+                     VALUES (?, ?, ?, ?, ?, ",
                     now!(),
                     ")
                      ON CONFLICT (path) DO UPDATE SET volume_id = excluded.volume_id,
                        size = excluded.size, mtime_ns = excluded.mtime_ns,
-                       last_seen_at = excluded.last_seen_at"
+                       last_seen_run = excluded.last_seen_run, last_seen_at = excluded.last_seen_at"
                 );
                 sqlx::query(sql)
                     .bind(key)
                     .bind(volume)
                     .bind(size)
                     .bind(mtime)
+                    .bind(run)
                     .execute(&mut *tx)
                     .await?;
                 sqlx::query("DELETE FROM scan_issues WHERE volume_id = ?")
