@@ -7,7 +7,7 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 |---|---|---|
 | 0 | Outillage (Rust, structure, Ponytail, Graphify, UI/UX Pro Max, MCP shadcn + Playwright) | ✅ |
 | 1 | CLI de scan d'intégrité + schéma SQLite + CI linux/windows, puis graphe Graphify | ✅ |
-| 2 | API axum + streaming/redimensionnement des images + parseur de noms + job de scan + API d'administration des scans | ⏳ |
+| 2 | API axum + streaming/redimensionnement des images + parseur de noms + job de scan + API d'administration des scans | ❓ plan en validation |
 | 3 | Lecteur web (sens de lecture, webtoon, doubles pages) | ⏳ |
 | 4 | Bibliothèque façon Plex + statuts/filtres + menu d'administration (scans, journaux) + DESIGN_SYSTEM.md | ⏳ |
 | 5 | Métadonnées web + édition manuelle | ⏳ |
@@ -249,11 +249,235 @@ Générées par du code au moment des tests, sans binaire versionné : détermin
 
 ### Questions (résolues le 2026-11-11)
 
-- **Q1 CBR** ✅ : hors phase 1. Avant la phase 2, une note comparera la conversion CBR→CBZ au scan et le cache d'extraction, ainsi que les licences (unrar : licence propriétaire restrictive ; libarchive : BSD mais C, donc derrière une feature).
+- **Q1 CBR** ✅ : hors phase 1. Avant la phase 2, une note comparera la conversion CBR→CBZ au scan et le cache d'extraction, ainsi que les licences (unrar : licence propriétaire restrictive ; libarchive : BSD mais C, donc derrière une feature). Note rédigée : [docs/cbr.md](docs/cbr.md), questions Q1a à Q1d en attente.
 - **Q2 AVIF en `--deep`** ✅ (proposition retenue) : il n'existe pas de décodeur AVIF pur Rust mature (`image` passe par dav1d, en C). Proposition : en phase 1, AVIF validé par l'en-tête seulement, et décodage complet derrière une feature native optionnelle plus tard. L'encodage AVIF (ravif, pur Rust) et WebP avec perte (libwebp, en C) seront à trancher en phase 2.
 - **Q3 GIF/BMP/TIFF** ✅ : avertissement `unsupported_image`, entrée ignorée comme page.
 - **Q4 Base par défaut** ✅ : la CLI écrit dans `<dossier de données>/shiori.db` ; `--db` surcharge, `--no-db` produit seulement le rapport.
 - **Q5 Doublons identiques** ✅ : avertissement, une seule page conservée ; doublons au contenu différent = erreur.
+
+## Phase 2 : serveur, images, bibliothèques et scans (plan proposé le 2026-11-11, ❓ en attente de validation)
+
+### Objectif
+
+`shiori serve` démarre un serveur HTTP qui expose les bibliothèques, séries, tomes et pages établis par le scan, sert chaque page par son ID (originale ou redimensionnée, URL immuable) et pilote les scans (lancer, suivre, annuler, historique, journaux).
+C'est l'API dont le lecteur (phase 3) et la bibliothèque (phase 4) auront besoin ; aucune interface web dans cette phase.
+
+Hors périmètre : front embarqué (`rust-embed`, phase 3), authentification et rôles (« Plus tard »), progression de lecture (phase 3), métadonnées web (phase 5), scans planifiés ou surveillance du disque (plus tard), push de la progression par SSE/WebSocket (le front de la phase 4 interrogera l'API), CBR (lot 2.8, selon [la note CBR](docs/cbr.md)).
+
+### Découpage du workspace
+
+Pas de nouveau crate : le crate `shiori` gagne une cible lib (`src/lib.rs`, le `main.rs` ne fait qu'appeler `run`), ce qui permet les tests HTTP dans `tests/` et laisse le parcours de dossiers de `scan.rs` réutilisable par le job.
+
+```
+shiori-core   + name.rs        parseur de noms de tomes (fonction pure)
+              + archive/rar.rs (lot 2.8, feature `cbr`)
+shiori-db     + migrations 0002, 0003 ; bibliothèques, séries, emplacements, passes de scan, journaux
+shiori        + lib : server/ (routes axum, erreurs, état), render.rs (redimensionnement), cache.rs (cache disque), job.rs (job de scan)
+              + commande `serve`
+```
+
+### Crates ajoutées
+
+| Crate | Version | Usage | Pure Rust |
+|---|---|---|---|
+| `axum` | 0.8.9 | routes HTTP (features `http1`, `json`, `query`, `tokio`, `tracing`) | oui |
+| `tower-http` | 0.7.1 | `TraceLayer` (journal des requêtes) | oui |
+| `tower` / `http-body-util` | 0.5.3 / 0.1.5 | tests : `ServiceExt::oneshot` sur le routeur, sans réseau (dev-dependencies) | oui |
+| `image` (existante) | 0.25 | décodage, `imageops::resize` (Lanczos3), encodage JPEG | oui |
+| `ravif` | 0.13 | encodage AVIF, sans la feature `asm` (qui exige `nasm`) — **selon Q6** | oui |
+| `webp` | 0.3.1 | encodage WebP avec perte via libwebp, derrière une feature `webp-lossy` — **selon Q6** | **non** (libwebp, C) |
+| `rars` | 0.12.4 | lecture RAR, `default-features = false`, feature `cbr` — **selon Q1** | oui |
+
+Pas de `tokio-util` (un `AtomicBool` suffit pour l'annulation), pas de `mime_guess` (le type réel est en base), pas de `fast_image_resize` tant que la mesure sur le webtoon réel ne montre pas que `imageops` est trop lent.
+
+### Migrations SQLite
+
+**`0002_libraries.sql`**
+
+```sql
+CREATE TABLE libraries (
+  id         INTEGER PRIMARY KEY,
+  name       TEXT NOT NULL UNIQUE,
+  root       TEXT NOT NULL UNIQUE,        -- chemin absolu canonique, séparateurs '/'
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE series (
+  id         INTEGER PRIMARY KEY,
+  library_id INTEGER NOT NULL REFERENCES libraries(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,               -- nom affiché (dossier ou parseur, Q9)
+  sort_name  TEXT NOT NULL,               -- clé de tri (minuscules, articles retirés plus tard)
+  UNIQUE (library_id, name)
+);
+
+-- Ce qui dépend du chemin vit sur l'emplacement, pas sur le tome (un tome peut être vu à plusieurs endroits).
+ALTER TABLE file_locations ADD COLUMN library_id INTEGER REFERENCES libraries(id) ON DELETE CASCADE;
+ALTER TABLE file_locations ADD COLUMN series_id  INTEGER REFERENCES series(id) ON DELETE SET NULL;
+ALTER TABLE file_locations ADD COLUMN kind       TEXT CHECK (kind IN ('volume','chapter','special','unknown'));
+ALTER TABLE file_locations ADD COLUMN number     REAL;   -- 1, 1.5 ; NULL si absent
+ALTER TABLE file_locations ADD COLUMN number_end REAL;   -- « Tomes 1-3 »
+ALTER TABLE file_locations ADD COLUMN parser_version INTEGER;  -- un changement de règles relance l'analyse sans rehash
+CREATE INDEX file_locations_series ON file_locations(series_id);
+```
+
+- `library_id` NULL = fichier scanné par la CLI hors de toute bibliothèque (comportement actuel conservé).
+- Suppression d'une bibliothèque : ses emplacements et séries disparaissent, **les tomes et pages restent** (progression future préservée, principe 8) et réapparaissent si le fichier est rescanné ailleurs.
+- Identité des séries : (bibliothèque, nom). Renommer le dossier d'une série crée une nouvelle série ; acceptable tant qu'il n'y a pas de métadonnées éditées (phase 5 à revoir).
+
+**`0003_scan_jobs.sql`**
+
+```sql
+ALTER TABLE scan_runs ADD COLUMN library_id INTEGER REFERENCES libraries(id) ON DELETE SET NULL;
+ALTER TABLE scan_runs ADD COLUMN origin     TEXT NOT NULL DEFAULT 'cli' CHECK (origin IN ('cli','api'));
+ALTER TABLE scan_runs ADD COLUMN status     TEXT NOT NULL DEFAULT 'completed'
+  CHECK (status IN ('running','completed','cancelled','failed','interrupted'));
+ALTER TABLE scan_runs ADD COLUMN files_total     INTEGER;
+ALTER TABLE scan_runs ADD COLUMN files_ok        INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE scan_runs ADD COLUMN files_warning   INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE scan_runs ADD COLUMN files_error     INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE scan_runs ADD COLUMN files_unchanged INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE scan_runs ADD COLUMN files_removed   INTEGER NOT NULL DEFAULT 0;  -- emplacements disparus
+ALTER TABLE scan_runs ADD COLUMN error           TEXT;                        -- erreur fatale
+UPDATE scan_runs SET status = 'interrupted' WHERE finished_at IS NULL;      -- passes de phase 1 coupées
+
+CREATE TABLE scan_run_logs (
+  id          INTEGER PRIMARY KEY,
+  scan_run_id INTEGER NOT NULL REFERENCES scan_runs(id) ON DELETE CASCADE,
+  at          TEXT NOT NULL,
+  level       TEXT NOT NULL CHECK (level IN ('info','warning','error')),
+  path        TEXT,
+  code        TEXT,                        -- code de diagnostic quand il y en a un
+  message     TEXT NOT NULL
+);
+CREATE INDEX scan_run_logs_run ON scan_run_logs(scan_run_id, id);
+```
+
+- `scan_issues` reste l'état courant par tome ; `scan_run_logs` est l'historique d'une passe (fichier scanné, inchangé, disparu, chaque diagnostic, erreur fatale).
+- Le code écrit toujours `status` explicitement (le défaut ne sert qu'aux lignes existantes).
+- Au démarrage du serveur, une passe restée `running` (arrêt brutal) passe à `interrupted`.
+- Conservation : passes et journaux de plus de `--scan-log-days` jours (défaut 30) supprimés au démarrage et à la fin de chaque passe.
+
+### Parseur de noms de tomes (`shiori-core::name`)
+
+Fonction pure `parse(relative_path) -> ParsedName { series, kind, number, number_end }`, sans I/O, testée par une table de cas (fichier de cas dans `name/tests.rs`).
+
+- Série : premier dossier sous la racine de la bibliothèque (`Bibliothèque/One Piece/One Piece T01.cbz` → `One Piece`) ; fichier posé à la racine → partie du nom avant le marqueur de numéro (Q9).
+- Marqueurs reconnus, insensibles à la casse, avec ou sans point ni espace : FR `Tome`, `T`, `Vol`, `Volume`, `Chapitre`, `Ch`, `HS`/`Hors-série`, `Intégrale` ; EN `Volume`, `Vol`, `v`, `Chapter`, `Ch`, `c`, `#`, `Special`, `Extra`, `Omake`, `One-shot` ; JA `第N巻` (tome), `第N話` (chapitre).
+- Numéros : entiers paddés ou non, décimaux (`1.5`, `1,5`), intervalles (`1-3`, `01 à 03`) ; nombre nu final en dernier recours (`Blame 03.cbz` → tome 3). Les tags entre crochets ou parenthèses (`[Team]`, `(2019)`, `(Digital)`) sont ignorés ; une année seule n'est jamais un numéro.
+- Ordre dans une série : tomes, puis chapitres hors tome, puis spéciaux, puis `unknown` ; à l'intérieur, `number`, puis `number_end`, puis tri naturel du nom de fichier (ordre total, comme les pages).
+- `PARSER_VERSION` figée par un test ; la changer relance l'analyse des emplacements au scan suivant, sans rehash.
+
+### Job de scan (`shiori::job`)
+
+- Un seul scan à la fois pour tout le serveur ; une demande pendant un scan renvoie `409 scan_already_running` (pas de file d'attente : à ajouter si le besoin apparaît).
+- Moteur : le même que la CLI (`Db::scan` fichier par fichier, parallélisme `--jobs`), dans une tâche tokio. Cible : une bibliothèque, un dossier ou un fichier **situés sous la racine d'une bibliothèque** (refus sinon : l'API ne doit pas permettre de lire n'importe quel dossier du serveur).
+- Étapes : parcours (`files_total` connu avant de scanner), scan de chaque fichier, analyse du nom (parseur) et rattachement à la série, puis, pour une bibliothèque ou un dossier complet, suppression des emplacements non revus (`files_removed`) et des séries vides.
+- Progression en mémoire (`RwLock` : passe, fichiers faits / total, fichier courant, compteurs, début) ; compteurs écrits en base à la fin.
+- Annulation : drapeau vérifié entre deux fichiers ; le fichier en cours se termine (sa transaction reste cohérente), la passe finit `cancelled`, rien n'est supprimé pour les fichiers non visités.
+- La CLI `shiori scan` écrit aussi ses passes (`origin = 'cli'`, compteurs, journal). SQLite est déjà en WAL avec `busy_timeout` : CLI et serveur peuvent tourner en même temps.
+
+### Images (principes 2 et 7)
+
+- **Originale** : `GET /api/pages/{page_id}/image` lit l'entrée par son `archive_index` et la renvoie telle quelle (`Content-Type` = type réel en base). Avant de servir, le serveur vérifie que l'entrée à cet index porte bien le nom brut et le CRC enregistrés ; le CRC est revérifié à la lecture.
+- **Redimensionnée** : `GET /api/pages/{page_id}/image?w=<largeur>&f=<format>`.
+  - Largeurs autorisées seulement : `160, 320, 480, 640, 800, 1080, 1280, 1600, 2048` (`400 invalid_width` sinon) ; le client choisit la largeur immédiatement supérieure à `largeur CSS × devicePixelRatio`. Une liste fixe borne le cache et empêche de faire calculer des milliers de variantes.
+  - Si `w` ≥ largeur d'origine, l'originale est servie sans réencodage (aucune perte, aucun calcul). Le webtoon réel (800×1280) est dans ce cas sur la plupart des écrans.
+  - Le format fait partie de l'URL, jamais de négociation par `Accept` : une URL = un seul contenu, pas de `Vary`.
+  - Formats selon Q6. Limite à connaître : WebP ne dépasse pas 16 383 px de côté ; une bande de webtoon plus haute est servie en AVIF ou JPEG.
+  - Sources AVIF : pas de décodeur pur Rust, donc servies originales, sans redimensionnement (décodage derrière une feature native plus tard, cf. Q2).
+- **En-têtes** : `Cache-Control: public, max-age=31536000, immutable`, `ETag` fort (`"<page_id>-<w>-<f>-<RENDER_VERSION>"`), `304` sur `If-None-Match`. Un fichier modifié donne de nouveaux `page_id`, donc de nouvelles URL : rien à invalider.
+- **Cache disque** : `<cache>/pages/<2 premiers caractères>/<page_id>-w<w>.<f>`, dossier de cache de l'OS (`directories`), surchargeable par `SHIORI_CACHE_DIR` / `--cache-dir`. Écriture dans un fichier temporaire puis renommage atomique (deux requêtes simultanées calculent deux fois mais n'écrivent jamais un fichier partiel). Taille maximale `--cache-max` (défaut 2 Gio, Q7) ; au-delà, suppression des fichiers les plus anciens (date de modification, rafraîchie à chaque lecture) par une tâche de fond.
+- **Charge** : décodage et encodage dans `spawn_blocking`, limités par un sémaphore (nombre de cœurs) ; plafond de pixels décodés (garde-fou contre une image piégée) ; `catch_unwind` autour des décodeurs, comme au scan.
+- **Erreurs explicites (principe 4)**, en JSON `{ "code", "message" }` :
+
+| Code | HTTP | Cas |
+|---|---|---|
+| `page_not_found` | 404 | ID inconnu |
+| `page_broken` | 422 | page marquée `broken` au scan |
+| `volume_unavailable` | 410 | aucun emplacement connu du tome n'existe encore sur le disque |
+| `volume_changed` | 409 | taille ou date du fichier différente du scan : à rescanner (aucune autre page servie à la place) |
+| `page_mismatch` | 409 | l'entrée à l'`archive_index` n'a plus le nom ou le CRC enregistré |
+| `page_corrupt` | 500 | CRC faux à la lecture |
+| `render_failed` | 500 | décodage ou encodage en échec |
+
+- Mesure à faire au lot 2.4 sur le webtoon réel : temps d'ouverture de l'annuaire central (12 760 entrées) à chaque requête. S'il dépasse quelques millisecondes, garder en mémoire quelques annuaires ouverts (LRU), sinon rien.
+
+### Routes API
+
+Toutes en JSON sous `/api`, erreurs au format `{ "code", "message" }`, listes paginées par `?limit=&after=` quand elles peuvent être longues.
+
+| Méthode | Route | Réponse |
+|---|---|---|
+| GET | `/api/health` | `{ "status": "ok", "version" }` |
+| GET | `/api/libraries` | bibliothèques avec nombre de séries et de tomes |
+| POST | `/api/libraries` | `{ name, root }` → 201 ; `root` doit exister et être un dossier (`invalid_root`), unique |
+| DELETE | `/api/libraries/{id}` | 204 ; ne touche à aucun fichier, conserve les tomes |
+| GET | `/api/libraries/{id}/series` | séries triées par `sort_name`, avec nombre de tomes et ID de la couverture (page 0 du premier tome) |
+| GET | `/api/series/{id}` | série + tomes dans l'ordre du parseur (`volume_id`, `kind`, `number`, `status`, `page_count`, couverture) |
+| GET | `/api/volumes/{volume_id}` | tome : statut, format, taille, emplacements, problèmes du dernier scan |
+| GET | `/api/volumes/{volume_id}/pages` | pages par `ordinal` : `{ id, ordinal, width, height, media_type, status }` ; le lecteur n'en déduit jamais rien d'autre |
+| GET | `/api/pages/{page_id}/image` | originale, voir ci-dessus |
+| GET | `/api/pages/{page_id}/image?w=&f=` | redimensionnée, voir ci-dessus |
+| POST | `/api/admin/scans` | `{ library_id } \| { path }` + `{ deep, rehash }` → 202 + passe ; 409 si un scan tourne, 400 si le chemin est hors bibliothèque |
+| GET | `/api/admin/scans/current` | progression de la passe en cours, ou 204 |
+| POST | `/api/admin/scans/current/cancel` | 202 ; 404 si rien ne tourne |
+| GET | `/api/admin/scans` | historique (filtres `status`, `library_id`), du plus récent au plus ancien |
+| GET | `/api/admin/scans/{id}` | détail : options, durée, compteurs, erreur fatale |
+| GET | `/api/admin/scans/{id}/logs` | journal paginé (filtre `level`) |
+
+Sécurité tant qu'il n'y a pas d'authentification : écoute sur `127.0.0.1:7878` par défaut, `--listen 0.0.0.0:7878` pour ouvrir au réseau local, en connaissance de cause (Q10). Validation stricte des entrées : IDs en hexadécimal de longueur fixe (`ParseIdError` existe déjà), largeurs et formats en liste fermée, chemins canonisés et confinés aux racines des bibliothèques.
+
+### Commande `serve`
+
+```
+shiori serve [--listen 127.0.0.1:7878] [--db <FICHIER>] [--cache-dir <DOSSIER>] [--cache-max 2GiB]
+             [--jobs N] [--scan-log-days 30] [-v|-q]
+```
+
+Arrêt propre sur Ctrl-C (`with_graceful_shutdown`) : un scan en cours est annulé et sa passe close `cancelled`.
+
+### Tests
+
+- Parseur : table d'au moins 80 noms réels ou réalistes (FR, EN, JA, tags, années, décimaux, intervalles, noms sans numéro), `PARSER_VERSION` figée.
+- Base : migrations sur une base de phase 1 existante (les données de la phase 1 survivent), cascade de suppression d'une bibliothèque (tomes conservés), purge des journaux.
+- HTTP (routeur en mémoire via `oneshot`, fixtures `shiori-testkit` scannées dans une base temporaire) :
+  - **invariant d'ordre de lecture** : sur l'archive rangée dans le désordre (`unpadded`) et sur le faux webtoon, pour chaque `ordinal` *n* de `/pages`, l'image servie par `/api/pages/{id}/image` se décode et a la couleur `page_color(n)` ; même contrôle sur la version redimensionnée ;
+  - en-têtes `Cache-Control` / `ETag`, `304` sur `If-None-Match` ;
+  - chaque code d'erreur du tableau provoqué volontairement (page cassée, fichier modifié après scan, fichier supprimé, entrée remplacée à taille et date identiques, CRC faux) ;
+  - migration `0003` : une passe de phase 1 sans `finished_at` devient `interrupted` ;
+  - largeur ou format hors liste → 400 ; ID mal formé → 400 ; chemin de scan hors bibliothèque → 400 ;
+  - job : progression, annulation, 409 sur double lancement, passe `interrupted` après redémarrage, emplacements disparus retirés.
+- Essai réel en fin de phase sur `~/webtoon-test.cbz` : temps de réponse d'une page originale et redimensionnée (à froid et en cache), taille des variantes, mémoire du serveur.
+
+### Lots (une branche + une PR chacun)
+
+- [ ] **2.1** `feat/core-name-parser` : `shiori-core::name`, table de cas, `PARSER_VERSION`.
+- [ ] **2.2** `feat/db-libraries` : migration `0002`, API `Db` des bibliothèques, séries et emplacements analysés ; rattachement au scan ; suppression des emplacements disparus.
+- [ ] **2.3** `feat/server-skeleton` : cible lib du crate `shiori`, commande `serve`, état, erreurs JSON, `TraceLayer`, arrêt propre ; routes `health`, bibliothèques, séries, tomes, liste des pages.
+- [ ] **2.4** `feat/server-pages` : page originale par `archive_index` avec vérifications, en-têtes immuables, codes d'erreur ; **test HTTP de l'invariant d'ordre de lecture** ; mesure d'ouverture de l'annuaire sur le webtoon réel.
+- [ ] **2.5** `feat/image-resize` : `render.rs` + `cache.rs`, largeurs fixes, formats retenus (Q6), sémaphore, plafond de pixels, éviction ; mesures sur le webtoon réel.
+- [ ] **2.6** `feat/scan-job` : migration `0003`, job unique avec progression et annulation, passes et journaux aussi pour la CLI, passe `interrupted` au démarrage, purge.
+- [ ] **2.7** `feat/admin-scans-api` : routes `/api/admin/scans…` et leurs tests.
+- [ ] **2.8** `feat/cbr` : selon les réponses à Q1 ([note CBR](docs/cbr.md)) ; peut être reporté sans bloquer la phase 3.
+- [ ] **2.9** `chore/phase2-wrap` : essai réel, mise à jour de CLAUDE.md (commandes `serve`), bilan de phase ici, `/graphify . --update`.
+
+### Questions de la phase 2
+
+Bloquantes (elles changent le code des lots 2.5 et 2.8) :
+
+- **Q1 CBR** ❓ : voir les questions Q1a à Q1d à la fin de [docs/cbr.md](docs/cbr.md). Recommandation : conversion en zip `stored` au scan, `rars` en lecture seule derrière la feature `cbr`, lot 2.8 en fin de phase.
+- **Q6 Formats des images redimensionnées** ❓ : le principe 7 dit WebP/AVIF, mais en Rust pur seuls existent l'AVIF (`ravif`, très bon taux de compression mais encodage lent sans assembleur, à mesurer) et le WebP **sans perte** (`image-webp`, plus lourd qu'un JPEG pour des scans). Le WebP avec perte demande libwebp (C). Options :
+  - (a) AVIF (`ravif`) seul, réglé sur une vitesse élevée ; le cache absorbe le coût après le premier affichage ;
+  - (b) AVIF + JPEG (pur Rust, rapide, universel) : le client choisit `f` dans l'URL, JPEG pour les miniatures et couvertures, AVIF pour les pages ; aucune bascule automatique ;
+  - (c) WebP avec perte via libwebp derrière la feature `webp-lossy`, AVIF en option ;
+  - **recommandation : (b)**, tout en Rust pur, et principe 7 amendé en « AVIF, ou JPEG en repli ». WebP avec perte seulement si (b) déçoit à la mesure.
+- **Q9 Rangement des bibliothèques** ❓ : peut-on supposer « un dossier par série » (`Bibliothèque/Série/Tome.cbz`), avec le parseur en repli pour les fichiers posés à la racine ? Ou tes fichiers sont-ils rangés autrement (tout à plat, par éditeur, etc.) ?
+
+Avec une proposition par défaut (retenue si tu ne dis rien) :
+
+- **Q7 Cache** : 2 Gio par défaut, éviction des fichiers les plus anciens.
+- **Q8 Largeurs** : `160, 320, 480, 640, 800, 1080, 1280, 1600, 2048`.
+- **Q10 Réseau** : pas d'authentification en phase 2, écoute sur `127.0.0.1` par défaut, ouverture au réseau par `--listen`.
 
 ## Fonctionnalités ajoutées en cours de route
 
@@ -261,12 +485,12 @@ Générées par du code au moment des tests, sans binaire versionné : détermin
 
 Objectif : piloter les scans depuis l'application et consulter leurs journaux, sans terminal.
 
-- **Phase 2 (API)** : lancer un scan (une bibliothèque, un dossier, un tome ; options `deep` et `rehash`), voir le scan en cours (progression, fichier courant), l'annuler ; historique des passes (`scan_runs` : début, fin, options, durée, compteurs ok / avertissement / erreur / inchangés) ; journal détaillé d'une passe (fichiers scannés, problèmes, erreurs fatales). À prévoir : une table de journal par passe (horodatage, niveau, fichier, message) et une durée de conservation configurable.
+- **Phase 2 (API, lots 2.6 et 2.7)** : lancer un scan (une bibliothèque, un dossier, un tome ; options `deep` et `rehash`), voir le scan en cours (progression, fichier courant), l'annuler ; historique des passes (`scan_runs` : début, fin, options, durée, compteurs ok / avertissement / erreur / inchangés) ; journal détaillé d'une passe (fichiers scannés, problèmes, erreurs fatales). À prévoir : une table de journal par passe (horodatage, niveau, fichier, message) et une durée de conservation configurable.
 - **Phase 4 (UI)** : page « Administration » → « Scans » : bouton « Scanner maintenant », passe en cours avec progression, historique filtrable, détail d'une passe avec ses journaux et un lien vers chaque tome en erreur. Accès réservé aux administrateurs quand les rôles arriveront (phase « Plus tard »).
 
 ### Invariant de lecture à vérifier en phase 2
 
-L'ordre de lecture ne dépend jamais de l'ordre dans l'archive : le lecteur reçoit la liste ordonnée des `page_id` (par `ordinal`), et le serveur lit chaque page par l'`archive_index` enregistré pour cet ID. Test d'intégration à écrire avec l'API : sur une archive rangée dans le désordre, la page n servie par HTTP est l'image attendue à l'ordinal n (même contrôle par couleur que `every_page_is_the_right_image`).
+L'ordre de lecture ne dépend jamais de l'ordre dans l'archive : le lecteur reçoit la liste ordonnée des `page_id` (par `ordinal`), et le serveur lit chaque page par l'`archive_index` enregistré pour cet ID. Test d'intégration prévu au lot 2.4 : sur une archive rangée dans le désordre, la page n servie par HTTP est l'image attendue à l'ordinal n (même contrôle par couleur que `every_page_is_the_right_image`).
 
 ## Journal des décisions
 
@@ -278,3 +502,4 @@ L'ordre de lecture ne dépend jamais de l'ordre dans l'archive : le lecteur reç
 - 2026-11-11 : couverture minimale 80 % lignes ET branches, imposée par le job CI `coverage` (nightly + `cargo-llvm-cov --branch`, fichiers de tests exclus de la mesure). Tests unitaires déplacés dans des fichiers `tests.rs` voisins.
 - 2026-11-11 : `zip` décode en CP437 un nom UTF-8 invalide (pas d'erreur) ; les octets bruts restent la seule base des IDs.
 - 2026-11-11 : formule des `page_id` figée par un test d'instantané (`id::tests::page_id_is_frozen`). Ordre naturel : à valeur égale, `9` précède `09` (comportement d'`alphanumeric-sort`, déterministe).
+- 2026-11-11 : note CBR ([docs/cbr.md](docs/cbr.md)) et plan de la phase 2 proposés, en attente de validation (Q1, Q6, Q9 bloquantes).
