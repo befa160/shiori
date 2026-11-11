@@ -183,8 +183,9 @@ impl Db {
         Ok(true)
     }
 
-    /// Supprime les emplacements de la bibliothèque situés sous `under` qui n'ont pas été
-    /// revus depuis le début de la passe `run`. Renvoie leur nombre.
+    /// Supprime les emplacements de la bibliothèque situés sous `under` que la passe `run`
+    /// n'a pas vus. Renvoie leur nombre. On compare des numéros de passe et non des
+    /// horodatages : deux passes peuvent tomber dans la même milliseconde.
     pub async fn remove_missing(
         &self,
         library: &Library,
@@ -195,7 +196,7 @@ impl Db {
         let done = sqlx::query(
             "DELETE FROM file_locations
              WHERE library_id = ? AND substr(path, 1, length(?)) = ?
-               AND last_seen_at < (SELECT started_at FROM scan_runs WHERE id = ?)",
+               AND last_seen_run IS NOT ?",
         )
         .bind(library.id)
         .bind(&prefix)

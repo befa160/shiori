@@ -24,5 +24,6 @@ ALTER TABLE file_locations ADD COLUMN series_id  INTEGER REFERENCES series(id) O
 ALTER TABLE file_locations ADD COLUMN kind       TEXT CHECK (kind IN ('volume','chapter','special','unknown'));
 ALTER TABLE file_locations ADD COLUMN number     REAL;
 ALTER TABLE file_locations ADD COLUMN number_end REAL;
+ALTER TABLE file_locations ADD COLUMN last_seen_run INTEGER;  -- dernière passe qui a vu le fichier (retrait des disparus)
 CREATE INDEX file_locations_library ON file_locations(library_id);
 CREATE INDEX file_locations_series ON file_locations(series_id);
