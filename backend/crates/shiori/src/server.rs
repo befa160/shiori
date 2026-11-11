@@ -9,8 +9,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use anyhow::{Context, Result};
-use axum::extract::rejection::JsonRejection;
-use axum::extract::{Path, Request, State};
+use axum::extract::rejection::{JsonRejection, QueryRejection};
+use axum::extract::{Path, Query, Request, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
@@ -22,7 +22,11 @@ use serde_json::json;
 use shiori_core::{Archive, CbzArchive, PageId, PageStatus, VolumeId};
 use shiori_db::{Db, LibraryError, PageFile};
 use tokio::net::TcpListener;
+use tokio::sync::Semaphore;
 use tower_http::trace::TraceLayer;
+
+use crate::cache::Images;
+use crate::render::{self, Format, RENDER_VERSION, WIDTHS};
 
 #[derive(Args)]
 pub struct ServeArgs {
@@ -32,6 +36,32 @@ pub struct ServeArgs {
     /// Base SQLite (défaut : <dossier de données>/shiori.db, ou $SHIORI_DATA_DIR/shiori.db).
     #[arg(long, value_name = "FICHIER")]
     pub db: Option<PathBuf>,
+    /// Cache des pages redimensionnées (défaut : dossier de cache de l'OS, ou $SHIORI_CACHE_DIR).
+    #[arg(long, value_name = "DOSSIER")]
+    pub cache_dir: Option<PathBuf>,
+    /// Taille maximale de ce cache, en Mio ; au-delà, les pages les moins lues sont effacées.
+    #[arg(long, value_name = "MIO", default_value_t = 2048)]
+    pub cache_max_mib: u64,
+}
+
+/// État partagé par les requêtes.
+pub struct App {
+    pub db: Arc<Db>,
+    pub images: Images,
+    /// Décoder et encoder coûte du CPU et de la mémoire : nombre de rendus simultanés borné.
+    renders: Semaphore,
+}
+
+impl App {
+    pub fn new(db: Arc<Db>, images: Images) -> Self {
+        // shortcut: 4 rendus au plus (machine de 4 Gio) ; à rendre réglable si un serveur plus gros le demande.
+        let cores = std::thread::available_parallelism().map_or(1, |n| n.get());
+        Self {
+            db,
+            images,
+            renders: Semaphore::new(cores.min(4)),
+        }
+    }
 }
 
 /// Ouvre la base, écoute, et sert jusqu'à `shutdown` (Ctrl-C dans le binaire).
@@ -41,29 +71,38 @@ pub async fn run(
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> Result<()> {
     let db = crate::open_db(args.db).await?;
+    let cache = match args.cache_dir {
+        Some(dir) => dir,
+        None => crate::cache_dir()?,
+    };
+    let images = Images::open(
+        cache.clone(),
+        args.cache_max_mib.saturating_mul(1024 * 1024),
+    )
+    .with_context(|| format!("cache d'images {}", cache.display()))?;
     let listener = TcpListener::bind(args.listen)
         .await
         .with_context(|| format!("écoute sur {}", args.listen))?;
     if !quiet {
         eprintln!("Shiori écoute sur http://{}", listener.local_addr()?);
     }
-    serve(listener, Arc::new(db), shutdown).await
+    serve(listener, Arc::new(App::new(Arc::new(db), images)), shutdown).await
 }
 
 pub async fn serve(
     listener: TcpListener,
-    db: Arc<Db>,
+    app: Arc<App>,
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> Result<()> {
     let local_only = listener.local_addr()?.ip().is_loopback();
-    axum::serve(listener, router(db, local_only))
+    axum::serve(listener, router(app, local_only))
         .with_graceful_shutdown(shutdown)
         .await?;
     Ok(())
 }
 
 /// `local_only` : n'accepte que les requêtes adressées à `localhost` (voir [`local_host_only`]).
-pub fn router(db: Arc<Db>, local_only: bool) -> Router {
+pub fn router(app: Arc<App>, local_only: bool) -> Router {
     let router = Router::new()
         .route("/api/health", get(health))
         .route("/api/libraries", get(libraries).post(create_library))
@@ -82,7 +121,7 @@ pub fn router(db: Arc<Db>, local_only: bool) -> Router {
             )
         })
         .layer(TraceLayer::new_for_http())
-        .with_state(db);
+        .with_state(app);
     match local_only {
         true => router.layer(middleware::from_fn(local_host_only)),
         false => router,
@@ -197,8 +236,8 @@ async fn health() -> Json<serde_json::Value> {
     Json(json!({ "status": "ok", "version": env!("CARGO_PKG_VERSION") }))
 }
 
-async fn libraries(State(db): State<Arc<Db>>) -> ApiResult<Vec<shiori_db::LibrarySummary>> {
-    Ok(Json(db.library_summaries().await?))
+async fn libraries(State(app): State<Arc<App>>) -> ApiResult<Vec<shiori_db::LibrarySummary>> {
+    Ok(Json(app.db.library_summaries().await?))
 }
 
 #[derive(Deserialize)]
@@ -215,12 +254,12 @@ struct CreatedLibrary {
 }
 
 async fn create_library(
-    State(db): State<Arc<Db>>,
+    State(app): State<Arc<App>>,
     body: Result<Json<NewLibrary>, JsonRejection>,
 ) -> Result<(StatusCode, Json<CreatedLibrary>), ApiError> {
     let Json(new) =
         body.map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, "invalid_body", e.body_text()))?;
-    let library = db.create_library(&new.name, &new.root).await?;
+    let library = app.db.create_library(&new.name, &new.root).await?;
     Ok((
         StatusCode::CREATED,
         Json(CreatedLibrary {
@@ -232,50 +271,54 @@ async fn create_library(
 }
 
 async fn delete_library(
-    State(db): State<Arc<Db>>,
+    State(app): State<Arc<App>>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, ApiError> {
-    match db.delete_library(int_id(&id)?).await? {
+    match app.db.delete_library(int_id(&id)?).await? {
         true => Ok(StatusCode::NO_CONTENT),
         false => Err(ApiError::not_found("bibliothèque")),
     }
 }
 
 async fn library_series(
-    State(db): State<Arc<Db>>,
+    State(app): State<Arc<App>>,
     Path(id): Path<String>,
 ) -> ApiResult<Vec<shiori_db::SeriesSummary>> {
-    db.series_of(int_id(&id)?)
+    app.db
+        .series_of(int_id(&id)?)
         .await?
         .map(Json)
         .ok_or_else(|| ApiError::not_found("bibliothèque"))
 }
 
 async fn series(
-    State(db): State<Arc<Db>>,
+    State(app): State<Arc<App>>,
     Path(id): Path<String>,
 ) -> ApiResult<shiori_db::SeriesDetail> {
-    db.series_detail(int_id(&id)?)
+    app.db
+        .series_detail(int_id(&id)?)
         .await?
         .map(Json)
         .ok_or_else(|| ApiError::not_found("série"))
 }
 
 async fn volume(
-    State(db): State<Arc<Db>>,
+    State(app): State<Arc<App>>,
     Path(id): Path<String>,
 ) -> ApiResult<shiori_db::VolumeDetail> {
-    db.volume_detail(&volume_id(&id)?)
+    app.db
+        .volume_detail(&volume_id(&id)?)
         .await?
         .map(Json)
         .ok_or_else(|| ApiError::not_found("tome"))
 }
 
 async fn pages(
-    State(db): State<Arc<Db>>,
+    State(app): State<Arc<App>>,
     Path(id): Path<String>,
 ) -> ApiResult<Vec<shiori_db::PageInfo>> {
-    db.pages_of(&volume_id(&id)?)
+    app.db
+        .pages_of(&volume_id(&id)?)
         .await?
         .map(Json)
         .ok_or_else(|| ApiError::not_found("tome"))
@@ -284,20 +327,68 @@ async fn pages(
 /// Une page ne change jamais sous un même ID (principe 2) : cache permanent.
 const IMMUTABLE: &str = "public, max-age=31536000, immutable";
 
-/// Page originale, lue par son `archive_index` (principes 1, 4 et 6). Jamais une autre
-/// page à la place : toute incohérence est une erreur explicite.
+#[derive(Deserialize)]
+struct ImageQuery {
+    w: Option<String>,
+    f: Option<String>,
+}
+
+/// Largeur et format demandés, validés contre les listes fermées ; `None` = originale.
+fn wanted(query: &ImageQuery) -> Result<Option<(u32, Format)>, ApiError> {
+    let Some(w) = query.w.as_deref() else {
+        return match query.f {
+            None => Ok(None),
+            Some(_) => Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "invalid_width",
+                "le format `f` demande une largeur `w`",
+            )),
+        };
+    };
+    let width = w
+        .parse()
+        .ok()
+        .filter(|w| WIDTHS.contains(w))
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "invalid_width",
+                format!("largeur parmi {WIDTHS:?}"),
+            )
+        })?;
+    let format = match query.f.as_deref() {
+        None | Some("avif") => Format::Avif,
+        Some("jpeg") => Format::Jpeg,
+        Some(_) => {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "invalid_format",
+                "format `avif` ou `jpeg`",
+            ));
+        }
+    };
+    Ok(Some((width, format)))
+}
+
+/// Page lue par son `archive_index` (principes 1, 4 et 6), originale ou redimensionnée
+/// (`?w=&f=`, principe 7). Jamais une autre page à la place : toute incohérence est une
+/// erreur explicite.
 async fn page_image(
-    State(db): State<Arc<Db>>,
+    State(app): State<Arc<App>>,
     Path(id): Path<String>,
+    query: Result<Query<ImageQuery>, QueryRejection>,
     headers: HeaderMap,
 ) -> Result<Response, ApiError> {
     let id: PageId = id
         .parse()
         .map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, "invalid_id", format!("{e}")))?;
-    let page = db
-        .page_source(&id)
-        .await?
-        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "page_not_found", "page inconnue"))?;
+    let Query(query) = query
+        .map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, "invalid_query", e.body_text()))?;
+    let wanted = wanted(&query)?;
+    let page =
+        app.db.page_source(&id).await?.ok_or_else(|| {
+            ApiError::new(StatusCode::NOT_FOUND, "page_not_found", "page inconnue")
+        })?;
     if page.status == PageStatus::Broken {
         return Err(ApiError::new(
             StatusCode::UNPROCESSABLE_ENTITY,
@@ -305,7 +396,14 @@ async fn page_image(
             "page illisible dans l'archive (voir les problèmes du tome)",
         ));
     }
-    let etag = format!("\"{id}\"");
+    // Pas de décodeur AVIF pur Rust (Q2), et on n'agrandit jamais : l'originale est servie.
+    let resize = wanted.filter(|&(w, _)| {
+        page.media_type.as_deref() != Some("image/avif") && page.width.is_none_or(|pw| w < pw)
+    });
+    let etag = match resize {
+        Some((w, f)) => format!("\"{id}-w{w}-{}-v{RENDER_VERSION}\"", f.extension()),
+        None => format!("\"{id}\""),
+    };
     if etag_matches(&headers, &etag) {
         let cache = [
             (header::ETAG, etag),
@@ -313,8 +411,8 @@ async fn page_image(
         ];
         return Ok((StatusCode::NOT_MODIFIED, cache).into_response());
     }
-    let (path, stamp) = match page.file {
-        PageFile::Ready(path, stamp) => (path, stamp),
+    let (path, stamp) = match &page.file {
+        PageFile::Ready(path, stamp) => (path.clone(), *stamp),
         PageFile::Changed => {
             return Err(ApiError::new(
                 StatusCode::CONFLICT,
@@ -330,13 +428,25 @@ async fn page_image(
             ));
         }
     };
-    let (index, raw, crc) = (page.archive_index, page.entry_name_raw, page.crc32);
-    let bytes = tokio::task::spawn_blocking(move || read_page(&path, stamp, index, &raw, crc))
-        .await
-        .map_err(|_| corrupt("lecture interrompue"))??;
-    let media_type = page
-        .media_type
-        .unwrap_or_else(|| "application/octet-stream".into());
+    let original = async {
+        let (index, raw, crc) = (page.archive_index, page.entry_name_raw.clone(), page.crc32);
+        tokio::task::spawn_blocking(move || read_page(&path, stamp, index, &raw, crc))
+            .await
+            .map_err(|_| corrupt("lecture interrompue"))?
+    };
+    let (bytes, media_type) = match resize {
+        None => {
+            let media_type = page.media_type.clone();
+            (
+                original.await?,
+                media_type.unwrap_or_else(|| "application/octet-stream".into()),
+            )
+        }
+        Some((w, f)) => (
+            resized(&app, id, w, f, original).await?,
+            f.media_type().into(),
+        ),
+    };
     let headers = [
         (header::CONTENT_TYPE, media_type),
         (header::CACHE_CONTROL, IMMUTABLE.into()),
@@ -345,6 +455,36 @@ async fn page_image(
         (header::X_CONTENT_TYPE_OPTIONS, "nosniff".into()),
     ];
     Ok((headers, bytes).into_response())
+}
+
+/// Rendu en cache, sinon calculé (nombre de rendus simultanés borné) puis mis en cache.
+async fn resized(
+    app: &Arc<App>,
+    id: PageId,
+    width: u32,
+    format: Format,
+    original: impl Future<Output = Result<Vec<u8>, ApiError>>,
+) -> Result<Vec<u8>, ApiError> {
+    let cache = app.clone();
+    let hit = tokio::task::spawn_blocking(move || cache.images.get(&id, width, format)).await;
+    if let Ok(Some(bytes)) = hit {
+        return Ok(bytes);
+    }
+    let original = original.await?;
+    let _permit = app.renders.acquire().await.expect("sémaphore jamais fermé");
+    let cache = app.clone();
+    let failed = |e: String| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "render_failed", e);
+    tokio::task::spawn_blocking(move || {
+        let bytes = render::render(&original, width, format)?;
+        // Un cache plein ou en lecture seule ne doit pas empêcher de servir la page.
+        if let Err(e) = cache.images.put(&id, width, format, &bytes) {
+            tracing::warn!("cache d'images : {e}");
+        }
+        Ok(bytes)
+    })
+    .await
+    .map_err(|_| failed("rendu interrompu".into()))?
+    .map_err(failed)
 }
 
 fn corrupt(message: impl Into<String>) -> ApiError {

@@ -23,6 +23,7 @@ comfy-table = "8.0"
 directories = "6.0"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
 imagesize = "0.15"
+ravif = { version = "0.13", default-features = false, features = ["threading"] }
 regex = "1.13"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

@@ -11,7 +11,8 @@ use axum::http::{Request, StatusCode, header};
 use axum::response::Response;
 use http_body_util::BodyExt;
 use serde_json::Value;
-use shiori::server;
+use shiori::cache::Images;
+use shiori::server::{self, App};
 use shiori_core::ScanOptions;
 use shiori_db::Db;
 use shiori_testkit::{STORED, fixtures, page_color, png, replace_all, write_zip};
@@ -26,7 +27,8 @@ struct Fixture {
 async fn fixture() -> Fixture {
     let dir = tempfile::tempdir().unwrap();
     let db = Arc::new(Db::open(&dir.path().join("t.db")).await.unwrap());
-    let app = server::router(db.clone(), false);
+    let images = Images::open(dir.path().join("cache"), u64::MAX).unwrap();
+    let app = server::router(Arc::new(App::new(db.clone(), images)), false);
     Fixture { dir, db, app }
 }
 

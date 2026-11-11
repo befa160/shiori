@@ -8,7 +8,8 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
 use serde_json::{Value, json};
-use shiori::server::{self, ServeArgs};
+use shiori::cache::Images;
+use shiori::server::{self, App, ServeArgs};
 use shiori_core::ScanOptions;
 use shiori_db::Db;
 use shiori_testkit::fixtures;
@@ -40,6 +41,7 @@ struct Fixture {
     _dir: tempfile::TempDir,
     root: PathBuf,
     db: Arc<Db>,
+    state: Arc<App>,
     app: Router,
 }
 
@@ -55,11 +57,14 @@ async fn fixture() -> Fixture {
     std::fs::rename(&unpadded, series.join("Série A T01.cbz")).unwrap();
     fixtures::bad_crc(&root);
     let db = Arc::new(Db::open(&dir.path().join("t.db")).await.unwrap());
-    let app = server::router(db.clone(), false);
+    let images = Images::open(dir.path().join("cache"), u64::MAX).unwrap();
+    let state = Arc::new(App::new(db.clone(), images));
+    let app = server::router(state.clone(), false);
     Fixture {
         _dir: dir,
         root,
         db,
+        state,
         app,
     }
 }
@@ -366,7 +371,7 @@ async fn database_failures_are_internal_errors() {
 #[tokio::test]
 async fn local_server_rejects_foreign_hosts() {
     let f = fixture().await;
-    let app = server::router(f.db.clone(), true);
+    let app = server::router(f.state.clone(), true);
     let status = |host: &'static str| {
         let app = app.clone();
         async move {
@@ -409,7 +414,7 @@ async fn serves_over_tcp_and_shuts_down() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
-    let task = tokio::spawn(server::serve(listener, f.db.clone(), async {
+    let task = tokio::spawn(server::serve(listener, f.state.clone(), async {
         let _ = stopped.await;
     }));
 
@@ -433,6 +438,8 @@ async fn run_opens_the_database_and_reports_bind_errors() {
     let args = |listen: &str| ServeArgs {
         listen: listen.parse().unwrap(),
         db: Some(dir.path().join("sous-dossier/shiori.db")),
+        cache_dir: Some(dir.path().join("cache")),
+        cache_max_mib: 16,
     };
     // Arrêt immédiat : la base est créée (avec son dossier) puis le serveur s'arrête.
     server::run(args("127.0.0.1:0"), false, async {})
