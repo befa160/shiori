@@ -73,7 +73,7 @@ jobs:
       - name: Mesure
         run: >-
           cargo +${{ env.NIGHTLY }} llvm-cov --workspace --locked --branch
-          --ignore-filename-regex '(/tests\.rs|/tests/)'
+          --ignore-filename-regex '(/tests\.rs|/tests/|shiori-testkit/)'
           --json --summary-only --output-path coverage.json
       - name: Seuils
         run: |

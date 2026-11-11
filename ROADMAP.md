@@ -88,6 +88,9 @@ Chaque diagnostic a un code stable (utilisé par l'UI plus tard), une sévérit�
 | `encrypted_entry` | error | entrée chiffrée |
 | `unsupported_compression` | error | méthode de compression non gérée (zstd, bzip2…) |
 | `crc_mismatch` | error | CRC32 calculé ≠ CRC32 annoncé (toutes les entrées sont lues jusqu'au bout) |
+| `size_mismatch` | error | l'entrée contient plus d'octets que sa taille déclarée (ajouté au lot 1.3) |
+| `entry_too_large` | error | taille déclarée > 512 Mio, refusée avant lecture : garde-fou contre les bombes zip (ajouté au lot 1.3) |
+| `file_changed_during_scan` | error | taille ou date de modification changée entre le hash et la lecture des entrées : pages écartées, à rescanner (ajouté au lot 1.3, review Ponytail) |
 | `image_undecodable` | error | en-tête illisible, ou décodage complet en échec avec `--deep` |
 | `duplicate_entry_conflict` | error | même nom d'entrée, contenus différents (taille ou CRC) : ambiguïté, donc pas d'ID de page fiable |
 | `no_pages` | error | aucune image |
@@ -103,7 +106,7 @@ Statut du fichier = sévérité maximale (info ne dégrade pas `ok`).
 **Une page dont l'image est illisible reste listée** à sa place avec `status = broken` : le lecteur affichera une erreur explicite à cet endroit au lieu de sauter la page ou de répéter la précédente (principe 4).
 
 Modes :
-- défaut : CRC de toutes les entrées + en-têtes/dimensions de chaque image (rapide, lecture séquentielle unique du fichier) ;
+- défaut : CRC de toutes les entrées + en-têtes/dimensions de chaque image (le fichier est lu deux fois : hash complet, puis entrées ; le rescan évite le hash, lot 1.4) ;
 - `--deep` : en plus, décodage complet de chaque image (lent sur un webtoon de 2 Go, mais exhaustif). AVIF : en-tête seulement (Q2).
 
 ### Schéma SQLite (migration `0001_scan.sql`)
@@ -213,8 +216,9 @@ Générées par du code au moment des tests, sans binaire versionné : détermin
 
 - [x] **1.1** `ci/github-actions` : workflow CI (sur le squelette actuel), badge dans le README. (#2, protection de `main` active : CI requise, historique linéaire)
 - [x] **1.2** `feat/core-archive` : `shiori-core` (lecture CBZ, hash du fichier, IDs de page, ordre naturel) + tests unitaires.
-- [ ] **1.3** `feat/core-integrity` : contrôles et codes de diagnostic, modèle de rapport, `shiori-testkit` et tests d'intégration sur les fixtures et les invariants.
-  - Constat du lot 1.2 : `zip` 9.5 fusionne les entrées de même nom (une seule exposée, `has_duplicate_names()` vrai). Pour distinguer `duplicate_entry_identical` de `duplicate_entry_conflict`, relire l'annuaire central (CRC, tailles) seulement quand ce drapeau est levé.
+- [x] **1.3** `feat/core-integrity` : contrôles et codes de diagnostic, modèle de rapport, `shiori-testkit` et tests d'intégration sur les fixtures et les invariants.
+  - `Archive::duplicates()` relit l'annuaire central quand `zip` signale des doublons (CRC + tailles 32 bits comparés).
+  - Une archive qui commence par `PK\x03\x04` mais dont l'annuaire est introuvable est classée `archive_truncated`.
 - [ ] **1.4** `feat/db-schema` : `shiori-db`, migration `0001_scan.sql`, persistance, détection de changement, rescan idempotent.
 - [ ] **1.5** `feat/cli-scan` : commande `shiori scan`, tableau, JSON, codes de sortie, dossier de données ; mise à jour des commandes dans CLAUDE.md.
 - [ ] **1.6** `chore/graphify-build` : `/graphify .`, vérification des requêtes, fin de `GRAPHIFY_SKIP_HOOK`, bilan de phase ici.
@@ -232,6 +236,7 @@ Générées par du code au moment des tests, sans binaire versionné : détermin
 - 2026-11-11 : dépôt cloné depuis `befa160/shiori` (licence MIT). `graphify-out/` ignoré par git. Hooks Graphify dans `.claude/settings.json` versionné. Playwright MCP en Chromium headless (scope projet).
 - 2026-11-11 : travail par branches et PR pour tout le projet.
 - 2026-11-11 : plan de la phase 1 validé, propositions Q1 à Q5 retenues.
+- 2026-11-11 : fixtures AVIF : une image 8×12 encodée une fois avec `ravif` et intégrée en constante (287 octets), pour ne pas tirer un encodeur AV1 dans les dépendances de test. `shiori-testkit` est exclu de la mesure de couverture (code de test). Dépendances compilées en `opt-level = 3` même en debug pour que les fixtures se génèrent vite.
 - 2026-11-11 : toujours les dernières versions stables (Rust stable, Node 26 via `web/.node-version`, dernières crates/paquets/actions), pas de support des versions anciennes. Dependabot (cargo, npm, GitHub Actions) en phase 6.
 - 2026-11-11 : couverture minimale 80 % lignes ET branches, imposée par le job CI `coverage` (nightly + `cargo-llvm-cov --branch`, fichiers de tests exclus de la mesure). Tests unitaires déplacés dans des fichiers `tests.rs` voisins.
 - 2026-11-11 : `zip` décode en CP437 un nom UTF-8 invalide (pas d'erreur) ; les octets bruts restent la seule base des IDs.

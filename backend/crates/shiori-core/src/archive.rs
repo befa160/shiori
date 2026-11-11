@@ -4,9 +4,10 @@
 //! via l'annuaire central : chaque entrée est accessible directement par son index,
 //! sans extraction complète, zip64 compris. Le CBR viendra derrière le même trait.
 
+use std::collections::BTreeMap;
 use std::fs::File;
-use std::io::{self, BufReader, Read};
-use std::path::Path;
+use std::io::{self, BufReader, Read, Seek, SeekFrom};
+use std::path::{Path, PathBuf};
 
 use zip::result::ZipError;
 use zip::{CompressionMethod, ZipArchive};
@@ -42,6 +43,15 @@ pub struct Entry {
 /// Taille maximale d'une entrée lue en mémoire : une page, même de webtoon, reste
 /// très en dessous. Protège contre les bombes zip.
 pub const MAX_ENTRY_SIZE: u64 = 512 * 1024 * 1024;
+
+/// Un nom présent plusieurs fois dans l'annuaire central.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Duplicate {
+    pub name: String,
+    pub name_raw: Vec<u8>,
+    /// Vrai si toutes les occurrences annoncent le même contenu (CRC et tailles).
+    pub identical: bool,
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum ArchiveError {
@@ -104,9 +114,9 @@ pub trait Archive {
     /// Entrées dans l'ordre de l'annuaire central.
     fn entries(&self) -> &[Entry];
 
-    /// Vrai si l'annuaire déclare plusieurs entrées sous le même nom. Dans ce cas
-    /// `entries()` n'en expose qu'une par nom : l'appelant doit le signaler.
-    fn has_duplicate_names(&self) -> bool;
+    /// Noms déclarés plusieurs fois dans l'annuaire. `entries()` n'expose qu'une entrée
+    /// par nom : l'appelant doit signaler ces doublons.
+    fn duplicates(&self) -> Result<Vec<Duplicate>, ArchiveError>;
 
     /// Flux du contenu décompressé d'une entrée. Le CRC est vérifié à la fin de la
     /// lecture : une erreur se convertit avec [`ArchiveError::from_read_error`].
@@ -135,6 +145,7 @@ pub trait Archive {
 
 /// Archive CBZ (zip).
 pub struct CbzArchive {
+    path: PathBuf,
     zip: ZipArchive<BufReader<File>>,
     entries: Vec<Entry>,
 }
@@ -184,7 +195,11 @@ impl CbzArchive {
                 })
             })
             .collect::<Result<_, ZipError>>()?;
-        Ok(Self { zip, entries })
+        Ok(Self {
+            path: path.to_path_buf(),
+            zip,
+            entries,
+        })
     }
 }
 
@@ -193,8 +208,45 @@ impl Archive for CbzArchive {
         &self.entries
     }
 
-    fn has_duplicate_names(&self) -> bool {
-        self.zip.has_duplicate_names()
+    fn duplicates(&self) -> Result<Vec<Duplicate>, ArchiveError> {
+        if !self.zip.has_duplicate_names() {
+            return Ok(Vec::new());
+        }
+        // `zip` a fusionné les doublons : on relit l'annuaire central pour les retrouver.
+        let mut cd = BufReader::new(File::open(&self.path).map_err(ArchiveError::Io)?);
+        cd.seek(SeekFrom::Start(self.zip.central_directory_start()))
+            .map_err(ArchiveError::Io)?;
+        let mut by_name: BTreeMap<Vec<u8>, Vec<[u8; 12]>> = BTreeMap::new();
+        let mut header = [0u8; 46];
+        while cd.read_exact(&mut header).is_ok() && header[..4] == *b"PK\x01\x02" {
+            let len = |at: usize| usize::from(u16::from_le_bytes([header[at], header[at + 1]]));
+            let mut name = vec![0; len(28)];
+            cd.read_exact(&mut name)
+                .map_err(ArchiveError::from_read_error)?;
+            cd.seek_relative((len(30) + len(32)) as i64)
+                .map_err(ArchiveError::Io)?;
+            // shortcut: compare CRC + tailles 32 bits ; les tailles zip64 (> 4 Gio) ne sont
+            // pas lues, inutile tant qu'une entrée est plafonnée à MAX_ENTRY_SIZE.
+            let mut fingerprint = [0u8; 12];
+            fingerprint.copy_from_slice(&header[16..28]);
+            by_name.entry(name).or_default().push(fingerprint);
+        }
+        Ok(by_name
+            .into_iter()
+            .filter(|(_, prints)| prints.len() > 1)
+            .map(|(name_raw, prints)| Duplicate {
+                name: self
+                    .entries
+                    .iter()
+                    .find(|e| e.name_raw == name_raw)
+                    .map_or_else(
+                        || String::from_utf8_lossy(&name_raw).into_owned(),
+                        |e| e.name.clone(),
+                    ),
+                identical: prints.windows(2).all(|w| w[0] == w[1]),
+                name_raw,
+            })
+            .collect())
     }
 
     fn open_entry(&mut self, index: usize) -> Result<Box<dyn Read + '_>, ArchiveError> {

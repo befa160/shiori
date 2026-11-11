@@ -1,44 +1,6 @@
 use super::*;
-use std::io::Write;
-use std::path::PathBuf;
+use shiori_testkit::{DEFLATED, STORED, patch_header_u16, replace_all, write_zip};
 use zip::write::SimpleFileOptions;
-
-fn write_zip(dir: &Path, name: &str, files: &[(&str, &[u8], CompressionMethod)]) -> PathBuf {
-    let path = dir.join(name);
-    let mut zip = zip::ZipWriter::new(File::create(&path).unwrap());
-    for (entry, content, method) in files {
-        if entry.ends_with('/') {
-            zip.add_directory(*entry, SimpleFileOptions::default())
-                .unwrap();
-        } else {
-            zip.start_file(
-                *entry,
-                SimpleFileOptions::default().compression_method(*method),
-            )
-            .unwrap();
-            zip.write_all(content).unwrap();
-        }
-    }
-    zip.finish().unwrap();
-    path
-}
-
-fn replace_all(path: &Path, from: &[u8], to: &[u8]) {
-    assert_eq!(from.len(), to.len());
-    let mut bytes = std::fs::read(path).unwrap();
-    let mut found = 0;
-    for i in 0..=bytes.len() - from.len() {
-        if &bytes[i..i + from.len()] == from {
-            bytes[i..i + from.len()].copy_from_slice(to);
-            found += 1;
-        }
-    }
-    assert!(found > 0, "motif introuvable");
-    std::fs::write(path, bytes).unwrap();
-}
-
-const STORED: CompressionMethod = CompressionMethod::Stored;
-const DEFLATED: CompressionMethod = CompressionMethod::Deflated;
 
 #[test]
 fn lists_entries_in_directory_order() {
@@ -67,7 +29,7 @@ fn lists_entries_in_directory_order() {
     assert!(e[0].compression_supported && !e[0].encrypted);
     assert_eq!(e[1].kind, EntryKind::Dir);
     assert_eq!(e[2].kind, EntryKind::File);
-    assert!(!archive.has_duplicate_names());
+    assert!(archive.duplicates().unwrap().is_empty());
 }
 
 fn crc32(data: &[u8]) -> u32 {
@@ -136,19 +98,31 @@ fn rejects_non_zip_and_truncated_files() {
 }
 
 #[test]
-fn duplicate_names_are_flagged() {
-    // `zip` fusionne les entrées de même nom : on vérifie qu'il le signale,
-    // l'analyse fine des doublons relève des contrôles d'intégrité.
+fn duplicates_are_found_and_compared() {
+    // `zip` fusionne les entrées de même nom : `duplicates()` relit l'annuaire.
     let dir = tempfile::tempdir().unwrap();
-    let path = write_zip(
-        dir.path(),
-        "a.cbz",
-        &[("a.jpg", b"un", STORED), ("b.jpg", b"deux", STORED)],
-    );
-    replace_all(&path, b"b.jpg", b"a.jpg");
-    let archive = CbzArchive::open(&path).unwrap();
-    assert!(archive.has_duplicate_names());
-    assert_eq!(archive.entries().len(), 1);
+    for (content_b, identical) in [(b"un".as_slice(), true), (b"deux".as_slice(), false)] {
+        let path = write_zip(
+            dir.path(),
+            "a.cbz",
+            &[
+                ("a.jpg", b"un", STORED),
+                ("c.jpg", b"autre", STORED),
+                ("b.jpg", content_b, STORED),
+            ],
+        );
+        replace_all(&path, b"b.jpg", b"a.jpg");
+        let archive = CbzArchive::open(&path).unwrap();
+        assert_eq!(archive.entries().len(), 2);
+        assert_eq!(
+            archive.duplicates().unwrap(),
+            [Duplicate {
+                name: "a.jpg".into(),
+                name_raw: b"a.jpg".to_vec(),
+                identical,
+            }]
+        );
+    }
 }
 
 #[test]
@@ -174,29 +148,6 @@ fn opening_does_not_modify_the_file() {
     #[allow(clippy::permissions_set_readonly_false)]
     perms.set_readonly(false);
     std::fs::set_permissions(&path, perms).unwrap();
-}
-
-/// Applique `f` au champ u16 situé à `local_off` dans chaque en-tête local et à
-/// `central_off` dans chaque en-tête de l'annuaire central.
-fn patch_header_u16(path: &Path, local_off: usize, central_off: usize, f: impl Fn(u16) -> u16) {
-    let mut bytes = std::fs::read(path).unwrap();
-    let mut patched = 0;
-    for i in 0..bytes.len().saturating_sub(4) {
-        let off = match &bytes[i..i + 4] {
-            b"PK\x03\x04" => local_off,
-            b"PK\x01\x02" => central_off,
-            _ => continue,
-        };
-        let at = i + off;
-        let v = u16::from_le_bytes([bytes[at], bytes[at + 1]]);
-        bytes[at..at + 2].copy_from_slice(&f(v).to_le_bytes());
-        patched += 1;
-    }
-    assert_eq!(
-        patched, 2,
-        "un en-tête local et un en-tête central attendus"
-    );
-    std::fs::write(path, bytes).unwrap();
 }
 
 #[test]
