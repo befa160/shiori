@@ -45,6 +45,51 @@ jobs:
       - name: Tests
         run: cargo test --workspace --locked
 
+  coverage:
+    name: coverage
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      # Seuils obligatoires (CLAUDE.md, « Couverture de tests ») : lignes ET branches.
+      MIN_LINES: 80
+      MIN_BRANCHES: 80
+      # Versions figées : un nightly ou un outil cassé ne doit pas bloquer toutes les PR.
+      # À monter à la main de temps en temps.
+      NIGHTLY: nightly-2026-11-10
+    steps:
+      - uses: actions/checkout@v7
+      # La couverture des branches (`--branch`) n'existe encore que sur nightly.
+      - name: Toolchain nightly
+        run: rustup toolchain install "$NIGHTLY" --profile minimal --component llvm-tools
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov@0.9.1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+          key: coverage
+      - name: Mesure
+        run: >-
+          cargo +${{ env.NIGHTLY }} llvm-cov --workspace --locked --branch
+          --ignore-filename-regex '(/tests\.rs|/tests/)'
+          --json --summary-only --output-path coverage.json
+      - name: Seuils
+        run: |
+          read -r lines lcount branches bcount < <(jq -r '.data[0].totals
+            | "\(.lines.percent) \(.lines.count) \(.branches.percent) \(.branches.count)"' coverage.json)
+          echo "lignes : ${lines} % (${lcount}) | branches : ${branches} % (${bcount})"
+          echo "### Couverture : lignes ${lines} %, branches ${branches} %" >> "$GITHUB_STEP_SUMMARY"
+          ok=1
+          awk -v v="$lines" -v m="$MIN_LINES" 'BEGIN { exit !(v >= m) }' \
+            || { echo "::error::couverture des lignes ${lines} % < ${MIN_LINES} %"; ok=0; }
+          if [ "$bcount" -gt 0 ]; then
+            awk -v v="$branches" -v m="$MIN_BRANCHES" 'BEGIN { exit !(v >= m) }' \
+              || { echo "::error::couverture des branches ${branches} % < ${MIN_BRANCHES} %"; ok=0; }
+          fi
+          [ "$ok" = 1 ]
+
   web:
     name: web
     runs-on: ubuntu-latest

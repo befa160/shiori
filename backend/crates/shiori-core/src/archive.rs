@@ -1,0 +1,218 @@
+//! Accès aux archives de BD (principes 5 et 6).
+//!
+//! Les fichiers sont ouverts en lecture seule et ne sont jamais modifiés. Le CBZ est lu
+//! via l'annuaire central : chaque entrée est accessible directement par son index,
+//! sans extraction complète, zip64 compris. Le CBR viendra derrière le même trait.
+
+use std::fs::File;
+use std::io::{self, BufReader, Read};
+use std::path::Path;
+
+use zip::result::ZipError;
+use zip::{CompressionMethod, ZipArchive};
+
+/// Nature d'une entrée d'archive.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EntryKind {
+    File,
+    Dir,
+    Symlink,
+}
+
+/// Métadonnées d'une entrée, telles que déclarées par l'annuaire central.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Entry {
+    /// Index d'accès direct dans `zip`. Les doublons de nom y sont fusionnés : ce n'est
+    /// pas la position brute dans l'annuaire central.
+    pub index: usize,
+    /// Nom décodé (affichage, tri, diagnostics) : UTF-8, sinon CP437.
+    pub name: String,
+    /// Octets bruts du nom : base de l'identité des pages.
+    pub name_raw: Vec<u8>,
+    pub kind: EntryKind,
+    pub compressed_size: u64,
+    pub size: u64,
+    pub crc32: u32,
+    /// Nom lisible de la méthode de compression.
+    pub compression: String,
+    pub compression_supported: bool,
+    pub encrypted: bool,
+}
+
+/// Taille maximale d'une entrée lue en mémoire : une page, même de webtoon, reste
+/// très en dessous. Protège contre les bombes zip.
+pub const MAX_ENTRY_SIZE: u64 = 512 * 1024 * 1024;
+
+#[derive(Debug, thiserror::Error)]
+pub enum ArchiveError {
+    #[error("archive illisible : {0}")]
+    Unreadable(String),
+    #[error("archive tronquée : {0}")]
+    Truncated(String),
+    #[error("entrée chiffrée")]
+    Encrypted,
+    #[error("méthode de compression non gérée : {0}")]
+    UnsupportedCompression(String),
+    #[error("CRC32 incorrect : le contenu ne correspond pas à l'annuaire")]
+    CrcMismatch,
+    #[error("entrée trop grosse : {0} octets déclarés (maximum {MAX_ENTRY_SIZE})")]
+    EntryTooLarge(u64),
+    #[error("l'entrée contient plus d'octets que sa taille déclarée")]
+    SizeMismatch,
+    #[error("aucune entrée d'index {0}")]
+    NoSuchEntry(usize),
+    #[error(transparent)]
+    Io(io::Error),
+}
+
+impl ArchiveError {
+    /// Interprète une erreur survenue pendant la lecture du contenu d'une entrée.
+    pub fn from_read_error(err: io::Error) -> Self {
+        // `zip` ne signale ces deux cas que par leur message (crc32.rs).
+        let invalid_data = err.kind() == io::ErrorKind::InvalidData;
+        if invalid_data && err.to_string() == "Invalid checksum" {
+            Self::CrcMismatch
+        } else if invalid_data
+            && err.to_string() == "File is larger than its declared uncompressed size"
+        {
+            Self::SizeMismatch
+        } else if err.kind() == io::ErrorKind::UnexpectedEof {
+            Self::Truncated(err.to_string())
+        } else {
+            Self::Io(err)
+        }
+    }
+}
+
+impl From<ZipError> for ArchiveError {
+    fn from(err: ZipError) -> Self {
+        match err {
+            ZipError::Io(e) => Self::from_read_error(e),
+            ZipError::InvalidArchive(msg) => Self::Unreadable(msg.into_owned()),
+            ZipError::UnsupportedArchive(msg) => Self::Unreadable(msg.to_owned()),
+            ZipError::CompressionMethodNotSupported(m) => {
+                Self::UnsupportedCompression(format!("méthode {m}"))
+            }
+            ZipError::InvalidPassword => Self::Encrypted,
+            other => Self::Unreadable(other.to_string()),
+        }
+    }
+}
+
+/// Archive dont on peut lister et lire les entrées.
+pub trait Archive {
+    /// Entrées dans l'ordre de l'annuaire central.
+    fn entries(&self) -> &[Entry];
+
+    /// Vrai si l'annuaire déclare plusieurs entrées sous le même nom. Dans ce cas
+    /// `entries()` n'en expose qu'une par nom : l'appelant doit le signaler.
+    fn has_duplicate_names(&self) -> bool;
+
+    /// Flux du contenu décompressé d'une entrée. Le CRC est vérifié à la fin de la
+    /// lecture : une erreur se convertit avec [`ArchiveError::from_read_error`].
+    fn open_entry(&mut self, index: usize) -> Result<Box<dyn Read + '_>, ArchiveError>;
+
+    /// Contenu complet d'une entrée, CRC vérifié, jamais plus que sa taille déclarée
+    /// ni plus de [`MAX_ENTRY_SIZE`].
+    fn read_entry(&mut self, index: usize) -> Result<Vec<u8>, ArchiveError> {
+        let size = self
+            .entries()
+            .get(index)
+            .ok_or(ArchiveError::NoSuchEntry(index))?
+            .size;
+        if size > MAX_ENTRY_SIZE {
+            return Err(ArchiveError::EntryTooLarge(size));
+        }
+        // `zip` arrête la lecture dès qu'elle dépasse la taille déclarée (`SizeMismatch`) :
+        // la mémoire reste bornée par `size`.
+        let mut out = Vec::with_capacity(size as usize);
+        self.open_entry(index)?
+            .read_to_end(&mut out)
+            .map_err(ArchiveError::from_read_error)?;
+        Ok(out)
+    }
+}
+
+/// Archive CBZ (zip).
+pub struct CbzArchive {
+    zip: ZipArchive<BufReader<File>>,
+    entries: Vec<Entry>,
+}
+
+fn is_supported(method: CompressionMethod) -> bool {
+    matches!(
+        method,
+        CompressionMethod::Stored
+            | CompressionMethod::Deflated
+            | CompressionMethod::Deflate64
+            | CompressionMethod::Lzma
+            | CompressionMethod::Xz
+            | CompressionMethod::Ppmd
+    )
+}
+
+impl CbzArchive {
+    /// Ouvre une archive en lecture seule et lit son annuaire central.
+    pub fn open(path: &Path) -> Result<Self, ArchiveError> {
+        let file = File::open(path).map_err(ArchiveError::Io)?;
+        let zip = ZipArchive::new(BufReader::new(file))?;
+        let entries = (0..zip.len())
+            .map(|index| {
+                let e = zip.by_index_data(index)?;
+                let name_raw = e.name_raw().to_vec();
+                let kind = if e.is_symlink() {
+                    EntryKind::Symlink
+                } else if e.is_dir() {
+                    EntryKind::Dir
+                } else {
+                    EntryKind::File
+                };
+                Ok(Entry {
+                    index,
+                    name: e
+                        .name()
+                        .map(|n| n.into_owned())
+                        .unwrap_or_else(|_| String::from_utf8_lossy(&name_raw).into_owned()),
+                    name_raw,
+                    kind,
+                    compressed_size: e.compressed_size(),
+                    size: e.size(),
+                    crc32: e.crc32(),
+                    compression: format!("{:?}", e.compression()),
+                    compression_supported: is_supported(e.compression()),
+                    encrypted: e.encrypted(),
+                })
+            })
+            .collect::<Result<_, ZipError>>()?;
+        Ok(Self { zip, entries })
+    }
+}
+
+impl Archive for CbzArchive {
+    fn entries(&self) -> &[Entry] {
+        &self.entries
+    }
+
+    fn has_duplicate_names(&self) -> bool {
+        self.zip.has_duplicate_names()
+    }
+
+    fn open_entry(&mut self, index: usize) -> Result<Box<dyn Read + '_>, ArchiveError> {
+        let entry = self
+            .entries
+            .get(index)
+            .ok_or(ArchiveError::NoSuchEntry(index))?;
+        if entry.encrypted {
+            return Err(ArchiveError::Encrypted);
+        }
+        if !entry.compression_supported {
+            return Err(ArchiveError::UnsupportedCompression(
+                entry.compression.clone(),
+            ));
+        }
+        Ok(Box::new(self.zip.by_index(index)?))
+    }
+}
+
+#[cfg(test)]
+mod tests;
