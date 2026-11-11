@@ -31,6 +31,10 @@ macro_rules! now {
     };
 }
 
+mod library;
+
+pub use library::{Library, LibraryError};
+
 pub struct Db {
     pool: SqlitePool,
 }
