@@ -224,7 +224,13 @@ Générées par du code au moment des tests, sans binaire versionné : détermin
     - Hash : 34 Mo/s à froid (disque), 836 Mo/s en cache. Scan normal 10,5 s, `--deep` 248 s (décodage séquentiel), mémoire max 12,6 Mo (19 Mo en `deep`).
     - Conséquences : la double lecture n'est pas un problème ; 12 760 lignes de pages à écrire en une transaction (1.4) ; liste virtualisée dans le lecteur (phase 3) ; `index.json` d'outil de téléchargement (titre, auteurs, description, URL) comme source de métadonnées locale possible (phase 5).
     - Amélioration possible, non prioritaire : décoder les pages en parallèle en mode `--deep`.
-- [ ] **1.4** `feat/db-schema` : `shiori-db`, migration `0001_scan.sql`, persistance, détection de changement, rescan idempotent.
+- [x] **1.4** `feat/db-schema` : `shiori-db`, migration `0001_scan.sql`, persistance, détection de changement, rescan idempotent.
+  - `Db::scan` : fichier inchangé (chemin, taille, mtime, `SCANNER_VERSION`) → rapport relu depuis la base, ni hash ni rescan ; sinon `scan_file` dans `spawn_blocking` puis écriture en une transaction.
+  - Les pages sont mises à jour **sur place** par leur ID (ordinaux décalés le temps de la mise à jour), jamais supprimées puis réinsérées : les futures tables qui référencent `pages.id` ne perdent rien en cascade. Seules les pages disparues de l'archive sont supprimées.
+  - `scan_issues` = état courant (problèmes du dernier scan de chaque tome, ou du chemin si aucun tome fiable). Un fichier absent, illisible avant hash ou modifié pendant le scan n'a pas de `file_locations` : il est retenté au scan suivant.
+  - Un fichier modifié donne un nouveau tome ; l'ancien reste en base (progression future préservée). Le nettoyage des tomes orphelins viendra avec les bibliothèques (phase 2).
+  - Noms des enums en base = noms serde du cœur (une seule source de vérité). SQL toujours statique (`concat!`), exigé par sqlx 0.9.
+  - 12 760 pages (taille de l'essai réel) : écriture en ~1,4 s en debug, relu identique à l'écrit.
 - [ ] **1.5** `feat/cli-scan` : commande `shiori scan`, tableau, JSON, codes de sortie, dossier de données ; mise à jour des commandes dans CLAUDE.md.
 - [ ] **1.6** `chore/graphify-build` : `/graphify .`, vérification des requêtes, fin de `GRAPHIFY_SKIP_HOOK`, bilan de phase ici.
 

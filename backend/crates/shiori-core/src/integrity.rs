@@ -9,13 +9,13 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use imagesize::{Compression, ImageType};
-use serde::{Serialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer};
 
 use crate::archive::{Archive, ArchiveError, CbzArchive, Entry, EntryKind};
 use crate::id::{PageId, VolumeId};
 use crate::order::compare_entry_names;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Severity {
     Info,
@@ -24,7 +24,7 @@ pub enum Severity {
 }
 
 /// Codes de diagnostic stables : l'interface et la base s'appuient dessus.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum IssueCode {
     ArchiveUnreadable,
@@ -82,7 +82,7 @@ pub struct Issue {
     pub message: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Status {
     Ok,
@@ -90,7 +90,7 @@ pub enum Status {
     Error,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PageStatus {
     Ok,
@@ -130,6 +130,10 @@ pub struct FileReport {
 fn lossy_path<S: Serializer>(path: &Path, s: S) -> Result<S::Ok, S::Error> {
     s.collect_str(&path.display())
 }
+
+/// Version des règles de scan. À incrémenter quand un changement de ces règles
+/// (ordre, classification, codes) doit déclencher le rescan des tomes déjà connus.
+pub const SCANNER_VERSION: i64 = 1;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ScanOptions {
