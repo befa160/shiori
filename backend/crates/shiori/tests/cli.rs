@@ -254,3 +254,39 @@ fn default_database_goes_to_the_os_data_dir() {
     assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
     assert!(xdg.path().join("shiori/shiori.db").exists());
 }
+
+/// Une erreur fatale en plein scan clôt la passe `failed`, jamais laissée `running`.
+#[tokio::test]
+async fn fatal_error_closes_the_run_as_failed() {
+    use sqlx::Row;
+    let lib = tempfile::tempdir().unwrap();
+    let data = tempfile::tempdir().unwrap();
+    let tome = fixtures::manga(lib.path());
+    let path = data.path().join("t.db");
+    let db = shiori_db::Db::open(&path).await.unwrap();
+    sqlx::query("DROP TABLE pages")
+        .execute(db.pool())
+        .await
+        .unwrap();
+
+    let out = shiori(
+        &[
+            "scan",
+            tome.to_str().unwrap(),
+            "--db",
+            path.to_str().unwrap(),
+        ],
+        data.path(),
+    );
+    assert_eq!(out.status.code(), Some(2), "{}", stderr(&out));
+    let row = sqlx::query("SELECT status, error FROM scan_runs")
+        .fetch_one(db.pool())
+        .await
+        .unwrap();
+    assert_eq!(row.get::<String, _>("status"), "failed");
+    assert!(
+        row.get::<String, _>("error").contains("pages"),
+        "{}",
+        row.get::<String, _>("error")
+    );
+}

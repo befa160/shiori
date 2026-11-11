@@ -440,6 +440,8 @@ async fn run_opens_the_database_and_reports_bind_errors() {
         db: Some(dir.path().join("sous-dossier/shiori.db")),
         cache_dir: Some(dir.path().join("cache")),
         cache_max_mib: 16,
+        jobs: None,
+        scan_log_days: 30,
     };
     // Arrêt immédiat : la base est créée (avec son dossier) puis le serveur s'arrête.
     server::run(args("127.0.0.1:0"), false, async {})

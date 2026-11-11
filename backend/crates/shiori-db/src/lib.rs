@@ -33,12 +33,14 @@ macro_rules! now {
 
 mod browse;
 mod library;
+mod runs;
 
 pub use browse::{
     LibrarySummary, PageFile, PageInfo, PageSource, SeriesDetail, SeriesSummary, SeriesVolume,
     VolumeDetail, VolumeLocation,
 };
 pub use library::{Library, LibraryError};
+pub use runs::{RunCounts, RunOrigin, RunStatus};
 
 pub struct Db {
     pool: SqlitePool,
@@ -116,30 +118,6 @@ impl Db {
 
     pub fn pool(&self) -> &SqlitePool {
         &self.pool
-    }
-
-    pub async fn start_run(&self, root: &str, options: &str) -> Result<i64, Error> {
-        let sql = concat!(
-            "INSERT INTO scan_runs (root, options, started_at) VALUES (?, ?, ",
-            now!(),
-            ")"
-        );
-        let done = sqlx::query(sql)
-            .bind(root)
-            .bind(options)
-            .execute(&self.pool)
-            .await?;
-        Ok(done.last_insert_rowid())
-    }
-
-    pub async fn finish_run(&self, run: i64) -> Result<(), Error> {
-        let sql = concat!(
-            "UPDATE scan_runs SET finished_at = ",
-            now!(),
-            " WHERE id = ?"
-        );
-        sqlx::query(sql).bind(run).execute(&self.pool).await?;
-        Ok(())
     }
 
     /// Scanne un fichier, ou relit son rapport s'il n'a pas changé (sauf `rehash`).
