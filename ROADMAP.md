@@ -457,12 +457,12 @@ Arrêt propre sur Ctrl-C (`with_graceful_shutdown`) : un scan en cours est annul
 - [ ] **2.5** `feat/image-resize` : `render.rs` + `cache.rs`, largeurs fixes, AVIF + JPEG, sémaphore, plafond de pixels, éviction ; mesures sur le webtoon réel.
 - [ ] **2.6** `feat/scan-job` : migration `0003`, job unique avec progression et annulation, passes et journaux aussi pour la CLI, passe `interrupted` au démarrage, purge.
 - [ ] **2.7** `feat/admin-scans-api` : routes `/api/admin/scans…` et leurs tests.
-- [ ] **2.8** `feat/cbr` : `RarArchive` (trait `Archive`), scan en flux, lecture directe des non solid, cache d'extraction des solid, fixtures générées, invariant d'ordre en HTTP sur les deux ; conception dans [docs/cbr.md](docs/cbr.md) §6.
+- [ ] **2.8** `feat/cbr` : `RarArchive` (trait `Archive`), scan en flux, lecture directe des non solid, cache d'extraction des solid, fixtures générées, invariant d'ordre en HTTP sur les deux ; conception dans [docs/cbr.md](docs/cbr.md) §6. Clôture conditionnée à un essai sur un vrai CBR solid créé par WinRAR (libarchive refuse les solid écrits par `rars`, donc ces fixtures seules ne suffisent pas).
 - [ ] **2.9** `chore/phase2-wrap` : essai réel, mise à jour de CLAUDE.md (commandes `serve`), bilan de phase ici, `/graphify . --update`.
 
 ### Questions de la phase 2 (résolues le 2026-11-11)
 
-- **Q1 CBR** ✅ : géré en phase 2 (lot 2.8) avec `rars` (pur Rust, mesuré sur un vrai CBR) ; RAR non solid lu directement par index, RAR solid servi depuis un cache d'extraction. Mesures, provenance et conception : [docs/cbr.md](docs/cbr.md).
+- **Q1 CBR** ✅ : géré en phase 2 (lot 2.8) avec `rars` (pur Rust, mesuré sur un vrai CBR, aussi rapide que libarchive sur un cœur et plus rapide en parallèle) ; RAR non solid lu directement par index, RAR solid servi depuis un cache d'extraction. Mesures, provenance et conception : [docs/cbr.md](docs/cbr.md).
 - **Q6 Formats** ✅ (option b) : AVIF (`ravif`) pour les pages, JPEG pour les miniatures et couvertures, tout en Rust pur ; le client choisit `f` dans l'URL, sans bascule automatique. Principe 7 amendé dans CLAUDE.md. Pas de WebP (pas d'encodeur avec perte pur Rust, et limite de 16 383 px).
 - **Q9 Rangement** ✅ : un dossier par série sous la racine de la bibliothèque ; le parseur sert de repli pour les fichiers posés à la racine.
 - **Q7 Cache** ✅ : 2 Gio par défaut (images redimensionnées et tomes RAR solid extraits), éviction des plus anciens.

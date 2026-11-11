@@ -76,14 +76,26 @@ Conclusions :
 
 - **RAR non solid** : `read_member_at(index)` ne décode que l'entrée demandée. L'accès direct marche comme en CBZ (6 à 17 ms par page), sans copie ni cache. Le principe 6 est respecté.
 - **RAR solid** : chaque page coûte la décompression de tout ce qui la précède. Servir page par page est inutilisable (218 s pour un tome) ; une passe unique coûte 2 s. D'où le cache d'extraction.
-- **libarchive non mesurée** : elle n'est pas installée sur la machine, et la compilation de ses sources a été refusée par la politique de sécurité de la session. Mesure possible si tu installes `libarchive-tools` (`bsdtar`).
+
+**Comparaison avec libarchive** (`bsdtar` 3.7.4 de la distribution, même fichier, même machine) :
+
+| Mesure sur Toriko | libarchive (`bsdtar`) | `rars` |
+|---|---|---|
+| Liste des entrées | 10 à 60 ms (lancement compris) | 10 à 20 ms (CLI) |
+| Extraction complète | 1,9 à 2,7 s | 2,6 s sur 1 cœur, 0,7 à 1,6 s sur 8 |
+| Page 1 / 105 / 210 seule | 19 / 19 / 12 ms (dont environ 2 ms de lancement du processus) | 15 / 12 / 5 ms (bibliothèque, archive déjà ouverte) |
+| Résultat | | octets identiques à ceux de `bsdtar` sur les 210 pages |
+| Copies solid RAR4 et RAR5 créées par `rars` | **illisibles** : « RAR solid archive support unavailable », « Declared solid file, but no window buffer initialized yet » | lues sans erreur |
+
+- Non solid : performances équivalentes sur un cœur, `rars` plus rapide dès qu'il peut paralléliser, et sans C.
+- Solid : impossible de comparer. On ne sait pas si l'échec vient de libarchive (son lecteur RAR4 solid est connu pour être limité) ou si `rars` écrit des RAR solid hors norme ; il faudrait WinRAR ou unrar pour trancher. **Conséquence** : les chiffres solid ci-dessus et les fixtures solid générées par `rars` ne prouvent pas la lecture de vrais RAR solid. Un vrai CBR solid (créé par WinRAR) est nécessaire avant de clore le lot 2.8.
 
 ## 5. Décisions (2026-11-11)
 
 - **Q1a** : le CBR est géré dans la phase 2 (lot 2.8).
 - **Q1b** : **cache d'extraction (B)**, appliqué aux seuls RAR solid ; les non solid sont lus directement (variante C, gratuite avec `rars`).
-- **Q1c** : **`rars`**, le plus performant des candidats mesurables : pur Rust, donc aucune feature native ni dépendance système (principe 9) ; accès direct par index, plafonds et annulation intégrés. libarchive ne serait adoptée que si une mesure future la montrait nettement plus rapide, et alors derrière une feature `cbr-libarchive`.
-- **Q1d** : `Toriko-v16.cbr` sert d'essai réel. Il manque un vrai CBR solid : à fournir si tu en as un.
+- **Q1c** : **`rars`**, aussi rapide que libarchive sur un cœur et plus rapide en parallèle (mesures §4), en Rust pur, donc sans feature native ni dépendance système (principe 9) ; accès direct par index, plafonds et annulation intégrés. libarchive est écartée.
+- **Q1d** : `Toriko-v16.cbr` sert d'essai réel. Il manque un vrai CBR solid créé par WinRAR : **condition pour clore le lot 2.8**.
 
 ## 6. Conception retenue (lot 2.8)
 
