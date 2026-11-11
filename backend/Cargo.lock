@@ -1575,6 +1575,7 @@ dependencies = [
  "comfy-table",
  "directories",
  "http-body-util",
+ "image",
  "serde",
  "serde_json",
  "shiori-core",

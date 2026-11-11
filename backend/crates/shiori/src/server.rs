@@ -6,12 +6,12 @@
 use std::future::Future;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 
 use anyhow::{Context, Result};
 use axum::extract::rejection::JsonRejection;
 use axum::extract::{Path, Request, State};
-use axum::http::{StatusCode, header};
+use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get};
@@ -19,8 +19,8 @@ use axum::{Json, Router};
 use clap::Args;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use shiori_core::VolumeId;
-use shiori_db::{Db, LibraryError};
+use shiori_core::{Archive, CbzArchive, PageId, PageStatus, VolumeId};
+use shiori_db::{Db, LibraryError, PageFile};
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 
@@ -72,6 +72,7 @@ pub fn router(db: Arc<Db>, local_only: bool) -> Router {
         .route("/api/series/{id}", get(series))
         .route("/api/volumes/{id}", get(volume))
         .route("/api/volumes/{id}/pages", get(pages))
+        .route("/api/pages/{id}/image", get(page_image))
         .fallback(async || ApiError::new(StatusCode::NOT_FOUND, "not_found", "route inconnue"))
         .method_not_allowed_fallback(async || {
             ApiError::new(
@@ -141,7 +142,9 @@ impl ApiError {
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let body = Json(json!({ "code": self.code, "message": self.message }));
-        (self.status, body).into_response()
+        // Une erreur n'est jamais mise en cache : la même URL peut redevenir lisible après un rescan.
+        let no_store = [(header::CACHE_CONTROL, "no-store")];
+        (self.status, no_store, body).into_response()
     }
 }
 
@@ -276,4 +279,146 @@ async fn pages(
         .await?
         .map(Json)
         .ok_or_else(|| ApiError::not_found("tome"))
+}
+
+/// Une page ne change jamais sous un même ID (principe 2) : cache permanent.
+const IMMUTABLE: &str = "public, max-age=31536000, immutable";
+
+/// Page originale, lue par son `archive_index` (principes 1, 4 et 6). Jamais une autre
+/// page à la place : toute incohérence est une erreur explicite.
+async fn page_image(
+    State(db): State<Arc<Db>>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> Result<Response, ApiError> {
+    let id: PageId = id
+        .parse()
+        .map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, "invalid_id", format!("{e}")))?;
+    let page = db
+        .page_source(&id)
+        .await?
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "page_not_found", "page inconnue"))?;
+    if page.status == PageStatus::Broken {
+        return Err(ApiError::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "page_broken",
+            "page illisible dans l'archive (voir les problèmes du tome)",
+        ));
+    }
+    let etag = format!("\"{id}\"");
+    if etag_matches(&headers, &etag) {
+        let cache = [
+            (header::ETAG, etag),
+            (header::CACHE_CONTROL, IMMUTABLE.into()),
+        ];
+        return Ok((StatusCode::NOT_MODIFIED, cache).into_response());
+    }
+    let (path, stamp) = match page.file {
+        PageFile::Ready(path, stamp) => (path, stamp),
+        PageFile::Changed => {
+            return Err(ApiError::new(
+                StatusCode::CONFLICT,
+                "volume_changed",
+                "le fichier a changé depuis le scan : à rescanner",
+            ));
+        }
+        PageFile::Missing => {
+            return Err(ApiError::new(
+                StatusCode::GONE,
+                "volume_unavailable",
+                "aucun fichier connu de ce tome n'existe encore",
+            ));
+        }
+    };
+    let (index, raw, crc) = (page.archive_index, page.entry_name_raw, page.crc32);
+    let bytes = tokio::task::spawn_blocking(move || read_page(&path, stamp, index, &raw, crc))
+        .await
+        .map_err(|_| corrupt("lecture interrompue"))??;
+    let media_type = page
+        .media_type
+        .unwrap_or_else(|| "application/octet-stream".into());
+    let headers = [
+        (header::CONTENT_TYPE, media_type),
+        (header::CACHE_CONTROL, IMMUTABLE.into()),
+        (header::ETAG, etag),
+        // Le contenu vient d'une archive extérieure : le navigateur ne doit pas deviner son type.
+        (header::X_CONTENT_TYPE_OPTIONS, "nosniff".into()),
+    ];
+    Ok((headers, bytes).into_response())
+}
+
+fn corrupt(message: impl Into<String>) -> ApiError {
+    ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "page_corrupt", message)
+}
+
+/// Lit l'entrée et vérifie que c'est bien la page enregistrée : même nom brut, même CRC.
+/// Le CRC est revérifié à la lecture.
+fn read_page(
+    path: &std::path::Path,
+    stamp: (i64, i64),
+    index: usize,
+    raw: &[u8],
+    crc: u32,
+) -> Result<Vec<u8>, ApiError> {
+    let archive = open_archive(path, stamp)?;
+    let mut archive = archive.lock().unwrap_or_else(PoisonError::into_inner);
+    let same = archive
+        .entries()
+        .get(index)
+        .is_some_and(|e| e.name_raw == raw && e.crc32 == crc);
+    if !same {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "page_mismatch",
+            "l'archive ne contient plus cette page à sa place : à rescanner",
+        ));
+    }
+    archive
+        .read_entry(index)
+        .map_err(|e| corrupt(e.to_string()))
+}
+
+/// Archive ouverte, partagée entre les requêtes d'un même tome.
+type OpenArchive = Arc<Mutex<CbzArchive>>;
+
+/// Annuaires centraux ouverts récemment, indexés par (chemin, taille, date) : un fichier
+/// modifié puis rescanné n'est jamais lu avec son ancien annuaire. Ouvrir celui d'un webtoon
+/// de 12 760 pages coûte ~11 ms par requête (mesuré au lot 2.4), lire la page ~1 ms.
+type OpenArchives = Vec<(PathBuf, (i64, i64), OpenArchive)>;
+static OPEN_ARCHIVES: Mutex<OpenArchives> = Mutex::new(Vec::new());
+const MAX_OPEN_ARCHIVES: usize = 4;
+
+fn open_archive(path: &std::path::Path, stamp: (i64, i64)) -> Result<OpenArchive, ApiError> {
+    let lock = || OPEN_ARCHIVES.lock().unwrap_or_else(PoisonError::into_inner);
+    {
+        let mut open = lock();
+        if let Some(i) = open.iter().position(|(p, s, _)| p == path && *s == stamp) {
+            let hit = open.remove(i);
+            let archive = hit.2.clone();
+            open.push(hit);
+            return Ok(archive);
+        }
+    }
+    // Ouverture hors du verrou : les autres tomes restent servis pendant ce temps.
+    let archive = Arc::new(Mutex::new(
+        CbzArchive::open(path).map_err(|e| corrupt(e.to_string()))?,
+    ));
+    let mut open = lock();
+    open.retain(|(p, _, _)| p != path);
+    open.push((path.to_path_buf(), stamp, archive.clone()));
+    if open.len() > MAX_OPEN_ARCHIVES {
+        open.remove(0);
+    }
+    Ok(archive)
+}
+
+/// `If-None-Match` : liste d'ETags, éventuellement faibles (`W/`), ou `*`.
+fn etag_matches(headers: &HeaderMap, etag: &str) -> bool {
+    headers
+        .get_all(header::IF_NONE_MATCH)
+        .iter()
+        .filter_map(|v: &HeaderValue| v.to_str().ok())
+        .flat_map(|v| v.split(','))
+        .map(|t| t.trim().trim_start_matches("W/"))
+        .any(|t| t == etag || t == "*")
 }

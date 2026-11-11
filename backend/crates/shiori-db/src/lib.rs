@@ -35,8 +35,8 @@ mod browse;
 mod library;
 
 pub use browse::{
-    LibrarySummary, PageInfo, SeriesDetail, SeriesSummary, SeriesVolume, VolumeDetail,
-    VolumeLocation,
+    LibrarySummary, PageFile, PageInfo, PageSource, SeriesDetail, SeriesSummary, SeriesVolume,
+    VolumeDetail, VolumeLocation,
 };
 pub use library::{Library, LibraryError};
 
