@@ -6,6 +6,7 @@
 pub mod archive;
 pub mod id;
 pub mod integrity;
+pub mod name;
 pub mod order;
 
 pub use archive::{Archive, ArchiveError, CbzArchive, Duplicate, Entry, EntryKind, MAX_ENTRY_SIZE};
@@ -14,4 +15,5 @@ pub use integrity::{
     FileReport, Issue, IssueCode, Page, PageStatus, SCANNER_VERSION, ScanOptions, Severity, Status,
     scan_file,
 };
+pub use name::{NameKind, PARSER_VERSION, ParsedName, compare_in_series, parse as parse_name};
 pub use order::compare_entry_names;
