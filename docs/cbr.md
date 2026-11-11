@@ -1,6 +1,6 @@
 # Note CBR (Q1)
 
-Rédigée le 2026-11-11 avant la phase 2. Objet : choisir comment Shiori lira les CBR (archives RAR) sans trahir les principes 1, 4, 5, 6 et 9. Rien n'est codé tant que les questions de la fin ne sont pas tranchées.
+Rédigée le 2026-11-11 avant la phase 2. Objet : choisir comment Shiori lira les CBR (archives RAR) sans trahir les principes 1, 4, 5, 6 et 9. Questions tranchées le 2026-11-11 (§5), conception retenue au §6.
 
 ## 1. Le problème : RAR solid n'a pas d'accès aléatoire
 
@@ -50,28 +50,48 @@ L'utilisateur convertit lui-même ses CBR en CBZ avec un outil externe. Zéro co
 | `rar` (0.4.0, Roba1993) | MIT | Rust | Partiel, peu maintenu | Oui | Écarté : incomplet |
 | `rar-codec` (0.1.10) | Apache-2.0 | Rust (no_std) | RAR4/RAR5, solid | Oui | Trop jeune (créé le 2026-10-23, < 1 000 téléchargements) |
 
-Réserves sur `rars` :
+Réserves sur `rars`, vérifiées le 2026-11-11 dans son dépôt :
 
-- Projet récent (créé en mai 2026, « expérience de développement agentique » selon son auteur), environ 97 000 téléchargements sur 90 jours, son README dit lui-même qu'il « manque de tests à grande échelle ».
-- **Provenance à vérifier** : l'auteur dit avoir travaillé à partir d'une spécification publique qu'il a rédigée (`bitplane/rar-research`). Si une partie était dérivée du source UnRAR, la restriction UnRAR s'appliquerait, et `rars` sait aussi écrire des RAR, précisément ce que cette licence interdit. À lire avant de l'adopter (README, historique, issues).
-- Le format RAR est propriétaire ; RARLAB tolère depuis toujours les décompresseurs libres. On n'utiliserait que la lecture : features `write`, `recovery`, `encryption` et `parallel` désactivées (`default-features = false`).
-- Un décodeur jeune peut paniquer ou boucler sur une archive piégée : même traitement que les décodeurs d'image en phase 1 (`catch_unwind`, plafond de taille par entrée `MAX_ENTRY_SIZE`, plafond sur le total décompressé).
+- Projet récent (créé en mai 2026, « expérience de développement agentique » selon son auteur), environ 97 000 téléchargements sur 90 jours ; son README dit lui-même qu'il manque de tests à grande échelle. Il a un dossier `fuzz/` et des fixtures d'archives piégées.
+- **Provenance** : la spécification `bitplane/rar-research` se présente comme « clean-room » et écarte explicitement le source UnRAR et les décodeurs de 7-Zip (« développés à partir du source unRAR, ils portent la même restriction »). Une partie a été établie en désassemblant des binaires WinRAR et UNRAR.EXE (fonctions `FUN_…`), surtout pour l'écriture et des détails anciens. C'est de l'ingénierie inverse pour l'interopérabilité, pas une copie du code UnRAR : la restriction UnRAR ne s'applique pas. Shiori n'utilise que la lecture (`default-features = false` : ni `write`, ni `recovery`, ni `encryption`, ni `parallel`).
+- Aucun `unsafe` (son workspace l'interdit, comme le nôtre). Plafonds de sortie par entrée et par appel (`with_max_member_output_bytes`, `with_max_total_output_bytes`), annulation (`ReadCancellation`) : les garde-fous contre les archives piégées existent déjà. On garde `catch_unwind` autour des appels, comme pour les décodeurs d'image.
 
-## 4. Intégration dans le code existant
+## 4. Mesures sur un vrai CBR (2026-11-11)
 
-- `shiori-core` a déjà un trait `Archive` (`entries`, `duplicates`, `open_entry`, `read_entry`) : `RarArchive` en serait une seconde implémentation, dans `archive/rar.rs`, derrière une feature Cargo `cbr`.
-- Le scan d'un `.cbr` produit le même rapport et les mêmes codes ; `volumes.format = 'cbr'` (déjà prévu dans le schéma). Codes nouveaux possibles : `solid_archive` (info), `multivolume_archive` (error, les `.part2.rar` ne sont pas gérés), `unsupported_format` (option D ou feature désactivée).
-- Avec la stratégie A, le scan écrit le zip converti puis enregistre les pages avec l'`archive_index` **du zip converti**. Les noms RAR (souvent en encodage OEM en RAR4) ne peuvent pas être réécrits octet pour octet par `zip` : les entrées converties sont nommées par ordinal (`000000.jpg`), le `page_id` reste calculé sur le nom brut RAR, et la vérification avant lecture porte sur le CRC et la taille au lieu du nom ; si celui-ci manque à la lecture, le serveur le reconstruit (ou renvoie une erreur explicite `conversion_missing` le temps de le refaire, jamais une autre page).
+Fichier fourni : `Toriko-v16.cbr`, 142 Mo, RAR 1.5-4.x, **non solid**, 210 pages JPEG de 1200 px dans un sous-dossier, chemins séparés par `\`. Build release, `rars` 0.12.4, 8 cœurs, fichier en cache.
 
-## 5. Recommandation
+| Mesure | Toriko (non solid) | Copie solid RAR4 | Copie solid RAR5 |
+|---|---|---|---|
+| Ouverture (lecture des en-têtes) | 2,2 ms | 1,4 ms | 1,3 ms |
+| Page 1 seule | 17 ms | 14 ms | 13 ms |
+| Page du milieu seule | 15 ms | **1,08 s** | **1,16 s** |
+| Dernière page seule | 6 ms | **2,0 s** | **2,1 s** |
+| Tout le tome page par page | 2,9 s | **218 s** | (arrêté) |
+| Tout le tome en une passe | 2,5 s | 2,1 s | (non mesuré) |
+| Vérification complète (`rars test`, CLI) | 2,4 s sur 1 cœur, 0,66 s sur 8 (11 à 34 Mo de mémoire) | | |
 
-1. **Stratégie A** (conversion au scan en zip `stored` dans le dossier de données) : un seul chemin de lecture, des IDs inchangés, aucune latence à l'ouverture, et le coût de décompression est déjà payé par le scan d'intégrité. Le seul vrai coût est le disque ; la variante C le réduira si besoin.
-2. **`rars` en lecture seule**, derrière une feature `cbr` (pur Rust, donc compatible avec le principe 9 même activée), **après** vérification de sa provenance et un essai sur de vrais CBR (RAR4 et RAR5, solid et non solid). Repli : libarchive derrière `cbr-libarchive` si `rars` échoue.
-3. **En lot à part, en fin de phase 2** (lot 2.8), voire reporté : le reste de la phase 2 ne dépend pas du CBR.
+Les copies solid ont été recréées avec `rars a --solid` à partir des pages extraites de Toriko (je n'ai pas de vrai CBR solid).
 
-## 6. Questions à trancher
+Conclusions :
 
-- **Q1a** Gérer le CBR maintenant (lot 2.8), plus tard, ou jamais (option D) ? Combien de CBR as-tu, et de quelle taille au total ?
-- **Q1b** Stratégie A (disque doublé pour les CBR, simple) ou B (disque borné, plus de code, première ouverture lente) ?
-- **Q1c** `rars` (Rust pur, jeune, provenance à vérifier) ou libarchive (éprouvée, BSD, mais C et dépendance système) ?
-- **Q1d** As-tu de vrais CBR à me donner pour l'essai (idéalement un RAR4 solid et un RAR5) ?
+- **RAR non solid** : `read_member_at(index)` ne décode que l'entrée demandée. L'accès direct marche comme en CBZ (6 à 17 ms par page), sans copie ni cache. Le principe 6 est respecté.
+- **RAR solid** : chaque page coûte la décompression de tout ce qui la précède. Servir page par page est inutilisable (218 s pour un tome) ; une passe unique coûte 2 s. D'où le cache d'extraction.
+- **libarchive non mesurée** : elle n'est pas installée sur la machine, et la compilation de ses sources a été refusée par la politique de sécurité de la session. Mesure possible si tu installes `libarchive-tools` (`bsdtar`).
+
+## 5. Décisions (2026-11-11)
+
+- **Q1a** : le CBR est géré dans la phase 2 (lot 2.8).
+- **Q1b** : **cache d'extraction (B)**, appliqué aux seuls RAR solid ; les non solid sont lus directement (variante C, gratuite avec `rars`).
+- **Q1c** : **`rars`**, le plus performant des candidats mesurables : pur Rust, donc aucune feature native ni dépendance système (principe 9) ; accès direct par index, plafonds et annulation intégrés. libarchive ne serait adoptée que si une mesure future la montrait nettement plus rapide, et alors derrière une feature `cbr-libarchive`.
+- **Q1d** : `Toriko-v16.cbr` sert d'essai réel. Il manque un vrai CBR solid : à fournir si tu en as un.
+
+## 6. Conception retenue (lot 2.8)
+
+- `shiori-core::archive::rar::RarArchive` implémente le trait `Archive` existant (`entries`, `duplicates`, `open_entry`, `read_entry`) ; `archive_index` = index du membre dans l'archive, `entry_name_raw` = octets bruts du nom RAR (le `page_id` suit la même formule que pour le CBZ). Ordre naturel : les noms RAR4 utilisent `\` comme séparateur, à découper comme `/`.
+- **Limites toujours posées** (désactivées par défaut dans `rars`) : `with_max_member_output_bytes(MAX_ENTRY_SIZE)` et `with_max_total_output_bytes(somme des tailles déclarées)`, plus un plafond de nombre d'en-têtes : une archive piégée échoue en erreur explicite au lieu de remplir la mémoire ou le disque.
+- **Scan** : décodage en une seule passe en flux (`extract_to` avec un rappel par membre), jamais `read_members_at` sur tout le tome (il garderait tout en mémoire, 141 Mo pour Toriko) ; CRC vérifié par `rars`, en-têtes d'image lus comme pour le CBZ. `volumes.format = 'cbr'`. Nouveaux codes : `solid_archive` (info), `multivolume_archive` (error, `.part2.rar` non géré), `encrypted_entry` réutilisé.
+- **Lecture d'une page, RAR non solid** : `read_member_at(archive_index)`, puis mêmes vérifications que le CBZ (nom brut, CRC).
+- **Lecture d'une page, RAR solid** : cache `<cache>/extract/<volume_id>/<ordinal>` ; première demande d'un tome → une seule extraction en flux dans `<volume_id>.tmp/`, renommée à la fin (jamais de dossier partiel visible) ; les requêtes simultanées sur le même tome attendent cette extraction au lieu d'en lancer une autre ; taille de chaque fichier relue contre `pages.size` avant de servir. Éviction : les tomes extraits comptent dans le même plafond `--cache-max` que les images redimensionnées, le tome le moins récemment lu part en premier, **jamais le dernier ouvert** (sinon un tome solid plus gros que le plafond serait réextrait à chaque page). Un fichier encore ouvert (refus de suppression sous Windows) est sauté et retenté au passage suivant.
+  - shortcut : une requête attend la fin de l'extraction complète (environ 2 s pour 140 Mo), même pour la page 1 ; servir les pages au fil de l'extraction viendra si la première ouverture paraît lente.
+- Parcours des dossiers (CLI et job) : `.cbr` ajouté à `.cbz`, insensible à la casse.
+- Tests : fixtures RAR solid et non solid générées par `rars` (feature `write` en dev-dependency de `shiori-testkit` seulement), test de l'invariant d'ordre de lecture en HTTP sur les deux, archive solid tronquée → pages manquantes en erreur explicite.

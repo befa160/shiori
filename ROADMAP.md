@@ -7,7 +7,7 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 |---|---|---|
 | 0 | Outillage (Rust, structure, Ponytail, Graphify, UI/UX Pro Max, MCP shadcn + Playwright) | ✅ |
 | 1 | CLI de scan d'intégrité + schéma SQLite + CI linux/windows, puis graphe Graphify | ✅ |
-| 2 | API axum + streaming/redimensionnement des images + parseur de noms + job de scan + API d'administration des scans | ❓ plan en validation |
+| 2 | API axum + streaming/redimensionnement des images + parseur de noms + job de scan + API d'administration des scans | 🚧 plan validé |
 | 3 | Lecteur web (sens de lecture, webtoon, doubles pages) | ⏳ |
 | 4 | Bibliothèque façon Plex + statuts/filtres + menu d'administration (scans, journaux) + DESIGN_SYSTEM.md | ⏳ |
 | 5 | Métadonnées web + édition manuelle | ⏳ |
@@ -249,20 +249,20 @@ Générées par du code au moment des tests, sans binaire versionné : détermin
 
 ### Questions (résolues le 2026-11-11)
 
-- **Q1 CBR** ✅ : hors phase 1. Avant la phase 2, une note comparera la conversion CBR→CBZ au scan et le cache d'extraction, ainsi que les licences (unrar : licence propriétaire restrictive ; libarchive : BSD mais C, donc derrière une feature). Note rédigée : [docs/cbr.md](docs/cbr.md), questions Q1a à Q1d en attente.
-- **Q2 AVIF en `--deep`** ✅ (proposition retenue) : il n'existe pas de décodeur AVIF pur Rust mature (`image` passe par dav1d, en C). Proposition : en phase 1, AVIF validé par l'en-tête seulement, et décodage complet derrière une feature native optionnelle plus tard. L'encodage AVIF (ravif, pur Rust) et WebP avec perte (libwebp, en C) seront à trancher en phase 2.
+- **Q1 CBR** ✅ : hors phase 1. Avant la phase 2, une note comparera la conversion CBR→CBZ au scan et le cache d'extraction, ainsi que les licences (unrar : licence propriétaire restrictive ; libarchive : BSD mais C, donc derrière une feature). Note rédigée et tranchée : [docs/cbr.md](docs/cbr.md).
+- **Q2 AVIF en `--deep`** ✅ (proposition retenue) : il n'existe pas de décodeur AVIF pur Rust mature (`image` passe par dav1d, en C). Proposition : en phase 1, AVIF validé par l'en-tête seulement, et décodage complet derrière une feature native optionnelle plus tard. Encodage tranché en phase 2 (Q6) : AVIF (`ravif`) + JPEG.
 - **Q3 GIF/BMP/TIFF** ✅ : avertissement `unsupported_image`, entrée ignorée comme page.
 - **Q4 Base par défaut** ✅ : la CLI écrit dans `<dossier de données>/shiori.db` ; `--db` surcharge, `--no-db` produit seulement le rapport.
 - **Q5 Doublons identiques** ✅ : avertissement, une seule page conservée ; doublons au contenu différent = erreur.
 
-## Phase 2 : serveur, images, bibliothèques et scans (plan proposé le 2026-11-11, ❓ en attente de validation)
+## Phase 2 : serveur, images, bibliothèques et scans (plan validé le 2026-11-11)
 
 ### Objectif
 
 `shiori serve` démarre un serveur HTTP qui expose les bibliothèques, séries, tomes et pages établis par le scan, sert chaque page par son ID (originale ou redimensionnée, URL immuable) et pilote les scans (lancer, suivre, annuler, historique, journaux).
 C'est l'API dont le lecteur (phase 3) et la bibliothèque (phase 4) auront besoin ; aucune interface web dans cette phase.
 
-Hors périmètre : front embarqué (`rust-embed`, phase 3), authentification et rôles (« Plus tard »), progression de lecture (phase 3), métadonnées web (phase 5), scans planifiés ou surveillance du disque (plus tard), push de la progression par SSE/WebSocket (le front de la phase 4 interrogera l'API), CBR (lot 2.8, selon [la note CBR](docs/cbr.md)).
+Hors périmètre : front embarqué (`rust-embed`, phase 3), authentification et rôles (« Plus tard »), progression de lecture (phase 3), métadonnées web (phase 5), scans planifiés ou surveillance du disque (plus tard), push de la progression par SSE/WebSocket (le front de la phase 4 interrogera l'API). Le CBR est dans le périmètre (lot 2.8, [note CBR](docs/cbr.md)).
 
 ### Découpage du workspace
 
@@ -284,9 +284,8 @@ shiori        + lib : server/ (routes axum, erreurs, état), render.rs (redimens
 | `tower-http` | 0.7.1 | `TraceLayer` (journal des requêtes) | oui |
 | `tower` / `http-body-util` | 0.5.3 / 0.1.5 | tests : `ServiceExt::oneshot` sur le routeur, sans réseau (dev-dependencies) | oui |
 | `image` (existante) | 0.25 | décodage, `imageops::resize` (Lanczos3), encodage JPEG | oui |
-| `ravif` | 0.13 | encodage AVIF, sans la feature `asm` (qui exige `nasm`) — **selon Q6** | oui |
-| `webp` | 0.3.1 | encodage WebP avec perte via libwebp, derrière une feature `webp-lossy` — **selon Q6** | **non** (libwebp, C) |
-| `rars` | 0.12.4 | lecture RAR, `default-features = false`, feature `cbr` — **selon Q1** | oui |
+| `ravif` | 0.13 | encodage AVIF des pages, sans la feature `asm` (qui exige `nasm`) | oui |
+| `rars` | 0.12.4 | lecture RAR (accès direct par index, plafonds de sortie, annulation), `default-features = false` ; pur Rust, donc sans feature Cargo | oui |
 
 Pas de `tokio-util` (un `AtomicBool` suffit pour l'annulation), pas de `mime_guess` (le type réel est en base), pas de `fast_image_resize` tant que la mesure sur le webtoon réel ne montre pas que `imageops` est trop lent.
 
@@ -305,7 +304,7 @@ CREATE TABLE libraries (
 CREATE TABLE series (
   id         INTEGER PRIMARY KEY,
   library_id INTEGER NOT NULL REFERENCES libraries(id) ON DELETE CASCADE,
-  name       TEXT NOT NULL,               -- nom affiché (dossier ou parseur, Q9)
+  name       TEXT NOT NULL,               -- nom du dossier de série (parseur pour les fichiers à la racine)
   sort_name  TEXT NOT NULL,               -- clé de tri (minuscules, articles retirés plus tard)
   UNIQUE (library_id, name)
 );
@@ -361,7 +360,7 @@ CREATE INDEX scan_run_logs_run ON scan_run_logs(scan_run_id, id);
 
 Fonction pure `parse(relative_path) -> ParsedName { series, kind, number, number_end }`, sans I/O, testée par une table de cas (fichier de cas dans `name/tests.rs`).
 
-- Série : premier dossier sous la racine de la bibliothèque (`Bibliothèque/One Piece/One Piece T01.cbz` → `One Piece`) ; fichier posé à la racine → partie du nom avant le marqueur de numéro (Q9).
+- Série : premier dossier sous la racine de la bibliothèque (`Bibliothèque/One Piece/One Piece T01.cbz` → `One Piece`) ; fichier posé à la racine → partie du nom avant le marqueur de numéro.
 - Marqueurs reconnus, insensibles à la casse, avec ou sans point ni espace : FR `Tome`, `T`, `Vol`, `Volume`, `Chapitre`, `Ch`, `HS`/`Hors-série`, `Intégrale` ; EN `Volume`, `Vol`, `v`, `Chapter`, `Ch`, `c`, `#`, `Special`, `Extra`, `Omake`, `One-shot` ; JA `第N巻` (tome), `第N話` (chapitre).
 - Numéros : entiers paddés ou non, décimaux (`1.5`, `1,5`), intervalles (`1-3`, `01 à 03`) ; nombre nu final en dernier recours (`Blame 03.cbz` → tome 3). Les tags entre crochets ou parenthèses (`[Team]`, `(2019)`, `(Digital)`) sont ignorés ; une année seule n'est jamais un numéro.
 - Ordre dans une série : tomes, puis chapitres hors tome, puis spéciaux, puis `unknown` ; à l'intérieur, `number`, puis `number_end`, puis tri naturel du nom de fichier (ordre total, comme les pages).
@@ -383,10 +382,10 @@ Fonction pure `parse(relative_path) -> ParsedName { series, kind, number, number
   - Largeurs autorisées seulement : `160, 320, 480, 640, 800, 1080, 1280, 1600, 2048` (`400 invalid_width` sinon) ; le client choisit la largeur immédiatement supérieure à `largeur CSS × devicePixelRatio`. Une liste fixe borne le cache et empêche de faire calculer des milliers de variantes.
   - Si `w` ≥ largeur d'origine, l'originale est servie sans réencodage (aucune perte, aucun calcul). Le webtoon réel (800×1280) est dans ce cas sur la plupart des écrans.
   - Le format fait partie de l'URL, jamais de négociation par `Accept` : une URL = un seul contenu, pas de `Vary`.
-  - Formats selon Q6. Limite à connaître : WebP ne dépasse pas 16 383 px de côté ; une bande de webtoon plus haute est servie en AVIF ou JPEG.
+  - Formats : `f=avif` (pages, `ravif`) ou `f=jpeg` (miniatures, couvertures) ; rien d'autre (`400 invalid_format`). Vitesse d'encodage AVIF à mesurer au lot 2.5 sur le webtoon réel et sur Toriko.
   - Sources AVIF : pas de décodeur pur Rust, donc servies originales, sans redimensionnement (décodage derrière une feature native plus tard, cf. Q2).
 - **En-têtes** : `Cache-Control: public, max-age=31536000, immutable`, `ETag` fort (`"<page_id>-<w>-<f>-<RENDER_VERSION>"`), `304` sur `If-None-Match`. Un fichier modifié donne de nouveaux `page_id`, donc de nouvelles URL : rien à invalider.
-- **Cache disque** : `<cache>/pages/<2 premiers caractères>/<page_id>-w<w>.<f>`, dossier de cache de l'OS (`directories`), surchargeable par `SHIORI_CACHE_DIR` / `--cache-dir`. Écriture dans un fichier temporaire puis renommage atomique (deux requêtes simultanées calculent deux fois mais n'écrivent jamais un fichier partiel). Taille maximale `--cache-max` (défaut 2 Gio, Q7) ; au-delà, suppression des fichiers les plus anciens (date de modification, rafraîchie à chaque lecture) par une tâche de fond.
+- **Cache disque** : `<cache>/pages/<2 premiers caractères>/<page_id>-w<w>.<f>`, dossier de cache de l'OS (`directories`), surchargeable par `SHIORI_CACHE_DIR` / `--cache-dir`. Écriture dans un fichier temporaire puis renommage atomique (deux requêtes simultanées calculent deux fois mais n'écrivent jamais un fichier partiel). Taille maximale `--cache-max` (défaut 2 Gio, partagée avec les tomes RAR solid extraits) ; au-delà, suppression des fichiers les plus anciens (date de modification, rafraîchie à chaque lecture) par une tâche de fond.
 - **Charge** : décodage et encodage dans `spawn_blocking`, limités par un sémaphore (nombre de cœurs) ; plafond de pixels décodés (garde-fou contre une image piégée) ; `catch_unwind` autour des décodeurs, comme au scan.
 - **Erreurs explicites (principe 4)**, en JSON `{ "code", "message" }` :
 
@@ -455,29 +454,20 @@ Arrêt propre sur Ctrl-C (`with_graceful_shutdown`) : un scan en cours est annul
 - [ ] **2.2** `feat/db-libraries` : migration `0002`, API `Db` des bibliothèques, séries et emplacements analysés ; rattachement au scan ; suppression des emplacements disparus.
 - [ ] **2.3** `feat/server-skeleton` : cible lib du crate `shiori`, commande `serve`, état, erreurs JSON, `TraceLayer`, arrêt propre ; routes `health`, bibliothèques, séries, tomes, liste des pages.
 - [ ] **2.4** `feat/server-pages` : page originale par `archive_index` avec vérifications, en-têtes immuables, codes d'erreur ; **test HTTP de l'invariant d'ordre de lecture** ; mesure d'ouverture de l'annuaire sur le webtoon réel.
-- [ ] **2.5** `feat/image-resize` : `render.rs` + `cache.rs`, largeurs fixes, formats retenus (Q6), sémaphore, plafond de pixels, éviction ; mesures sur le webtoon réel.
+- [ ] **2.5** `feat/image-resize` : `render.rs` + `cache.rs`, largeurs fixes, AVIF + JPEG, sémaphore, plafond de pixels, éviction ; mesures sur le webtoon réel.
 - [ ] **2.6** `feat/scan-job` : migration `0003`, job unique avec progression et annulation, passes et journaux aussi pour la CLI, passe `interrupted` au démarrage, purge.
 - [ ] **2.7** `feat/admin-scans-api` : routes `/api/admin/scans…` et leurs tests.
-- [ ] **2.8** `feat/cbr` : selon les réponses à Q1 ([note CBR](docs/cbr.md)) ; peut être reporté sans bloquer la phase 3.
+- [ ] **2.8** `feat/cbr` : `RarArchive` (trait `Archive`), scan en flux, lecture directe des non solid, cache d'extraction des solid, fixtures générées, invariant d'ordre en HTTP sur les deux ; conception dans [docs/cbr.md](docs/cbr.md) §6.
 - [ ] **2.9** `chore/phase2-wrap` : essai réel, mise à jour de CLAUDE.md (commandes `serve`), bilan de phase ici, `/graphify . --update`.
 
-### Questions de la phase 2
+### Questions de la phase 2 (résolues le 2026-11-11)
 
-Bloquantes (elles changent le code des lots 2.5 et 2.8) :
-
-- **Q1 CBR** ❓ : voir les questions Q1a à Q1d à la fin de [docs/cbr.md](docs/cbr.md). Recommandation : conversion en zip `stored` au scan, `rars` en lecture seule derrière la feature `cbr`, lot 2.8 en fin de phase.
-- **Q6 Formats des images redimensionnées** ❓ : le principe 7 dit WebP/AVIF, mais en Rust pur seuls existent l'AVIF (`ravif`, très bon taux de compression mais encodage lent sans assembleur, à mesurer) et le WebP **sans perte** (`image-webp`, plus lourd qu'un JPEG pour des scans). Le WebP avec perte demande libwebp (C). Options :
-  - (a) AVIF (`ravif`) seul, réglé sur une vitesse élevée ; le cache absorbe le coût après le premier affichage ;
-  - (b) AVIF + JPEG (pur Rust, rapide, universel) : le client choisit `f` dans l'URL, JPEG pour les miniatures et couvertures, AVIF pour les pages ; aucune bascule automatique ;
-  - (c) WebP avec perte via libwebp derrière la feature `webp-lossy`, AVIF en option ;
-  - **recommandation : (b)**, tout en Rust pur, et principe 7 amendé en « AVIF, ou JPEG en repli ». WebP avec perte seulement si (b) déçoit à la mesure.
-- **Q9 Rangement des bibliothèques** ❓ : peut-on supposer « un dossier par série » (`Bibliothèque/Série/Tome.cbz`), avec le parseur en repli pour les fichiers posés à la racine ? Ou tes fichiers sont-ils rangés autrement (tout à plat, par éditeur, etc.) ?
-
-Avec une proposition par défaut (retenue si tu ne dis rien) :
-
-- **Q7 Cache** : 2 Gio par défaut, éviction des fichiers les plus anciens.
-- **Q8 Largeurs** : `160, 320, 480, 640, 800, 1080, 1280, 1600, 2048`.
-- **Q10 Réseau** : pas d'authentification en phase 2, écoute sur `127.0.0.1` par défaut, ouverture au réseau par `--listen`.
+- **Q1 CBR** ✅ : géré en phase 2 (lot 2.8) avec `rars` (pur Rust, mesuré sur un vrai CBR) ; RAR non solid lu directement par index, RAR solid servi depuis un cache d'extraction. Mesures, provenance et conception : [docs/cbr.md](docs/cbr.md).
+- **Q6 Formats** ✅ (option b) : AVIF (`ravif`) pour les pages, JPEG pour les miniatures et couvertures, tout en Rust pur ; le client choisit `f` dans l'URL, sans bascule automatique. Principe 7 amendé dans CLAUDE.md. Pas de WebP (pas d'encodeur avec perte pur Rust, et limite de 16 383 px).
+- **Q9 Rangement** ✅ : un dossier par série sous la racine de la bibliothèque ; le parseur sert de repli pour les fichiers posés à la racine.
+- **Q7 Cache** ✅ : 2 Gio par défaut (images redimensionnées et tomes RAR solid extraits), éviction des plus anciens.
+- **Q8 Largeurs** ✅ : `160, 320, 480, 640, 800, 1080, 1280, 1600, 2048`.
+- **Q10 Réseau** ✅ : pas d'authentification en phase 2, écoute sur `127.0.0.1` par défaut, ouverture au réseau par `--listen`.
 
 ## Fonctionnalités ajoutées en cours de route
 
@@ -503,3 +493,4 @@ L'ordre de lecture ne dépend jamais de l'ordre dans l'archive : le lecteur reç
 - 2026-11-11 : `zip` décode en CP437 un nom UTF-8 invalide (pas d'erreur) ; les octets bruts restent la seule base des IDs.
 - 2026-11-11 : formule des `page_id` figée par un test d'instantané (`id::tests::page_id_is_frozen`). Ordre naturel : à valeur égale, `9` précède `09` (comportement d'`alphanumeric-sort`, déterministe).
 - 2026-11-11 : note CBR ([docs/cbr.md](docs/cbr.md)) et plan de la phase 2 proposés, en attente de validation (Q1, Q6, Q9 bloquantes).
+- 2026-11-11 : plan de la phase 2 validé : CBR en phase 2 avec `rars` (lecture directe des RAR non solid, cache d'extraction des solid), images AVIF + JPEG en Rust pur, un dossier par série, défauts Q7, Q8, Q10 retenus.

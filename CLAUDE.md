@@ -55,8 +55,8 @@ Avant chaque commit : clippy sans avertissement, `cargo fmt` propre, tests verts
 3. Le scan est la source de vérité : pour chaque page on stocke id, nom d'entrée, ordre (tri naturel), largeur, hauteur, type. Le lecteur n'infère rien à la volée.
 4. Une archive incohérente n'est jamais affichée silencieusement : une page absente ou illisible renvoie une erreur explicite visible dans l'UI, jamais « la dernière image ».
 5. Ne jamais modifier les fichiers sources.
-6. CBZ : lecture d'une entrée via l'annuaire central (accès direct, pas d'extraction complète), zip64 et gros fichiers gérés. CBR : le RAR solid n'a pas d'accès aléatoire ; conversion CBR→CBZ au scan ou cache d'extraction, à discuter avant d'implémenter. Attention à la licence de unrar, étudier libarchive.
-7. Images servies redimensionnées à la demande (largeur cible selon l'appareil), en WebP/AVIF, avec cache disque indexé par (page id, paramètres).
+6. CBZ : lecture d'une entrée via l'annuaire central (accès direct, pas d'extraction complète), zip64 et gros fichiers gérés. CBR (crate `rars`, pur Rust, jamais unrar) : RAR non solid lu directement par index ; RAR solid (pas d'accès aléatoire) servi depuis un cache d'extraction borné, voir `docs/cbr.md`.
+7. Images servies redimensionnées à la demande (largeur cible selon l'appareil, liste fixe de largeurs), en AVIF pour les pages et JPEG pour les miniatures (encodeurs pur Rust), avec cache disque indexé par (page id, paramètres).
 8. Identité d'un tome = hash du fichier (renommer ou déplacer ne perd ni progression ni métadonnées). Hash complet au premier passage, puis taille + date de modification pour détecter un changement.
 9. Portabilité : le backend compile et passe ses tests sous Linux, Windows et (si possible) macOS, sans changement de code applicatif. Donc :
    - pas de chemins codés en dur (dossiers par OS via la crate `directories`, surchargeables par variables d'environnement / fichier de config) ;
