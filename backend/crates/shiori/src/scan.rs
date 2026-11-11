@@ -14,7 +14,7 @@ use clap::{Args, ValueEnum};
 use comfy_table::{ContentArrangement, Table, presets};
 use serde::Serialize;
 use shiori_core::{FileReport, ScanOptions, Severity, Status, scan_file};
-use shiori_db::{Db, Scanned};
+use shiori_db::Scanned;
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 
@@ -127,23 +127,9 @@ pub async fn run(args: ScanArgs, quiet: bool) -> Result<ExitCode> {
     let files = collect(&args.paths)?;
     let options = ScanOptions { deep: args.deep };
 
-    let db = match (&args.db, args.no_db) {
-        (_, true) => None,
-        (Some(path), false) => Some(path.clone()),
-        (None, false) => Some(data_dir()?.join("shiori.db")),
-    };
-    let db = match db {
-        Some(path) => {
-            if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
-                fs::create_dir_all(parent)
-                    .with_context(|| format!("création de {}", parent.display()))?;
-            }
-            let db = Db::open(&path)
-                .await
-                .with_context(|| format!("ouverture de la base {}", path.display()))?;
-            Some(Arc::new(db))
-        }
-        None => None,
+    let db = match args.no_db {
+        true => None,
+        false => Some(Arc::new(crate::open_db(args.db.clone()).await?)),
     };
     let json_options = JsonOptions {
         deep: args.deep,
@@ -304,16 +290,6 @@ fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
 fn is_cbz(path: &Path) -> bool {
     path.extension()
         .is_some_and(|e| e.eq_ignore_ascii_case("cbz"))
-}
-
-/// Données de l'utilisateur : `$SHIORI_DATA_DIR`, sinon le dossier de données de l'OS.
-fn data_dir() -> Result<PathBuf> {
-    if let Some(dir) = std::env::var_os("SHIORI_DATA_DIR").filter(|d| !d.is_empty()) {
-        return Ok(PathBuf::from(dir));
-    }
-    directories::ProjectDirs::from("", "", "shiori")
-        .map(|d| d.data_dir().to_path_buf())
-        .context("dossier de données introuvable : définir SHIORI_DATA_DIR ou --db")
 }
 
 fn exit_code(results: &[Outcome], fail_on: FailOn) -> ExitCode {

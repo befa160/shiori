@@ -111,6 +111,11 @@ async fn libraries_are_validated() {
             .await,
         Err(LibraryError::NotADirectory(_))
     ));
+    // Un chemin relatif dépendrait du dossier de lancement du serveur.
+    assert!(matches!(
+        db.create_library("Relatif", Path::new("manga")).await,
+        Err(LibraryError::NotADirectory(_))
+    ));
     let sub = dir.path().join("manga/sous");
     std::fs::create_dir(&sub).unwrap();
     assert!(err(db.create_library("Sous", &sub).await).contains("« Manga »"));

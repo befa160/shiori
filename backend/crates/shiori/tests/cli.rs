@@ -219,3 +219,38 @@ fn usage_errors_exit_with_2() {
         stderr(&bad_db)
     );
 }
+
+/// Base indiquée par un simple nom de fichier : créée dans le dossier courant.
+#[test]
+fn db_given_as_a_bare_file_name() {
+    let lib = tempfile::tempdir().unwrap();
+    let tome = fixtures::manga(lib.path());
+    let out = Command::new(env!("CARGO_BIN_EXE_shiori"))
+        .args(["scan", tome.to_str().unwrap(), "--db", "nu.db", "-q"])
+        .current_dir(lib.path())
+        .env_remove("RUST_LOG")
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    assert!(lib.path().join("nu.db").exists());
+}
+
+/// Sans `SHIORI_DATA_DIR` (ou vide), la base va dans le dossier de données de l'OS
+/// (`$XDG_DATA_HOME/shiori` sous Linux ; ailleurs, le vrai dossier de l'utilisateur serait
+/// touché, d'où la restriction).
+#[cfg(target_os = "linux")]
+#[test]
+fn default_database_goes_to_the_os_data_dir() {
+    let lib = tempfile::tempdir().unwrap();
+    let xdg = tempfile::tempdir().unwrap();
+    let tome = fixtures::manga(lib.path());
+    let out = Command::new(env!("CARGO_BIN_EXE_shiori"))
+        .args(["scan", tome.to_str().unwrap(), "-q"])
+        .env("SHIORI_DATA_DIR", "")
+        .env("XDG_DATA_HOME", xdg.path())
+        .env_remove("RUST_LOG")
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    assert!(xdg.path().join("shiori/shiori.db").exists());
+}

@@ -1,11 +1,10 @@
-//! Binaire Shiori : CLI de scan d'intégrité, puis le serveur web (phase 2).
+//! Binaire Shiori : CLI de scan d'intégrité et serveur HTTP.
 
 use std::process::ExitCode;
 
 use clap::{ArgAction, Parser, Subcommand};
+use shiori::{scan, server};
 use tracing_subscriber::EnvFilter;
-
-mod scan;
 
 #[derive(Parser)]
 #[command(
@@ -28,6 +27,8 @@ struct Cli {
 enum Command {
     /// Scan d'intégrité des archives d'un ou plusieurs dossiers.
     Scan(scan::ScanArgs),
+    /// Serveur HTTP : API JSON des bibliothèques, séries, tomes et pages.
+    Serve(server::ServeArgs),
 }
 
 fn main() -> ExitCode {
@@ -42,10 +43,22 @@ fn main() -> ExitCode {
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| level.into()))
         .init();
 
-    let Command::Scan(args) = cli.command;
     let outcome = tokio::runtime::Runtime::new()
         .map_err(anyhow::Error::from)
-        .and_then(|rt| rt.block_on(scan::run(args, cli.quiet)));
+        .and_then(|rt| {
+            rt.block_on(async {
+                match cli.command {
+                    Command::Scan(args) => scan::run(args, cli.quiet).await,
+                    Command::Serve(args) => {
+                        let ctrl_c = async {
+                            let _ = tokio::signal::ctrl_c().await;
+                        };
+                        server::run(args, cli.quiet, ctrl_c).await?;
+                        Ok(ExitCode::SUCCESS)
+                    }
+                }
+            })
+        });
     match outcome {
         Ok(code) => code,
         Err(e) => {
