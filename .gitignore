@@ -17,6 +17,9 @@ node_modules/
 .env.*
 !.env.example
 
+# Graphify : graphe reconstruit localement par les hooks git
+/graphify-out/
+
 # Claude Code : réglages personnels (settings.json reste versionné)
 .claude/settings.local.json
 
