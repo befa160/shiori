@@ -63,11 +63,17 @@ fn manga_has_cover_spreads_and_back_cover() {
 // --- Invariants ------------------------------------------------------------------
 
 /// Le bug « 4ème de couverture répétée » est impossible : chaque page relue par son
-/// index d'archive est exactement l'image attendue à cet ordinal.
+/// index d'archive est exactement l'image attendue à cet ordinal. `unpadded` couvre le cas
+/// du webtoon réel : archive rangée dans le désordre (`1, 10, 11, 2…`), lue dans l'ordre.
 #[test]
 fn every_page_is_the_right_image() {
     let dir = tempfile::tempdir().unwrap();
-    for path in [fixtures::webtoon(dir.path()), fixtures::manga(dir.path())] {
+    let archives = [
+        fixtures::webtoon(dir.path()),
+        fixtures::manga(dir.path()),
+        fixtures::unpadded(dir.path()),
+    ];
+    for path in archives {
         let r = scan(&path);
         let mut archive = CbzArchive::open(&path).unwrap();
         for p in &r.pages {
