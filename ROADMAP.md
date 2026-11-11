@@ -219,6 +219,11 @@ Générées par du code au moment des tests, sans binaire versionné : détermin
 - [x] **1.3** `feat/core-integrity` : contrôles et codes de diagnostic, modèle de rapport, `shiori-testkit` et tests d'intégration sur les fixtures et les invariants.
   - `Archive::duplicates()` relit l'annuaire central quand `zip` signale des doublons (CRC + tailles 32 bits comparés).
   - Une archive qui commence par `PK\x03\x04` mais dont l'annuaire est introuvable est classée `archive_truncated`.
+  - **Essai réel** (webtoon de 1,96 Go, 12 760 pages déjà découpées en 800×1280 max, 116 chapitres) :
+    - `archive_order_differs` : 7 440 pages hors de leur place dans l'archive (paires voisines inversées, typique d'un téléchargement parallèle). Piste plausible pour les sauts de page constatés dans Kavita ; Shiori applique l'ordre naturel.
+    - Hash : 34 Mo/s à froid (disque), 836 Mo/s en cache. Scan normal 10,5 s, `--deep` 248 s (décodage séquentiel), mémoire max 12,6 Mo (19 Mo en `deep`).
+    - Conséquences : la double lecture n'est pas un problème ; 12 760 lignes de pages à écrire en une transaction (1.4) ; liste virtualisée dans le lecteur (phase 3) ; `index.json` d'outil de téléchargement (titre, auteurs, description, URL) comme source de métadonnées locale possible (phase 5).
+    - Amélioration possible, non prioritaire : décoder les pages en parallèle en mode `--deep`.
 - [ ] **1.4** `feat/db-schema` : `shiori-db`, migration `0001_scan.sql`, persistance, détection de changement, rescan idempotent.
 - [ ] **1.5** `feat/cli-scan` : commande `shiori scan`, tableau, JSON, codes de sortie, dossier de données ; mise à jour des commandes dans CLAUDE.md.
 - [ ] **1.6** `chore/graphify-build` : `/graphify .`, vérification des requêtes, fin de `GRAPHIFY_SKIP_HOOK`, bilan de phase ici.
