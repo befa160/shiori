@@ -89,6 +89,7 @@ pub struct PageInfo {
 pub struct PageSource {
     pub status: PageStatus,
     pub media_type: Option<String>,
+    pub width: Option<u32>,
     pub archive_index: usize,
     pub entry_name_raw: Vec<u8>,
     pub crc32: u32,
@@ -320,7 +321,7 @@ impl Db {
     /// Page et fichier où la lire ; `None` si l'ID est inconnu.
     pub async fn page_source(&self, id: &PageId) -> Result<Option<PageSource>, Error> {
         let Some(page) = sqlx::query(
-            "SELECT volume_id, status, media_type, archive_index, entry_name_raw, crc32
+            "SELECT volume_id, status, media_type, width, archive_index, entry_name_raw, crc32
              FROM pages WHERE id = ?",
         )
         .bind(id.to_string())
@@ -350,6 +351,7 @@ impl Db {
         Ok(Some(PageSource {
             status: from_db(page.get::<&str, _>("status"))?,
             media_type: page.get("media_type"),
+            width: page.get("width"),
             archive_index: page.get::<i64, _>("archive_index") as usize,
             entry_name_raw: page.get("entry_name_raw"),
             crc32: page.get("crc32"),
