@@ -11,7 +11,7 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 | 3 | Lecteur web (sens de lecture, webtoon, doubles pages) | ⏳ |
 | 4 | Bibliothèque façon Plex + statuts/filtres + DESIGN_SYSTEM.md | ⏳ |
 | 5 | Métadonnées web + édition manuelle | ⏳ |
-| 6 | Distribution : image Docker, PWA finalisée, binaires Linux/Windows en release | ⏳ |
+| 6 | Distribution : image Docker, PWA finalisée, binaires Linux/Windows en release, Dependabot | ⏳ |
 
 ## Méthode de travail
 
@@ -232,6 +232,7 @@ Générées par du code au moment des tests, sans binaire versionné : détermin
 - 2026-11-11 : dépôt cloné depuis `befa160/shiori` (licence MIT). `graphify-out/` ignoré par git. Hooks Graphify dans `.claude/settings.json` versionné. Playwright MCP en Chromium headless (scope projet).
 - 2026-11-11 : travail par branches et PR pour tout le projet.
 - 2026-11-11 : plan de la phase 1 validé, propositions Q1 à Q5 retenues.
+- 2026-11-11 : toujours les dernières versions stables (Rust stable, Node 26 via `web/.node-version`, dernières crates/paquets/actions), pas de support des versions anciennes. Dependabot (cargo, npm, GitHub Actions) en phase 6.
 - 2026-11-11 : couverture minimale 80 % lignes ET branches, imposée par le job CI `coverage` (nightly + `cargo-llvm-cov --branch`, fichiers de tests exclus de la mesure). Tests unitaires déplacés dans des fichiers `tests.rs` voisins.
 - 2026-11-11 : `zip` décode en CP437 un nom UTF-8 invalide (pas d'erreur) ; les octets bruts restent la seule base des IDs.
 - 2026-11-11 : formule des `page_id` figée par un test d'instantané (`id::tests::page_id_is_frozen`). Ordre naturel : à valeur égale, `9` précède `09` (comportement d'`alphanumeric-sort`, déterministe).

@@ -29,6 +29,13 @@ Front (depuis `web/`) :
 
 Avant chaque commit : clippy sans avertissement, `cargo fmt` propre, tests verts, build front OK.
 
+## Versions (obligatoire)
+
+- Toujours les **dernières versions stables** : Rust `stable` (`backend/rust-toolchain.toml`), Node.js courant (`web/.node-version`, aujourd'hui 26, aussi utilisé par la CI), dernières versions des crates, paquets npm et actions GitHub. Pas de support de versions anciennes.
+- Ajouter une dépendance = prendre sa dernière version (`cargo info <crate>`, `npm view <paquet> version`) ; `npm outdated` doit rester vide et `cargo update` ne doit rien laisser en retard dans une PR qui touche aux dépendances.
+- Seules exceptions, figées volontairement et montées à la main : le nightly de la couverture (`NIGHTLY` dans la CI) et la version de `cargo-llvm-cov`.
+- Dependabot (cargo, npm, GitHub Actions) sera mis en place en phase 6 pour maintenir tout cela à jour automatiquement.
+
 ## Couverture de tests (obligatoire)
 
 - **Minimum 80 % des lignes ET 80 % des branches**, mesuré sur le code de production. Le job CI `coverage` fait échouer la PR en dessous.

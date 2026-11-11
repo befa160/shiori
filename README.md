@@ -43,7 +43,7 @@ Pile : Rust (axum, tokio, sqlx + SQLite), React + Tailwind + shadcn/ui embarqué
 
 ## Développement
 
-Prérequis : [Rust](https://rustup.rs) stable (la version est fixée par `backend/rust-toolchain.toml`) et Node.js 22 ou plus (la CI utilise Node 26).
+Prérequis : les dernières versions stables de [Rust](https://rustup.rs) (canal `stable`, fixé par `backend/rust-toolchain.toml`) et de [Node.js](https://nodejs.org) (26, fixé par `web/.node-version`). Le projet suit toujours les dernières versions de ses outils et dépendances, pour que la maintenance reste simple.
 
 ```bash
 cd backend
