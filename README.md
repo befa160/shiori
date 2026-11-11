@@ -5,7 +5,7 @@
 
 Lecteur de mangas, BD et webtoons auto-hébergé. Un seul binaire Rust sert la bibliothèque et une application web installable (PWA), pensée d'abord pour la lecture sur tablette.
 
-> **État : en développement, rien d'utilisable pour l'instant.** La phase 1 (scan d'intégrité des archives) est en cours. L'avancement détaillé est dans [ROADMAP.md](ROADMAP.md).
+> **État : en développement.** Seule la commande `shiori scan` (scan d'intégrité des archives CBZ) est utilisable ; le lecteur arrive dans les phases suivantes. L'avancement détaillé est dans [ROADMAP.md](ROADMAP.md).
 
 ## Pourquoi
 
@@ -34,7 +34,9 @@ Shiori est conçu pour que ces défauts soient impossibles :
 
 ```
 backend/                 workspace Rust
-  crates/shiori-core/    archives, identités stables, ordre des pages (sans base ni async)
+  crates/shiori-core/    archives, identités stables, ordre des pages, scan d'intégrité (sans base ni async)
+  crates/shiori-db/      base SQLite : persistance des scans, détection de changement
+  crates/shiori-testkit/ fixtures de test générées par du code
   crates/shiori/         binaire : CLI de scan, puis serveur web
 web/                     application React 19 + TypeScript + Vite
 ```
@@ -57,6 +59,15 @@ cd web
 npm ci
 npm run dev
 ```
+
+Scanner une bibliothèque (rapport dans le terminal, base SQLite dans le dossier de données de l'OS, ou `SHIORI_DATA_DIR`) :
+
+```bash
+cd backend
+cargo run --release -p shiori -- scan /chemin/vers/ma/bibliotheque
+```
+
+Options utiles : `--deep` (décode chaque image), `--json rapport.json` (rapport complet), `--no-db` (sans base), `--fail-on warning`.
 
 Toute modification passe par une branche et une pull request. La CI vérifie le format, clippy et les tests sous Linux, Windows et macOS, le build du front, et une couverture de tests d'au moins 80 % des lignes et des branches. Les règles complètes sont dans [CLAUDE.md](CLAUDE.md).
 
