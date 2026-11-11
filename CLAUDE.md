@@ -58,6 +58,9 @@ Le lecteur est plein écran et immersif (barre d'outils masquée, tap au centre 
 
 ## Méthode de travail
 
+- `ROADMAP.md` est la roadmap vivante : la lire avant de commencer, la mettre à jour dans chaque PR qui fait avancer une phase (cases, décisions, questions).
+- Une branche de travail et une PR par lot (`feat/…`, `fix/…`, `chore/…`, `ci/…`, `docs/…`, `test/…`), jamais de commit direct sur `main`.
+- Tant que le graphe Graphify n'est pas construit (fin de phase 1), commiter avec `GRAPHIFY_SKIP_HOOK=1`.
 - Pour chaque phase : plan détaillé (crates, schéma SQLite, routes API, tâches) validé avant de coder.
 - Petits commits, tests à chaque phase.
 - Poser les questions bloquantes plutôt que supposer (CBR, formats d'image, breakpoints).
