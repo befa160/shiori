@@ -1,0 +1,28 @@
+# Rust
+/backend/target/
+**/*.rs.bk
+
+# Node / front
+node_modules/
+/web/dist/
+
+# Données locales (base, caches, bibliothèques de test hors fixtures)
+/data/
+*.db
+*.db-shm
+*.db-wal
+
+# Environnement
+.env
+.env.*
+!.env.example
+
+# Claude Code : réglages personnels (settings.json reste versionné)
+.claude/settings.local.json
+
+# OS / éditeurs
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
