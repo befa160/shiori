@@ -85,6 +85,115 @@ const CASES: &[Case] = &[
         None,
     ),
     ("  Spaced  /Tome 2.cbz", "Spaced", Volume, Some(2.0), None),
+    // Noms réels d'une bibliothèque de téléchargements : dossiers bruités, série tirée du fichier.
+    (
+        "Vinland.Saga.INTEGRALE.Yukimura.FR.[CBZ]-thor1295\\Vinland.Saga.T05.Yukimura.FR.[CBZ]-thor1295.cbz",
+        "Vinland Saga",
+        Volume,
+        Some(5.0),
+        None,
+    ),
+    (
+        "Birdmen (01-16) (Tanabe) (2020) [Digital-2100] (TONER-PapriKa+)\\Birdmen T10 (Tanabe) (2022) [Digital-2100] (TONER-PapriKa+).cbz",
+        "Birdmen",
+        Volume,
+        Some(10.0),
+        None,
+    ),
+    (
+        "07-Ghost INTEGRAL [DIGITAL 1920] FR CBZ\\07-Ghost T16 [DIGITAL 1920] FR  NOTAG.cbz",
+        "07-Ghost",
+        Volume,
+        Some(16.0),
+        None,
+    ),
+    (
+        "All.Out.Shiori.Amase.[INTEGRALE].FR.[CBZ]-Dogbanov\\All.Out.T08.Shiori.Amase.FR.[CBZ]-Dogbanov.cbz",
+        "All Out",
+        Volume,
+        Some(8.0),
+        None,
+    ),
+    (
+        "LINK.Shono.World's.End.Harem.T01-T18.2018.French.[CBZ.PDF]-Booker\\CBZ\\World's End Harem - T03.cbz",
+        "World's End Harem",
+        Volume,
+        Some(3.0),
+        None,
+    ),
+    (
+        "Battle Club 01-06\\Battle Club - 02.cbr",
+        "Battle Club",
+        Volume,
+        Some(2.0),
+        None,
+    ),
+    (
+        "Gigant - 01-10\\Gigant 09.cbz",
+        "Gigant",
+        Volume,
+        Some(9.0),
+        None,
+    ),
+    (
+        "Blazer Drive - 01-09\\Blazer Drive - T03.cbz",
+        "Blazer Drive",
+        Volume,
+        Some(3.0),
+        None,
+    ),
+    (
+        "Noritaka\\Volume 11 VF_00067d.cbz",
+        "Noritaka",
+        Volume,
+        Some(11.0),
+        None,
+    ),
+    (
+        "Pick Me Up !\\Chapitre 167_455d77.cbz",
+        "Pick Me Up !",
+        Chapter,
+        Some(167.0),
+        None,
+    ),
+    ("Gigant - 01-10\\09.cbz", "Gigant", Volume, Some(9.0), None),
+    (
+        "Battle Club 2nd Stage - 01-03\\01.cbz",
+        "Battle Club 2nd Stage",
+        Volume,
+        Some(1.0),
+        None,
+    ),
+    (
+        "Berserk (01-41+) (Miura) (2004) [Digital-1920]\\Tome 1.cbz",
+        "Berserk",
+        Volume,
+        Some(1.0),
+        None,
+    ),
+    (
+        "Hunter.X.Hunter.(T39).(TOGASHI).(2026).[Digital-1350].(Officiel).[CBZ].FR-NoFace696.cbz",
+        "Hunter X Hunter",
+        Volume,
+        Some(39.0),
+        None,
+    ),
+    (
+        "My_Girlfriend_Is_a_Zombie_Intégrale[R3dHTam].cbz",
+        "My Girlfriend Is a Zombie",
+        Special,
+        None,
+        None,
+    ),
+    (
+        "Leviathan (PalaceMultiUnivers).cbz",
+        "Leviathan",
+        Unknown,
+        None,
+        None,
+    ),
+    ("Akira (Tome 3).cbz", "Akira", Volume, Some(3.0), None),
+    ("Akira (v2) (Tome).cbz", "Akira", Volume, Some(2.0), None),
     // Décimaux et intervalles.
     (
         "Berserk/Berserk Tome 1.5.cbz",
@@ -452,6 +561,24 @@ const CASES: &[Case] = &[
     ("", "", Unknown, None, None),
 ];
 
+/// Le dossier attendu : premier composant, quand le chemin en a plusieurs.
+fn folder_of(path: &str) -> Option<String> {
+    let parts: Vec<&str> = path.split(['/', '\\']).filter(|p| !p.is_empty()).collect();
+    (parts.len() > 1).then(|| parts[0].trim().to_owned())
+}
+
+#[test]
+fn folder_groups_whatever_the_file_says() {
+    let a = parse("Birdmen (01-16) (Tanabe) [Digital-2100]/Birdmen T01 (2020).cbz");
+    let b = parse("Birdmen (01-16) (Tanabe) [Digital-2100]/Birdmen Chapitre 2.cbz");
+    assert_eq!(a.folder, b.folder);
+    assert_eq!(
+        a.folder.as_deref(),
+        Some("Birdmen (01-16) (Tanabe) [Digital-2100]")
+    );
+    assert_eq!(parse("Birdmen T01.cbz").folder, None);
+}
+
 #[test]
 fn table_of_names() {
     assert!(CASES.len() >= 80, "au moins 80 cas (plan de la phase 2)");
@@ -459,6 +586,7 @@ fn table_of_names() {
     for &(path, series, kind, number, number_end) in CASES {
         let got = parse(path);
         let want = ParsedName {
+            folder: folder_of(path),
             series: series.to_owned(),
             kind,
             number,
@@ -480,7 +608,7 @@ fn parser_version_is_frozen() {
         .map(|(path, ..)| format!("{:?}", parse(path)))
         .collect();
     let digest = blake3::hash(snapshot.join("\n").as_bytes()).to_hex();
-    assert_eq!((PARSER_VERSION, &digest[..16]), (1, "a595bcdae64f56b3"));
+    assert_eq!((PARSER_VERSION, &digest[..16]), (1, "da4a7c7560e2df5a"));
 }
 
 #[test]
