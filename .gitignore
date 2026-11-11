@@ -20,6 +20,9 @@ node_modules/
 # Graphify : graphe reconstruit localement par les hooks git
 /graphify-out/
 
+# Playwright MCP : instantanés et captures
+/.playwright-mcp/
+
 # Claude Code : réglages personnels (settings.json reste versionné)
 .claude/settings.local.json
 
