@@ -306,3 +306,32 @@ fn zip_errors_are_classified() {
         assert!(expected(&err), "{shown} → {err:?}");
     }
 }
+
+#[test]
+fn entries_larger_than_declared_are_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = write_zip(dir.path(), "a.cbz", &[("a.jpg", b"abcdef", STORED)]);
+    // Taille décompressée déclarée ramenée à 3 octets ; le CRC reste celui des 6 octets
+    // réels, seule la limite de taille arrête la lecture.
+    patch_header_u16(&path, 22, 24, |_| 3);
+    let mut archive = CbzArchive::open(&path).unwrap();
+    assert_eq!(archive.entries()[0].size, 3);
+    assert!(matches!(
+        archive.read_entry(0),
+        Err(ArchiveError::SizeMismatch)
+    ));
+}
+
+#[test]
+fn oversized_entries_are_refused_before_reading() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = write_zip(dir.path(), "a.cbz", &[("a.jpg", b"abcdef", STORED)]);
+    // Mot de poids fort de la taille déclarée : 0x2000_0006 > 512 Mio.
+    patch_header_u16(&path, 24, 26, |_| 0x2000);
+    let mut archive = CbzArchive::open(&path).unwrap();
+    assert!(archive.entries()[0].size > MAX_ENTRY_SIZE);
+    assert!(matches!(
+        archive.read_entry(0),
+        Err(ArchiveError::EntryTooLarge(_))
+    ));
+}

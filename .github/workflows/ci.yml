@@ -55,19 +55,24 @@ jobs:
       # Seuils obligatoires (CLAUDE.md, « Couverture de tests ») : lignes ET branches.
       MIN_LINES: 80
       MIN_BRANCHES: 80
+      # Versions figées : un nightly ou un outil cassé ne doit pas bloquer toutes les PR.
+      # À monter à la main de temps en temps.
+      NIGHTLY: nightly-2026-11-10
     steps:
       - uses: actions/checkout@v7
       # La couverture des branches (`--branch`) n'existe encore que sur nightly.
       - name: Toolchain nightly
-        run: rustup toolchain install nightly --profile minimal --component llvm-tools
-      - uses: taiki-e/install-action@cargo-llvm-cov
+        run: rustup toolchain install "$NIGHTLY" --profile minimal --component llvm-tools
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov@0.9.1
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: backend
           key: coverage
       - name: Mesure
         run: >-
-          cargo +nightly llvm-cov --workspace --locked --branch
+          cargo +${{ env.NIGHTLY }} llvm-cov --workspace --locked --branch
           --ignore-filename-regex '(/tests\.rs|/tests/)'
           --json --summary-only --output-path coverage.json
       - name: Seuils

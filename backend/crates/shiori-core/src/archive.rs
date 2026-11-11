@@ -22,10 +22,10 @@ pub enum EntryKind {
 /// Métadonnées d'une entrée, telles que déclarées par l'annuaire central.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Entry {
-    /// Position dans l'annuaire, utilisée pour l'accès direct.
+    /// Index d'accès direct dans `zip`. Les doublons de nom y sont fusionnés : ce n'est
+    /// pas la position brute dans l'annuaire central.
     pub index: usize,
-    /// Nom décodé (affichage, tri, diagnostics). Remplacement avec `U+FFFD` si le nom
-    /// n'est pas décodable.
+    /// Nom décodé (affichage, tri, diagnostics) : UTF-8, sinon CP437.
     pub name: String,
     /// Octets bruts du nom : base de l'identité des pages.
     pub name_raw: Vec<u8>,
@@ -39,6 +39,10 @@ pub struct Entry {
     pub encrypted: bool,
 }
 
+/// Taille maximale d'une entrée lue en mémoire : une page, même de webtoon, reste
+/// très en dessous. Protège contre les bombes zip.
+pub const MAX_ENTRY_SIZE: u64 = 512 * 1024 * 1024;
+
 #[derive(Debug, thiserror::Error)]
 pub enum ArchiveError {
     #[error("archive illisible : {0}")]
@@ -51,6 +55,10 @@ pub enum ArchiveError {
     UnsupportedCompression(String),
     #[error("CRC32 incorrect : le contenu ne correspond pas à l'annuaire")]
     CrcMismatch,
+    #[error("entrée trop grosse : {0} octets déclarés (maximum {MAX_ENTRY_SIZE})")]
+    EntryTooLarge(u64),
+    #[error("l'entrée contient plus d'octets que sa taille déclarée")]
+    SizeMismatch,
     #[error("aucune entrée d'index {0}")]
     NoSuchEntry(usize),
     #[error(transparent)]
@@ -60,9 +68,14 @@ pub enum ArchiveError {
 impl ArchiveError {
     /// Interprète une erreur survenue pendant la lecture du contenu d'une entrée.
     pub fn from_read_error(err: io::Error) -> Self {
-        // `zip` ne signale un CRC faux que par ce message (crc32.rs, `invalid_checksum!`).
-        if err.kind() == io::ErrorKind::InvalidData && err.to_string() == "Invalid checksum" {
+        // `zip` ne signale ces deux cas que par leur message (crc32.rs).
+        let invalid_data = err.kind() == io::ErrorKind::InvalidData;
+        if invalid_data && err.to_string() == "Invalid checksum" {
             Self::CrcMismatch
+        } else if invalid_data
+            && err.to_string() == "File is larger than its declared uncompressed size"
+        {
+            Self::SizeMismatch
         } else if err.kind() == io::ErrorKind::UnexpectedEof {
             Self::Truncated(err.to_string())
         } else {
@@ -99,9 +112,20 @@ pub trait Archive {
     /// lecture : une erreur se convertit avec [`ArchiveError::from_read_error`].
     fn open_entry(&mut self, index: usize) -> Result<Box<dyn Read + '_>, ArchiveError>;
 
-    /// Contenu complet d'une entrée, CRC vérifié.
+    /// Contenu complet d'une entrée, CRC vérifié, jamais plus que sa taille déclarée
+    /// ni plus de [`MAX_ENTRY_SIZE`].
     fn read_entry(&mut self, index: usize) -> Result<Vec<u8>, ArchiveError> {
-        let mut out = Vec::new();
+        let size = self
+            .entries()
+            .get(index)
+            .ok_or(ArchiveError::NoSuchEntry(index))?
+            .size;
+        if size > MAX_ENTRY_SIZE {
+            return Err(ArchiveError::EntryTooLarge(size));
+        }
+        // `zip` arrête la lecture dès qu'elle dépasse la taille déclarée (`SizeMismatch`) :
+        // la mémoire reste bornée par `size`.
+        let mut out = Vec::with_capacity(size as usize);
         self.open_entry(index)?
             .read_to_end(&mut out)
             .map_err(ArchiveError::from_read_error)?;

@@ -17,8 +17,8 @@ Backend (depuis `backend/`) :
 - Tests : `cargo test --workspace`
 - Lint : `cargo clippy --workspace --all-targets -- -D warnings`
 - Format : `cargo fmt --all` (vérification : `cargo fmt --all --check`)
-- Couverture (nightly, la couverture des branches y est encore instable) : `cargo +nightly llvm-cov --workspace --branch --summary-only --ignore-filename-regex '(/tests\.rs|/tests/)'`
-  (une fois : `rustup toolchain install nightly --profile minimal --component llvm-tools` et `cargo install cargo-llvm-cov --locked`)
+- Couverture (nightly, la couverture des branches y est encore instable) : `cargo +nightly-2026-11-10 llvm-cov --workspace --branch --summary-only --ignore-filename-regex '(/tests\.rs|/tests/)'`
+  (une fois : `rustup toolchain install nightly-2026-11-10 --profile minimal --component llvm-tools`, même date que `NIGHTLY` dans la CI et `cargo install cargo-llvm-cov --locked`)
 
 Front (depuis `web/`) :
 
