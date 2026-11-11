@@ -21,6 +21,7 @@ serde.workspace = true
 serde_json.workspace = true
 shiori-core.workspace = true
 shiori-db.workspace = true
+thiserror.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "sync", "net", "signal"] }
 tower-http.workspace = true
 tracing.workspace = true

@@ -9,6 +9,7 @@ use directories::ProjectDirs;
 use shiori_db::Db;
 
 pub mod cache;
+pub mod job;
 pub mod render;
 pub mod scan;
 pub mod server;

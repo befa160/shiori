@@ -23,7 +23,7 @@ Backend (depuis `backend/`) :
 CLI (depuis `backend/`) :
 
 - Scan d'intégrité : `cargo run -p shiori -- scan <dossier>... [--deep] [--json -] [--no-db]` (aide : `cargo run -p shiori -- scan --help`)
-- Serveur HTTP : `cargo run -p shiori -- serve [--listen 127.0.0.1:7878] [--db <fichier>] [--cache-dir <dossier>] [--cache-max-mib 2048]` (API JSON sous `/api`, sans authentification : ne pas écouter sur 0.0.0.0 hors réseau de confiance)
+- Serveur HTTP : `cargo run -p shiori -- serve [--listen 127.0.0.1:7878] [--db <fichier>] [--cache-dir <dossier>] [--cache-max-mib 2048] [--jobs N] [--scan-log-days 30]` (API JSON sous `/api`, sans authentification : ne pas écouter sur 0.0.0.0 hors réseau de confiance)
 - Base par défaut dans le dossier de données de l'OS ; `SHIORI_DATA_DIR` ou `--db` pour la déplacer. Code de sortie : 0 ok, 1 problème au-delà de `--fail-on`, 2 erreur d'usage ou fatale.
 
 Front (depuis `web/`) :

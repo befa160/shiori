@@ -14,7 +14,7 @@ use clap::{Args, ValueEnum};
 use comfy_table::{ContentArrangement, Table, presets};
 use serde::Serialize;
 use shiori_core::{FileReport, ScanOptions, Severity, Status, scan_file};
-use shiori_db::Scanned;
+use shiori_db::{RunCounts, RunStatus, Scanned};
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 
@@ -144,10 +144,11 @@ pub async fn run(args: ScanArgs, quiet: bool) -> Result<ExitCode> {
                 .map(|p| p.display().to_string())
                 .collect::<Vec<_>>()
                 .join("\n");
-            Some(
-                db.start_run(&roots, &serde_json::to_string(&json_options)?)
-                    .await?,
-            )
+            let run = db
+                .start_run(&roots, &serde_json::to_string(&json_options)?)
+                .await?;
+            db.set_run_total(run, files.len() as u64).await?;
+            Some(run)
         }
         None => None,
     };
@@ -165,7 +166,11 @@ pub async fn run(args: ScanArgs, quiet: bool) -> Result<ExitCode> {
         tasks.spawn(async move {
             let _permit = limit.acquire_owned().await?;
             let scanned = match (&db, run_id) {
-                (Some(db), Some(run)) => db.scan(run, &path, options, rehash).await?,
+                (Some(db), Some(run)) => {
+                    let scanned = db.scan(run, &path, options, rehash).await?;
+                    db.log_file(run, &scanned).await?;
+                    scanned
+                }
                 _ => Scanned {
                     report: tokio::task::spawn_blocking(move || scan_file(&path, options)).await?,
                     skipped: false,
@@ -181,13 +186,30 @@ pub async fn run(args: ScanArgs, quiet: bool) -> Result<ExitCode> {
         });
     }
     let mut results: Vec<Option<Outcome>> = files.iter().map(|_| None).collect();
+    let mut failure = None;
     while let Some(done) = tasks.join_next().await {
-        let (index, scanned) = done??;
-        results[index] = Some(scanned);
+        match done.map_err(anyhow::Error::from).and_then(|r| r) {
+            Ok((index, scanned)) => results[index] = Some(scanned),
+            Err(e) => {
+                failure = Some(e);
+                break;
+            }
+        }
     }
     let results: Vec<Outcome> = results.into_iter().flatten().collect();
     if let (Some(db), Some(run)) = (&db, run_id) {
-        db.finish_run(run).await?;
+        let mut counts = RunCounts::default();
+        results.iter().for_each(|r| counts.add(&r.scanned));
+        // Une erreur fatale clôt la passe `failed` : jamais laissée `running`.
+        let (status, error) = match &failure {
+            Some(e) => (RunStatus::Failed, Some(format!("{e:#}"))),
+            None => (RunStatus::Completed, None),
+        };
+        db.finish_run(run, status, &counts, error.as_deref())
+            .await?;
+    }
+    if let Some(e) = failure {
+        return Err(e);
     }
 
     let summary = Summary::of(&results);
@@ -266,7 +288,7 @@ fn collect(roots: &[PathBuf]) -> Result<Vec<Target>> {
         .collect())
 }
 
-fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
+pub(crate) fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
     let entries = match fs::read_dir(dir) {
         Ok(entries) => entries,
         Err(e) => {

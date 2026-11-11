@@ -5,6 +5,7 @@
 
 use std::future::Future;
 use std::net::SocketAddr;
+use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
 
@@ -26,6 +27,7 @@ use tokio::sync::Semaphore;
 use tower_http::trace::TraceLayer;
 
 use crate::cache::Images;
+use crate::job::Scanner;
 use crate::render::{self, Format, RENDER_VERSION, WIDTHS};
 
 #[derive(Args)]
@@ -42,12 +44,19 @@ pub struct ServeArgs {
     /// Taille maximale de ce cache, en Mio ; au-delà, les pages les moins lues sont effacées.
     #[arg(long, value_name = "MIO", default_value_t = 2048)]
     pub cache_max_mib: u64,
+    /// Fichiers scannés en parallèle par un scan lancé depuis l'API (défaut : nombre de cœurs).
+    #[arg(long, value_name = "N")]
+    pub jobs: Option<NonZeroUsize>,
+    /// Durée de conservation des passes de scan et de leurs journaux, en jours.
+    #[arg(long, value_name = "JOURS", default_value_t = 30)]
+    pub scan_log_days: u32,
 }
 
 /// État partagé par les requêtes.
 pub struct App {
     pub db: Arc<Db>,
     pub images: Images,
+    pub scanner: Scanner,
     /// Décoder et encoder coûte du CPU et de la mémoire : nombre de rendus simultanés borné.
     renders: Semaphore,
 }
@@ -59,6 +68,7 @@ impl App {
         Self {
             db,
             images,
+            scanner: Scanner::new(cores, 30),
             renders: Semaphore::new(cores.min(4)),
         }
     }
@@ -86,7 +96,18 @@ pub async fn run(
     if !quiet {
         eprintln!("Shiori écoute sur http://{}", listener.local_addr()?);
     }
-    serve(listener, Arc::new(App::new(Arc::new(db), images)), shutdown).await
+    // Une passe restée `running` vient d'un arrêt brutal : elle ne reprendra pas.
+    db.interrupt_running_runs().await?;
+    db.purge_runs(args.scan_log_days).await?;
+    let jobs = args
+        .jobs
+        .or_else(|| std::thread::available_parallelism().ok())
+        .map_or(1, NonZeroUsize::get);
+    let app = App {
+        scanner: Scanner::new(jobs, args.scan_log_days),
+        ..App::new(Arc::new(db), images)
+    };
+    serve(listener, Arc::new(app), shutdown).await
 }
 
 pub async fn serve(
@@ -95,9 +116,11 @@ pub async fn serve(
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> Result<()> {
     let local_only = listener.local_addr()?.ip().is_loopback();
-    axum::serve(listener, router(app, local_only))
+    axum::serve(listener, router(app.clone(), local_only))
         .with_graceful_shutdown(shutdown)
         .await?;
+    // Le scan en cours est annulé et sa passe close `cancelled`, jamais laissée `running`.
+    app.scanner.shutdown().await;
     Ok(())
 }
 

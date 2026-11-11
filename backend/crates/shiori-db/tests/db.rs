@@ -60,7 +60,14 @@ async fn first_scan_stores_volume_pages_location_and_issues() {
     assert_eq!(row.get::<String, _>(0), "warning");
     assert_eq!(row.get::<i64, _>(1), 11);
     assert_eq!(row.get::<i64, _>(2), shiori_core::SCANNER_VERSION);
-    db.finish_run(run).await.unwrap();
+    db.finish_run(
+        run,
+        shiori_db::RunStatus::Completed,
+        &Default::default(),
+        None,
+    )
+    .await
+    .unwrap();
     assert_eq!(
         count(
             &db,
