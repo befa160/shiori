@@ -211,9 +211,10 @@ Générées par du code au moment des tests, sans binaire versionné : détermin
 
 ### Lots (une branche + une PR chacun)
 
-- [ ] **1.1** `ci/github-actions` : workflow CI (sur le squelette actuel), badge dans le README.
-- [ ] **1.2** `feat/core-archive` : `shiori-core` (lecture CBZ, hash du fichier, IDs de page, ordre naturel) + tests unitaires.
+- [x] **1.1** `ci/github-actions` : workflow CI (sur le squelette actuel), badge dans le README. (#2, protection de `main` active : CI requise, historique linéaire)
+- [x] **1.2** `feat/core-archive` : `shiori-core` (lecture CBZ, hash du fichier, IDs de page, ordre naturel) + tests unitaires.
 - [ ] **1.3** `feat/core-integrity` : contrôles et codes de diagnostic, modèle de rapport, `shiori-testkit` et tests d'intégration sur les fixtures et les invariants.
+  - Constat du lot 1.2 : `zip` 9.5 fusionne les entrées de même nom (une seule exposée, `has_duplicate_names()` vrai). Pour distinguer `duplicate_entry_identical` de `duplicate_entry_conflict`, relire l'annuaire central (CRC, tailles) seulement quand ce drapeau est levé.
 - [ ] **1.4** `feat/db-schema` : `shiori-db`, migration `0001_scan.sql`, persistance, détection de changement, rescan idempotent.
 - [ ] **1.5** `feat/cli-scan` : commande `shiori scan`, tableau, JSON, codes de sortie, dossier de données ; mise à jour des commandes dans CLAUDE.md.
 - [ ] **1.6** `chore/graphify-build` : `/graphify .`, vérification des requêtes, fin de `GRAPHIFY_SKIP_HOOK`, bilan de phase ici.
@@ -231,3 +232,4 @@ Générées par du code au moment des tests, sans binaire versionné : détermin
 - 2026-11-11 : dépôt cloné depuis `befa160/shiori` (licence MIT). `graphify-out/` ignoré par git. Hooks Graphify dans `.claude/settings.json` versionné. Playwright MCP en Chromium headless (scope projet).
 - 2026-11-11 : travail par branches et PR pour tout le projet.
 - 2026-11-11 : plan de la phase 1 validé, propositions Q1 à Q5 retenues.
+- 2026-11-11 : formule des `page_id` figée par un test d'instantané (`id::tests::page_id_is_frozen`). Ordre naturel : à valeur égale, `9` précède `09` (comportement d'`alphanumeric-sort`, déterministe).
