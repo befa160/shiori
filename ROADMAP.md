@@ -6,10 +6,10 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 | Phase | Contenu | État |
 |---|---|---|
 | 0 | Outillage (Rust, structure, Ponytail, Graphify, UI/UX Pro Max, MCP shadcn + Playwright) | ✅ |
-| 1 | CLI de scan d'intégrité + schéma SQLite + CI linux/windows, puis graphe Graphify | 🚧 plan validé |
-| 2 | API axum + streaming/redimensionnement des images + parseur de noms + job de scan | ⏳ |
+| 1 | CLI de scan d'intégrité + schéma SQLite + CI linux/windows, puis graphe Graphify | ✅ |
+| 2 | API axum + streaming/redimensionnement des images + parseur de noms + job de scan + API d'administration des scans | ⏳ |
 | 3 | Lecteur web (sens de lecture, webtoon, doubles pages) | ⏳ |
-| 4 | Bibliothèque façon Plex + statuts/filtres + DESIGN_SYSTEM.md | ⏳ |
+| 4 | Bibliothèque façon Plex + statuts/filtres + menu d'administration (scans, journaux) + DESIGN_SYSTEM.md | ⏳ |
 | 5 | Métadonnées web + édition manuelle | ⏳ |
 | 6 | Distribution : image Docker, PWA finalisée, binaires Linux/Windows en release, Dependabot | ⏳ |
 
@@ -18,12 +18,12 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 - **Une branche par lot, une PR par lot**, jamais de commit direct sur `main` (sauf exception validée). Noms de branche : `feat/…`, `fix/…`, `chore/…`, `ci/…`, `docs/…`, `test/…`.
 - Chaque PR : description (contexte, changements, tests, captures si UI), CI verte, `cargo fmt` + `cargo clippy -D warnings` propres, **couverture ≥ 80 % lignes et branches** (job `coverage`), ROADMAP.md mis à jour si la PR fait avancer la phase.
 - Fusion par toi après relecture ; squash merge par défaut (historique de `main` = une ligne par lot).
-- **Graphify** : tant que le graphe n'est pas construit (fin de phase 1), les commits se font avec `GRAPHIFY_SKIP_HOOK=1`. Ensuite les hooks git le maintiennent à jour.
+- **Graphify** : graphe construit à la fin de la phase 1 ; les hooks git le maintiennent à jour, plus de `GRAPHIFY_SKIP_HOOK`.
 - Avant chaque phase : plan détaillé ici, validation, puis code.
 
 ---
 
-## Phase 1 : scan d'intégrité (plan validé le 2026-11-11)
+## Phase 1 : scan d'intégrité (plan validé le 2026-11-11, terminée le 2026-11-11)
 
 ### Objectif
 
@@ -236,7 +236,16 @@ Générées par du code au moment des tests, sans binaire versionné : détermin
   - Parallélisme : `--jobs` (défaut : nombre de cœurs), sémaphore tokio ; résultats remis dans l'ordre des fichiers (même JSON avec `--jobs 1` et `--jobs 8`).
   - JSON `report_version: 1` : options, résumé, fichiers (rapport complet + `skipped`). Avec `--json -`, le tableau passe sur la sortie d'erreur.
   - L'exemple local `examples/scan.rs` de l'essai réel est supprimé : la CLI le remplace.
-- [ ] **1.6** `chore/graphify-build` : `/graphify .`, vérification des requêtes, fin de `GRAPHIFY_SKIP_HOOK`, bilan de phase ici.
+- [x] **1.6** `chore/graphify-build` : `/graphify .`, vérification des requêtes, fin de `GRAPHIFY_SKIP_HOOK`, bilan de phase ici.
+  - Graphe : 530 nœuds, 903 arêtes, 21 communautés (code par AST, sans LLM ; `CLAUDE.md`, `README.md`, `ROADMAP.md` et `ci.yml` par extraction sémantique ; images et README du gabarit Vite écartés). Nœuds centraux : `IssueCode`, `FileReport`, `write_zip`, `ArchiveError`, `Db`.
+  - Limites connues : 150 arêtes vers des symboles externes (std, crates) sans nœud ; `0001_scan.sql` non analysé (grammaire SQL absente, `uv tool install "graphifyy[sql]"` pour l'ajouter).
+  - `every_page_is_the_right_image` couvre aussi une archive rangée dans le désordre (`unpadded`), le cas du webtoon réel.
+
+### Bilan de la phase 1
+
+- Livré : `shiori-core` (archives CBZ, identités stables, ordre naturel, scan d'intégrité, 18 codes), `shiori-db` (SQLite, rescan sans hash, pages mises à jour sur place), `shiori-testkit` (fixtures générées), CLI `shiori scan`, CI Linux / Windows / macOS avec couverture obligatoire ≥ 80 % (lignes 95 %, branches 90 % en fin de phase).
+- Validé sur un vrai webtoon de 2 Go (12 760 pages, archive en désordre) : ordre de lecture correct, 19 Mo de mémoire, rescan instantané.
+- Reste ouvert pour la suite : note CBR (Q1) avant la phase 2 ; décodage parallèle en `--deep` (non prioritaire) ; nettoyage des tomes orphelins avec les bibliothèques.
 
 ### Questions (résolues le 2026-11-11)
 
@@ -245,6 +254,19 @@ Générées par du code au moment des tests, sans binaire versionné : détermin
 - **Q3 GIF/BMP/TIFF** ✅ : avertissement `unsupported_image`, entrée ignorée comme page.
 - **Q4 Base par défaut** ✅ : la CLI écrit dans `<dossier de données>/shiori.db` ; `--db` surcharge, `--no-db` produit seulement le rapport.
 - **Q5 Doublons identiques** ✅ : avertissement, une seule page conservée ; doublons au contenu différent = erreur.
+
+## Fonctionnalités ajoutées en cours de route
+
+### Menu d'administration des scans (demandé le 2026-11-11)
+
+Objectif : piloter les scans depuis l'application et consulter leurs journaux, sans terminal.
+
+- **Phase 2 (API)** : lancer un scan (une bibliothèque, un dossier, un tome ; options `deep` et `rehash`), voir le scan en cours (progression, fichier courant), l'annuler ; historique des passes (`scan_runs` : début, fin, options, durée, compteurs ok / avertissement / erreur / inchangés) ; journal détaillé d'une passe (fichiers scannés, problèmes, erreurs fatales). À prévoir : une table de journal par passe (horodatage, niveau, fichier, message) et une durée de conservation configurable.
+- **Phase 4 (UI)** : page « Administration » → « Scans » : bouton « Scanner maintenant », passe en cours avec progression, historique filtrable, détail d'une passe avec ses journaux et un lien vers chaque tome en erreur. Accès réservé aux administrateurs quand les rôles arriveront (phase « Plus tard »).
+
+### Invariant de lecture à vérifier en phase 2
+
+L'ordre de lecture ne dépend jamais de l'ordre dans l'archive : le lecteur reçoit la liste ordonnée des `page_id` (par `ordinal`), et le serveur lit chaque page par l'`archive_index` enregistré pour cet ID. Test d'intégration à écrire avec l'API : sur une archive rangée dans le désordre, la page n servie par HTTP est l'image attendue à l'ordinal n (même contrôle par couleur que `every_page_is_the_right_image`).
 
 ## Journal des décisions
 
