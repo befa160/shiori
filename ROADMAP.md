@@ -231,7 +231,11 @@ Générées par du code au moment des tests, sans binaire versionné : détermin
   - Un fichier modifié donne un nouveau tome ; l'ancien reste en base (progression future préservée). Le nettoyage des tomes orphelins viendra avec les bibliothèques (phase 2).
   - Noms des enums en base = noms serde du cœur (une seule source de vérité). SQL toujours statique (`concat!`), exigé par sqlx 0.9.
   - 12 760 pages (taille de l'essai réel) : écriture en ~1,4 s en debug, relu identique à l'écrit.
-- [ ] **1.5** `feat/cli-scan` : commande `shiori scan`, tableau, JSON, codes de sortie, dossier de données ; mise à jour des commandes dans CLAUDE.md.
+- [x] **1.5** `feat/cli-scan` : commande `shiori scan`, tableau, JSON, codes de sortie, dossier de données ; mise à jour des commandes dans CLAUDE.md.
+  - Parcours récursif trié et dédoublonné, `.cbz` insensible à la casse, liens symboliques non suivis dans les dossiers ; un fichier passé explicitement est toujours scanné ; un sous-dossier illisible est signalé et ignoré.
+  - Parallélisme : `--jobs` (défaut : nombre de cœurs), sémaphore tokio ; résultats remis dans l'ordre des fichiers (même JSON avec `--jobs 1` et `--jobs 8`).
+  - JSON `report_version: 1` : options, résumé, fichiers (rapport complet + `skipped`). Avec `--json -`, le tableau passe sur la sortie d'erreur.
+  - L'exemple local `examples/scan.rs` de l'essai réel est supprimé : la CLI le remplace.
 - [ ] **1.6** `chore/graphify-build` : `/graphify .`, vérification des requêtes, fin de `GRAPHIFY_SKIP_HOOK`, bilan de phase ici.
 
 ### Questions (résolues le 2026-11-11)

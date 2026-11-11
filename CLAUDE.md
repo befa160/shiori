@@ -20,6 +20,11 @@ Backend (depuis `backend/`) :
 - Couverture (nightly, la couverture des branches y est encore instable) : `cargo +nightly-2026-11-10 llvm-cov --workspace --branch --summary-only --ignore-filename-regex '(/tests\.rs|/tests/|shiori-testkit/)'`
   (une fois : `rustup toolchain install nightly-2026-11-10 --profile minimal --component llvm-tools`, même date que `NIGHTLY` dans la CI et `cargo install cargo-llvm-cov --locked`)
 
+CLI (depuis `backend/`) :
+
+- Scan d'intégrité : `cargo run -p shiori -- scan <dossier>... [--deep] [--json -] [--no-db]` (aide : `cargo run -p shiori -- scan --help`)
+- Base par défaut dans le dossier de données de l'OS ; `SHIORI_DATA_DIR` ou `--db` pour la déplacer. Code de sortie : 0 ok, 1 problème au-delà de `--fail-on`, 2 erreur d'usage ou fatale.
+
 Front (depuis `web/`) :
 
 - Installation : `npm ci`

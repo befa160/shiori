@@ -67,3 +67,17 @@ fn rewriting_a_file_changes_its_stamp() {
     fs::write(&path, b"version 2, plus longue").unwrap();
     assert_ne!(before, stamp(&fs::metadata(&path).unwrap()));
 }
+
+#[test]
+fn a_panic_becomes_an_issue_of_that_file() {
+    let r = guarded(Path::new("piege.cbz"), || panic!("décodeur en vrac"));
+    assert_eq!(r.status, Status::Error);
+    assert_eq!(r.issues[0].code, IssueCode::ArchiveUnreadable);
+    assert!(r.issues[0].message.contains("décodeur en vrac"));
+    assert!(r.volume_id.is_none() && r.pages.is_empty());
+
+    let owned = guarded(Path::new("piege.cbz"), || {
+        panic!("{}", String::from("message dynamique"))
+    });
+    assert!(owned.issues[0].message.contains("message dynamique"));
+}

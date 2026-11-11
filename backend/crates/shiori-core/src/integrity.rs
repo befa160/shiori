@@ -142,6 +142,17 @@ pub struct ScanOptions {
 }
 
 impl FileReport {
+    fn empty(path: &Path) -> Self {
+        Self {
+            path: path.to_path_buf(),
+            volume_id: None,
+            size: 0,
+            status: Status::Ok,
+            pages: Vec::new(),
+            issues: Vec::new(),
+        }
+    }
+
     fn issue(&mut self, code: IssueCode, entry: Option<&str>, message: impl Into<String>) {
         self.issues.push(Issue {
             code,
@@ -164,14 +175,30 @@ impl FileReport {
 /// Scanne un fichier CBZ. Ne modifie jamais le fichier et ne panique pas sur une
 /// archive invalide : tout problème devient un [`Issue`].
 pub fn scan_file(path: &Path, options: ScanOptions) -> FileReport {
-    let mut report = FileReport {
-        path: path.to_path_buf(),
-        volume_id: None,
-        size: 0,
-        status: Status::Ok,
-        pages: Vec::new(),
-        issues: Vec::new(),
-    };
+    guarded(path, || scan_unguarded(path, options))
+}
+
+/// Une panique dans une bibliothèque tierce (archive malformée) devient un problème
+/// du fichier concerné au lieu d'interrompre le scan de toute la bibliothèque.
+fn guarded(path: &Path, scan: impl FnOnce() -> FileReport) -> FileReport {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(scan)).unwrap_or_else(|panic| {
+        let detail = panic
+            .downcast_ref::<&str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| panic.downcast_ref::<String>().cloned())
+            .unwrap_or_default();
+        let mut report = FileReport::empty(path);
+        report.issue(
+            IssueCode::ArchiveUnreadable,
+            None,
+            format!("erreur interne pendant l'analyse : {detail}"),
+        );
+        report.finish()
+    })
+}
+
+fn scan_unguarded(path: &Path, options: ScanOptions) -> FileReport {
+    let mut report = FileReport::empty(path);
     // shortcut: deux lectures du fichier (hash puis entrées) ; à fusionner si le scan de
     // grosses bibliothèques devient lent (le rescan, lui, évite le hash : lot 1.4).
     let mut stamp_before = None;
