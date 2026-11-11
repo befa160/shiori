@@ -6,7 +6,7 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 | Phase | Contenu | État |
 |---|---|---|
 | 0 | Outillage (Rust, structure, Ponytail, Graphify, UI/UX Pro Max, MCP shadcn + Playwright) | ✅ |
-| 1 | CLI de scan d'intégrité + schéma SQLite + CI linux/windows, puis graphe Graphify | ❓ plan à valider |
+| 1 | CLI de scan d'intégrité + schéma SQLite + CI linux/windows, puis graphe Graphify | 🚧 plan validé |
 | 2 | API axum + streaming/redimensionnement des images + parseur de noms + job de scan | ⏳ |
 | 3 | Lecteur web (sens de lecture, webtoon, doubles pages) | ⏳ |
 | 4 | Bibliothèque façon Plex + statuts/filtres + DESIGN_SYSTEM.md | ⏳ |
@@ -23,14 +23,14 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 
 ---
 
-## Phase 1 : scan d'intégrité (plan détaillé, à valider)
+## Phase 1 : scan d'intégrité (plan validé le 2026-11-11)
 
 ### Objectif
 
 `shiori scan <dossier>` parcourt un dossier, examine chaque CBZ **sans jamais le modifier**, enregistre en base l'identité du tome et de chacune de ses pages, et produit un rapport (JSON + tableau terminal) avec un statut `ok` / `warning` / `error` par fichier.
 C'est la fondation des principes 1, 3, 4, 5, 6 et 8 : tout ce que le lecteur affichera plus tard viendra de ce que le scan a établi.
 
-Hors périmètre de la phase 1 : CBR (❓ Q1), serveur HTTP, bibliothèques/séries, parseur de numéros de tome (phase 2), job de scan dans l'app (phase 2, il réutilisera le même moteur).
+Hors périmètre de la phase 1 : CBR (Q1), serveur HTTP, bibliothèques/séries, parseur de numéros de tome (phase 2), job de scan dans l'app (phase 2, il réutilisera le même moteur).
 
 ### Découpage du workspace
 
@@ -93,7 +93,7 @@ Chaque diagnostic a un code stable (utilisé par l'UI plus tard), une sévérit�
 | `no_pages` | error | aucune image |
 | `duplicate_entry_identical` | warning | même nom, contenu identique : une seule page est conservée |
 | `extension_mismatch` | warning | extension ≠ type réel (ex. `.jpg` contenant du png) ; la page reste valide, le type réel fait foi |
-| `unsupported_image` | warning | image d'un format hors liste (gif, bmp, tiff…), ignorée comme page ❓ Q3 |
+| `unsupported_image` | warning | image d'un format hors liste (gif, bmp, tiff…), ignorée comme page (Q3) |
 | `non_image_entry` | warning | fichier parasite (txt, nfo, url…) |
 | `subdirectories` | warning | pages réparties dans des sous-dossiers |
 | `archive_order_differs` | warning | ordre de l'annuaire ≠ ordre naturel (typiquement `1, 10, 2`) |
@@ -104,7 +104,7 @@ Statut du fichier = sévérité maximale (info ne dégrade pas `ok`).
 
 Modes :
 - défaut : CRC de toutes les entrées + en-têtes/dimensions de chaque image (rapide, lecture séquentielle unique du fichier) ;
-- `--deep` : en plus, décodage complet de chaque image (lent sur un webtoon de 2 Go, mais exhaustif). AVIF ❓ Q2.
+- `--deep` : en plus, décodage complet de chaque image (lent sur un webtoon de 2 Go, mais exhaustif). AVIF : en-tête seulement (Q2).
 
 ### Schéma SQLite (migration `0001_scan.sql`)
 
@@ -177,7 +177,7 @@ shiori scan <DOSSIER>... [--deep] [--jobs N] [--json <FICHIER|->] [--db <FICHIER
 ```
 
 - Parcours récursif, extensions `.cbz` (insensible à la casse), liens symboliques non suivis.
-- Base par défaut : `<dossier de données OS>/shiori.db` (`SHIORI_DATA_DIR` ou `--db` pour surcharger) ❓ Q4.
+- Base par défaut : `<dossier de données OS>/shiori.db` (`SHIORI_DATA_DIR` ou `--db` pour surcharger), `--no-db` pour le rapport seul (Q4).
 - Sortie : tableau `fichier | statut | pages | diagnostics` + résumé ; `--json` produit le rapport complet (schéma versionné `report_version: 1`).
 - Code de sortie : `0` si aucun fichier n'atteint le seuil `--fail-on` (défaut `error`), `1` sinon, `2` en cas d'erreur d'usage ou d'I/O fatale.
 - Fichiers ouverts en lecture seule uniquement ; aucune écriture hors de la base et du fichier JSON demandé.
@@ -218,15 +218,16 @@ Générées par du code au moment des tests, sans binaire versionné : détermin
 - [ ] **1.5** `feat/cli-scan` : commande `shiori scan`, tableau, JSON, codes de sortie, dossier de données ; mise à jour des commandes dans CLAUDE.md.
 - [ ] **1.6** `chore/graphify-build` : `/graphify .`, vérification des requêtes, fin de `GRAPHIFY_SKIP_HOOK`, bilan de phase ici.
 
-### Questions ouvertes (❓)
+### Questions (résolues le 2026-11-11)
 
-- **Q1 CBR** : hors phase 1. Avant la phase 2, une note comparera la conversion CBR→CBZ au scan et le cache d'extraction, ainsi que les licences (unrar : licence propriétaire restrictive ; libarchive : BSD mais C, donc derrière une feature).
-- **Q2 AVIF en `--deep`** : il n'existe pas de décodeur AVIF pur Rust mature (`image` passe par dav1d, en C). Proposition : en phase 1, AVIF validé par l'en-tête seulement, et décodage complet derrière une feature native optionnelle plus tard. L'encodage AVIF (ravif, pur Rust) et WebP avec perte (libwebp, en C) seront à trancher en phase 2.
-- **Q3 GIF/BMP/TIFF** : simple avertissement et entrée ignorée (proposé), ou pages à part entière ?
-- **Q4 Base par défaut** : la CLI écrit dans la base du dossier de données (proposé, cohérent avec l'app à venir) ou seulement le rapport, avec la base derrière `--db` ?
-- **Q5 Doublons identiques** : avertissement et une seule page conservée (proposé), ou erreur stricte ?
+- **Q1 CBR** ✅ : hors phase 1. Avant la phase 2, une note comparera la conversion CBR→CBZ au scan et le cache d'extraction, ainsi que les licences (unrar : licence propriétaire restrictive ; libarchive : BSD mais C, donc derrière une feature).
+- **Q2 AVIF en `--deep`** ✅ (proposition retenue) : il n'existe pas de décodeur AVIF pur Rust mature (`image` passe par dav1d, en C). Proposition : en phase 1, AVIF validé par l'en-tête seulement, et décodage complet derrière une feature native optionnelle plus tard. L'encodage AVIF (ravif, pur Rust) et WebP avec perte (libwebp, en C) seront à trancher en phase 2.
+- **Q3 GIF/BMP/TIFF** ✅ : avertissement `unsupported_image`, entrée ignorée comme page.
+- **Q4 Base par défaut** ✅ : la CLI écrit dans `<dossier de données>/shiori.db` ; `--db` surcharge, `--no-db` produit seulement le rapport.
+- **Q5 Doublons identiques** ✅ : avertissement, une seule page conservée ; doublons au contenu différent = erreur.
 
 ## Journal des décisions
 
 - 2026-11-11 : dépôt cloné depuis `befa160/shiori` (licence MIT). `graphify-out/` ignoré par git. Hooks Graphify dans `.claude/settings.json` versionné. Playwright MCP en Chromium headless (scope projet).
 - 2026-11-11 : travail par branches et PR pour tout le projet.
+- 2026-11-11 : plan de la phase 1 validé, propositions Q1 à Q5 retenues.
