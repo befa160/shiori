@@ -31,6 +31,10 @@ pub enum NameKind {
 /// Résultat de l'analyse d'un chemin.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ParsedName {
+    /// Premier dossier sous la racine, tel quel : c'est lui qui regroupe les tomes d'une
+    /// série. `None` pour un fichier posé à la racine.
+    pub folder: Option<String>,
+    /// Nom de série à afficher, débarrassé des tags et du numéro.
     pub series: String,
     pub kind: NameKind,
     /// `1`, `1.5` ; absent si aucun numéro n'a été trouvé.
@@ -75,6 +79,40 @@ static RULES: LazyLock<Vec<(NameKind, bool, Regex)>> = LazyLock::new(|| {
 static TAGS: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\[[^\]]*\]|\([^)]*\)|\{[^}]*\}").expect("motif valide"));
 
+/// Un tag qui ne contient qu'un numéro de tome (`(T39)`) est gardé : c'est le numéro.
+static VOLUME_TAG: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)^\s*(?:tomes?|volumes?|vols?|t|v)\s*\.?\s*[0-9]").expect("motif valide")
+});
+
+/// Règle trouvée dans un nom nettoyé : type, numéro, fin, et ce qui précède le numéro.
+struct Found<'a> {
+    kind: NameKind,
+    number: Option<f64>,
+    number_end: Option<f64>,
+    prefix: &'a str,
+}
+
+fn find(name: &str) -> Option<Found<'_>> {
+    RULES.iter().find_map(|(kind, bare, re)| {
+        let caps = re.captures(name)?;
+        let number = caps.name("n").map(|m| to_number(m.as_str()));
+        let number_end = caps
+            .name("end")
+            .map(|m| to_number(m.as_str()))
+            .filter(|end| number.is_some_and(|n| *end > n));
+        if *bare && number_end.is_none() && is_year(&caps) {
+            return None;
+        }
+        let start = caps.get(0).map_or(0, |m| m.start());
+        Some(Found {
+            kind: *kind,
+            number,
+            number_end,
+            prefix: name[..start].trim_matches(SEPARATORS),
+        })
+    })
+}
+
 /// Analyse un chemin relatif à la racine d'une bibliothèque (`/` ou `\` comme séparateur).
 pub fn parse(relative_path: &str) -> ParsedName {
     let parts: Vec<&str> = relative_path
@@ -84,32 +122,33 @@ pub fn parse(relative_path: &str) -> ParsedName {
     let file = parts.last().copied().unwrap_or("");
     let name = clean(strip_extension(file));
     let folder = (parts.len() > 1).then(|| parts[0].trim().to_owned());
-
-    for (kind, bare, re) in RULES.iter() {
-        let Some(caps) = re.captures(&name) else {
-            continue;
-        };
-        let number = caps.name("n").map(|m| to_number(m.as_str()));
-        let number_end = caps
-            .name("end")
-            .map(|m| to_number(m.as_str()))
-            .filter(|end| number.is_some_and(|n| *end > n));
-        if *bare && number_end.is_none() && is_year(&caps) {
-            continue;
-        }
-        let prefix = name[..caps.get(0).map_or(0, |m| m.start())].trim_matches(SEPARATORS);
-        return ParsedName {
-            series: folder.unwrap_or_else(|| series_from(prefix, &name)),
-            kind: *kind,
-            number,
-            number_end,
-        };
-    }
+    let found = find(&name);
+    let prefix = found.as_ref().map_or("", |f| f.prefix);
     ParsedName {
-        series: folder.unwrap_or_else(|| name.clone()),
-        kind: NameKind::Unknown,
-        number: None,
-        number_end: None,
+        series: display_series(prefix, folder.as_deref(), &name),
+        kind: found.as_ref().map_or(NameKind::Unknown, |f| f.kind),
+        number: found.as_ref().and_then(|f| f.number),
+        number_end: found.as_ref().and_then(|f| f.number_end),
+        folder,
+    }
+}
+
+/// Nom affiché : ce qui précède le numéro dans le nom du fichier (les dossiers de
+/// téléchargement sont pleins de bruit : `Birdmen (01-16) (Tanabe) [Digital-2100]`) ; à
+/// défaut le dossier nettoyé, sans sa plage de tomes ; à défaut le nom du fichier.
+fn display_series(prefix: &str, folder: Option<&str>, name: &str) -> String {
+    let folder_title = folder.map(|f| {
+        let cleaned = clean(f);
+        match find(&cleaned) {
+            Some(found) if !found.prefix.is_empty() => found.prefix.to_owned(),
+            _ => cleaned,
+        }
+    });
+    match folder_title {
+        // Même nom à la casse près : l'écriture du dossier est en général la plus soignée.
+        Some(title) if prefix.is_empty() || title.eq_ignore_ascii_case(prefix) => title,
+        _ if !prefix.is_empty() => prefix.to_owned(),
+        _ => name.to_owned(),
     }
 }
 
@@ -155,7 +194,15 @@ fn strip_extension(file: &str) -> &str {
 /// Retire les tags, remplace `_` et les points hors nombres décimaux par des espaces
 /// (`One.Piece.v01` → `One Piece v01`), puis normalise les espaces.
 fn clean(stem: &str) -> String {
-    let without_tags = TAGS.replace_all(stem, " ");
+    let without_tags = TAGS.replace_all(stem, |caps: &Captures| {
+        let tag = &caps[0];
+        let inner = &tag[1..tag.len() - 1];
+        if VOLUME_TAG.is_match(inner) {
+            format!(" {inner} ")
+        } else {
+            " ".to_owned()
+        }
+    });
     let chars: Vec<char> = without_tags.chars().collect();
     let spaced: String = chars
         .iter()
@@ -172,14 +219,6 @@ fn clean(stem: &str) -> String {
         })
         .collect();
     spaced.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
-fn series_from(prefix: &str, name: &str) -> String {
-    if prefix.is_empty() {
-        name.to_owned()
-    } else {
-        prefix.to_owned()
-    }
 }
 
 fn to_number(text: &str) -> f64 {
