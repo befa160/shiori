@@ -196,12 +196,14 @@ fn a_volume_that_cannot_be_moved_is_kept_whole() {
     let images = Images::open(dir.path().to_path_buf(), 15).unwrap();
     images.extracted(&volume(1), 0, 10, fake(&[10])).unwrap();
     age_dir(&images, &volume(1), 200);
-    // Un fichier à la place du dossier de suppression : le renommage échoue.
-    let blocked = dir
-        .path()
-        .join("extract")
-        .join(format!("{}.del", volume(1)));
-    std::fs::write(&blocked, b"").unwrap();
+    let extracted = dir.path().join("extract").join(volume(1).to_string());
+    // Windows : une page ouverte empêche le renommage, le cas réel.
+    #[cfg(windows)]
+    let _open = File::open(extracted.join("0")).unwrap();
+    // Ailleurs une page ouverte n'empêche rien : un fichier à la place du dossier de
+    // suppression fait échouer le renommage.
+    #[cfg(not(windows))]
+    std::fs::write(extracted.with_extension("del"), b"").unwrap();
     images.extracted(&volume(2), 0, 10, fake(&[10])).unwrap();
     assert_eq!(images.extracted(&volume(1), 0, 10, never).unwrap(), [0; 10]);
     assert_eq!(images.used(), 20);
