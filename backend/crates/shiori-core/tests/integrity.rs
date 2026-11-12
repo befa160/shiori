@@ -6,7 +6,7 @@ use shiori_core::{
     Archive, CbzArchive, FileReport, IssueCode, PageStatus, ScanOptions, Severity, Status,
     scan_file,
 };
-use shiori_testkit::{DEFLATED, fixtures, page_color, png, write_zip};
+use shiori_testkit::{DEFLATED, RAR4, RAR5, fixtures, page_color, png, write_zip};
 
 fn scan(path: &Path) -> FileReport {
     scan_file(path, ScanOptions::default())
@@ -349,4 +349,111 @@ fn report_serializes_ids_as_hex_and_hides_raw_names() {
     assert_eq!(json["pages"][0]["status"], "ok");
     assert_eq!(json["issues"][0]["code"], "ignored_entry");
     assert!(json["pages"][0].get("entry_name_raw").is_none());
+}
+
+// --- CBR (RAR) -------------------------------------------------------------------
+
+#[test]
+fn rar_volumes_are_scanned_like_zip_ones() {
+    let dir = tempfile::tempdir().unwrap();
+    for (version, solid) in [(RAR5, false), (RAR5, true), (RAR4, false), (RAR4, true)] {
+        let name = format!("{version:?}-{solid}.cbr");
+        let r = scan(&fixtures::rar(dir.path(), &name, version, solid));
+        assert_eq!(r.format, "cbr");
+        let mut expected = vec![IssueCode::IgnoredEntry];
+        if solid {
+            expected.insert(0, IssueCode::SolidArchive);
+        }
+        expected.extend([IssueCode::ArchiveOrderDiffers, IssueCode::Subdirectories]);
+        assert_eq!(codes(&r), expected, "{name}");
+        assert_eq!(r.status, Status::Warning);
+        assert_eq!(
+            names(&r),
+            [
+                "ch1/01.png",
+                "ch1/02.png",
+                "ch1/03.png",
+                "ch2/01.png",
+                "ch2/02.png",
+                "ch2/03.png"
+            ]
+        );
+        for (i, p) in r.pages.iter().enumerate() {
+            assert_eq!(
+                (p.status, p.width, p.height),
+                (PageStatus::Ok, Some(60), Some(90))
+            );
+            assert_eq!(p.ordinal, i);
+        }
+    }
+    // Un zip renommé en `.cbr` reste un zip.
+    let zip = fixtures::manga(dir.path());
+    let renamed = dir.path().join("zip.cbr");
+    std::fs::rename(zip, &renamed).unwrap();
+    assert_eq!(scan(&renamed).format, "cbz");
+}
+
+#[test]
+fn rar_duplicates_keep_the_last_occurrence() {
+    let dir = tempfile::tempdir().unwrap();
+    let first = png(8, 8, page_color(1));
+    let last = png(8, 8, page_color(2));
+    let files: [(&str, &[u8]); 3] = [("a.png", &first), ("a.png", &last), ("b.png", &first)];
+    let mut rar = rars::Builder::new(RAR5).allow_duplicate_names(true);
+    for (n, b) in files {
+        rar.add_bytes(n.as_bytes().to_vec(), b.to_vec(), None, None)
+            .unwrap();
+    }
+    let path = dir.path().join("dups.cbr");
+    rar.write_to_path(&path, None).unwrap();
+    let r = scan(&path);
+    assert_eq!(codes(&r), [IssueCode::DuplicateEntryConflict]);
+    assert_eq!(names(&r), ["a.png", "b.png"]);
+    assert_eq!(
+        (r.pages[0].archive_index, r.pages[0].status),
+        (1, PageStatus::Broken)
+    );
+}
+
+#[test]
+fn multivolume_rar_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut rar = rars::Builder::new(RAR5).store(true).volume_size(Some(4096));
+    rar.add_bytes(b"01.png".to_vec(), vec![7; 20_000], None, None)
+        .unwrap();
+    let volumes = rar.build_volumes(None).unwrap();
+    assert!(volumes.len() > 1);
+    let path = dir.path().join("tome.part1.cbr");
+    std::fs::write(&path, &volumes[0]).unwrap();
+    let r = scan(&path);
+    assert_eq!(codes(&r), [IssueCode::MultivolumeArchive]);
+    assert_eq!(r.status, Status::Error);
+    assert!(r.pages.is_empty());
+}
+
+/// RAR solid abîmé : chaque page garde sa place, celles d'après le dégât sont `broken` ;
+/// coupé, il est signalé tronqué.
+#[test]
+fn damaged_solid_rar_breaks_the_pages_after_the_damage() {
+    let dir = tempfile::tempdir().unwrap();
+    let (path, pages) = fixtures::damaged_solid_rar(dir.path());
+    let r = scan(&path);
+    assert_eq!(r.status, Status::Error);
+    assert_eq!(r.pages.len(), pages.len());
+    let broken: Vec<_> = r
+        .pages
+        .iter()
+        .map(|p| p.status == PageStatus::Broken)
+        .collect();
+    let cut = broken.iter().position(|&b| b).unwrap();
+    assert!(
+        cut > 0,
+        "les pages avant le dégât se lisent : {:?}",
+        r.issues
+    );
+    assert!(broken[cut..].iter().all(|&b| b));
+
+    let full = std::fs::read(&path).unwrap();
+    std::fs::write(&path, &full[..full.len() / 2]).unwrap();
+    assert_eq!(codes(&scan(&path)), [IssueCode::ArchiveTruncated]);
 }

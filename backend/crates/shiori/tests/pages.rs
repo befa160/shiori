@@ -15,7 +15,7 @@ use shiori::cache::Images;
 use shiori::server::{self, App};
 use shiori_core::ScanOptions;
 use shiori_db::Db;
-use shiori_testkit::{STORED, fixtures, page_color, png, replace_all, write_zip};
+use shiori_testkit::{RAR4, RAR5, STORED, fixtures, page_color, png, replace_all, write_zip};
 use tower::ServiceExt;
 
 struct Fixture {
@@ -119,7 +119,8 @@ fn mtime(path: &Path) -> std::time::SystemTime {
 }
 
 /// L'invariant de lecture : la page n servie par HTTP est l'image de l'ordinal n, même
-/// quand l'archive est rangée dans le désordre (`1, 10, 11, 2…`).
+/// quand l'archive est rangée dans le désordre (`1, 10, 11, 2…`), en CBZ comme en CBR
+/// (solid ou non, RAR 4 ou 5).
 #[tokio::test]
 async fn every_page_served_over_http_is_the_right_image() {
     let f = fixture().await;
@@ -127,6 +128,10 @@ async fn every_page_served_over_http_is_the_right_image() {
         fixtures::unpadded(f.dir.path()),
         fixtures::webtoon(f.dir.path()),
         fixtures::manga(f.dir.path()),
+        fixtures::rar(f.dir.path(), "rar5.cbr", RAR5, false),
+        fixtures::rar(f.dir.path(), "rar5-solid.cbr", RAR5, true),
+        fixtures::rar(f.dir.path(), "rar4.cbr", RAR4, false),
+        fixtures::rar(f.dir.path(), "rar4-solid.cbr", RAR4, true),
     ] {
         let volume = f.scan(&path).await;
         let pages = f.pages(&volume).await;
@@ -344,4 +349,33 @@ async fn a_rescanned_file_is_never_read_with_its_old_directory() {
         let ordinal = page["ordinal"].as_u64().unwrap() as usize;
         assert_eq!(ordinal_of(&body(response).await, 10), 7 - ordinal);
     }
+}
+
+/// RAR solid : la première page demandée extrait tout le tome une fois dans le cache ; les
+/// suivantes y sont lues, et chacune est revérifiée contre sa taille du scan.
+#[tokio::test]
+async fn solid_rar_pages_come_from_one_extraction() {
+    let f = fixture().await;
+    let path = fixtures::rar(f.dir.path(), "solide.cbr", RAR5, true);
+    let volume = f.scan(&path).await;
+    let pages = f.pages(&volume).await;
+    let extracted = f.dir.path().join("cache/extract").join(&volume);
+    assert!(!extracted.exists());
+    let (status, _) = f.image(pages[2]["id"].as_str().unwrap()).await;
+    assert_eq!(status, StatusCode::OK);
+    let files = std::fs::read_dir(&extracted).unwrap().count();
+    assert_eq!(
+        files,
+        fixtures::RAR_PAGES + 1,
+        "toutes les entrées, ComicInfo compris"
+    );
+
+    // Une page extraite abîmée n'est jamais servie.
+    for file in std::fs::read_dir(&extracted).unwrap() {
+        std::fs::write(file.unwrap().path(), b"court").unwrap();
+    }
+    assert_eq!(
+        f.error(pages[3]["id"].as_str().unwrap()).await,
+        (StatusCode::INTERNAL_SERVER_ERROR, "page_corrupt".into())
+    );
 }

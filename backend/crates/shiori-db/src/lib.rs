@@ -261,7 +261,7 @@ impl Db {
         path: &Path,
     ) -> Result<Option<FileReport>, Error> {
         let id = volume.to_string();
-        let Some(row) = sqlx::query("SELECT size, status FROM volumes WHERE id = ?")
+        let Some(row) = sqlx::query("SELECT size, format, status FROM volumes WHERE id = ?")
             .bind(&id)
             .fetch_optional(&self.pool)
             .await?
@@ -317,6 +317,10 @@ impl Db {
         Ok(Some(FileReport {
             path: path.to_path_buf(),
             volume_id: Some(*volume),
+            format: match row.get::<&str, _>("format") {
+                "cbr" => "cbr",
+                _ => "cbz",
+            },
             size: row.get::<i64, _>("size") as u64,
             status: from_db::<Status>(row.get("status"))?,
             pages,
@@ -337,16 +341,17 @@ async fn save_volume(
 ) -> Result<(), Error> {
     let sql = concat!(
         "INSERT INTO volumes (id, size, format, status, page_count, scanner_version, scanned_at)
-         VALUES (?, ?, 'cbz', ?, ?, ?, ",
+         VALUES (?, ?, ?, ?, ?, ?, ",
         now!(),
         ")
-         ON CONFLICT (id) DO UPDATE SET size = excluded.size, status = excluded.status,
+         ON CONFLICT (id) DO UPDATE SET size = excluded.size, format = excluded.format, status = excluded.status,
            page_count = excluded.page_count, scanner_version = excluded.scanner_version,
            scanned_at = excluded.scanned_at"
     );
     sqlx::query(sql)
         .bind(volume)
         .bind(report.size as i64)
+        .bind(report.format)
         .bind(to_db(&report.status))
         .bind(report.pages.len() as i64)
         .bind(SCANNER_VERSION)

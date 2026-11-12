@@ -26,6 +26,7 @@ fn synthetic(n: usize) -> FileReport {
     FileReport {
         path: "synthetique.cbz".into(),
         volume_id: Some(volume),
+        format: "cbz",
         size: 2_000_000_000,
         status: Status::Ok,
         pages,

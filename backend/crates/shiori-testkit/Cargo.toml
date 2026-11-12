@@ -12,4 +12,5 @@ workspace = true
 
 [dependencies]
 image.workspace = true
+rars = { workspace = true, features = ["write", "encryption"] }
 zip.workspace = true

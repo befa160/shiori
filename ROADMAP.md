@@ -270,7 +270,7 @@ Pas de nouveau crate : le crate `shiori` gagne une cible lib (`src/lib.rs`, le `
 
 ```
 shiori-core   + name.rs        parseur de noms de tomes (fonction pure)
-              + archive/rar.rs (lot 2.8, feature `cbr`)
+              + archive/rar.rs (lot 2.8, `rars` pur Rust, sans feature)
 shiori-db     + migrations 0002, 0003 ; bibliothèques, séries, emplacements, passes de scan, journaux
 shiori        + lib : server/ (routes axum, erreurs, état), render.rs (redimensionnement), cache.rs (cache disque), job.rs (job de scan)
               + commande `serve`
@@ -495,7 +495,10 @@ Arrêt propre sur Ctrl-C (`with_graceful_shutdown`) : un scan en cours est annul
   - `POST /api/admin/scans` `{ library_id, path?, deep?, rehash? }` → `202 { run }` ; `GET /api/admin/scans/current` (progression, ou 204) ; `POST /api/admin/scans/current/cancel` (202, `404 no_scan_running`) ; `GET /api/admin/scans?status=&library_id=&before=&limit=` (du plus récent au plus ancien) ; `GET /api/admin/scans/{id}` (options, durée, compteurs, erreur) ; `GET /api/admin/scans/{id}/logs?level=&after=&limit=` (`level` = gravité minimale). Listes : 50 par défaut, 500 au plus.
   - Codes : `scan_already_running` 409, `path_outside_library` 400, `path_not_found` 404, `not_found`, `invalid_body`, `invalid_query`, `invalid_id`, `internal`.
   - **Essai de bout en bout par HTTP** sur le webtoon réel (binaire release, bibliothèque créée par l'API) : scan en 69 s (disque froid) avec progression visible, passe `completed` (1 avertissement : `non_image_entry` pour `index.json`, `archive_order_differs`), série « Leviathan » et ses 12 760 pages consultables, page 101 servie originale puis en JPEG 480 px, rescan en 1,2 s (fichier inchangé). Limite constatée : la progression compte par fichier, un seul gros fichier reste à `done: 0` jusqu'à sa fin.
-- [ ] **2.8** `feat/cbr` : `RarArchive` (trait `Archive`), scan en flux, lecture directe des non solid, cache d'extraction des solid, fixtures générées, invariant d'ordre en HTTP sur les deux ; conception dans [docs/cbr.md](docs/cbr.md) §6. Clôture conditionnée à un essai sur un vrai CBR solid créé par WinRAR (libarchive refuse les solid écrits par `rars`, donc ces fixtures seules ne suffisent pas).
+- [x] **2.8** `feat/cbr` : `RarArchive` (trait `Archive`), scan en flux, lecture directe des non solid, cache d'extraction des solid, fixtures générées, invariant d'ordre en HTTP sur les deux ; conception réalisée dans [docs/cbr.md](docs/cbr.md) §6.
+  - Format reconnu au contenu (`Rar!`), pas à l'extension ; `volumes.format` = `cbz` ou `cbr`. Nouvelle méthode du trait `read_each` (une passe pour tout le tome), codes `solid_archive` (info) et `multivolume_archive` (erreur). Cache `<cache>/extract/<tome>/<index>` sous le même plafond que les rendus, jamais le dernier tome lu évincé.
+  - **Essai sur deux vrais CBR** (binaire release, bibliothèque et scan par l'API) : `Toriko-v16.cbr` (RAR 4 non solid, 142 Mo, 210 pages) et `tome-67.cbr` (RAR solid créé par WinRAR, 119 Mo, 183 pages dans 10 dossiers de chapitre, rangées hors ordre naturel). Scan des deux en 4,2 s. Toriko : page en 7 à 18 ms. Tome 67 : première page 1,7 à 1,9 s disque chaud (4,8 s à froid), le temps d'extraire tout le tome (114 Mo dans le cache), puis 2 ms par page ; AVIF 640 px en 0,36 s. Serveur à 69 Mo de RAM.
+  - Couverture : 97,1 % des lignes, 91,1 % des branches.
 - [ ] **2.9** `chore/phase2-wrap` : essai réel, mise à jour de CLAUDE.md (commandes `serve`), bilan de phase ici, `/graphify . --update`.
 
 ### Questions de la phase 2 (résolues le 2026-11-11)

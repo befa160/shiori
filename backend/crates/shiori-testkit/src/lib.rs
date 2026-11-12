@@ -1,4 +1,4 @@
-//! Fixtures de test : archives CBZ saines et cassées, générées par du code.
+//! Fixtures de test : archives CBZ et CBR saines et cassées, générées par du code.
 //!
 //! Rien n'est versionné en binaire : les fixtures sont déterministes et identiques sous
 //! Linux, Windows et macOS. Chaque page a une couleur unique ([`page_color`]) pour vérifier
@@ -12,6 +12,7 @@ use image::{ImageFormat, RgbImage};
 use zip::CompressionMethod;
 use zip::write::SimpleFileOptions;
 
+pub use rars::ArchiveVersion::{Rar29 as RAR4, Rar50 as RAR5};
 pub use zip::CompressionMethod::{Deflated as DEFLATED, Stored as STORED};
 
 /// Couleur unique d'une page, dérivée de son ordinal.
@@ -28,6 +29,22 @@ fn encode(width: u32, height: u32, rgb: [u8; 3], format: ImageFormat) -> Vec<u8>
 
 pub fn png(width: u32, height: u32, rgb: [u8; 3]) -> Vec<u8> {
     encode(width, height, rgb, ImageFormat::Png)
+}
+
+/// PNG de bruit déterministe, incompressible : son contenu occupe toute la place dans
+/// l'archive, une corruption au milieu du fichier tombe dans des données de page.
+pub fn noisy_png(width: u32, height: u32, seed: usize) -> Vec<u8> {
+    let mut state = seed as u64 ^ 0x9e37_79b9_7f4a_7c15;
+    let img = RgbImage::from_fn(width, height, |_, _| {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        let [r, g, b, ..] = state.to_le_bytes();
+        image::Rgb([r, g, b])
+    });
+    let mut out = Cursor::new(Vec::new());
+    img.write_to(&mut out, ImageFormat::Png).unwrap();
+    out.into_inner()
 }
 
 pub fn jpeg(width: u32, height: u32, rgb: [u8; 3]) -> Vec<u8> {
@@ -82,6 +99,25 @@ pub fn write_zip(dir: &Path, name: &str, files: &[(&str, &[u8], CompressionMetho
         }
     }
     zip.finish().unwrap();
+    path
+}
+
+/// Écrit une archive RAR, compressée ; `solid` : une seule suite compressée pour tout le
+/// tome (pas d'accès direct à une page).
+pub fn write_rar(
+    dir: &Path,
+    name: &str,
+    files: &[(&str, &[u8])],
+    version: rars::ArchiveVersion,
+    solid: bool,
+) -> PathBuf {
+    let path = dir.join(name);
+    let mut rar = rars::Builder::new(version).solid(solid);
+    for (entry, content) in files {
+        rar.add_bytes(entry.as_bytes().to_vec(), content.to_vec(), None, None)
+            .unwrap();
+    }
+    rar.write_to_path(&path, None).unwrap();
     path
 }
 
@@ -327,6 +363,47 @@ pub mod fixtures {
     }
 
     /// Fichier `.cbz` qui n'est pas un zip.
+    /// RAR solid de 8 pages de bruit, abîmé au milieu de ses données compressées : le
+    /// décodage échoue à partir d'une page et toutes les suivantes en dépendent.
+    pub fn damaged_solid_rar(dir: &Path) -> (PathBuf, Vec<Vec<u8>>) {
+        let pages: Vec<Vec<u8>> = (0..8).map(|i| noisy_png(64, 64, i)).collect();
+        let names: Vec<String> = (0..8).map(|i| format!("{i}.png")).collect();
+        let files: Vec<(&str, &[u8])> = names
+            .iter()
+            .zip(&pages)
+            .map(|(n, b)| (n.as_str(), b.as_slice()))
+            .collect();
+        let path = write_rar(dir, "abime.cbr", &files, RAR5, true);
+        let mut bytes = std::fs::read(&path).unwrap();
+        let middle = bytes.len() / 2;
+        for b in &mut bytes[middle..middle + 16] {
+            *b ^= 0xff;
+        }
+        std::fs::write(&path, bytes).unwrap();
+        (path, pages)
+    }
+
+    /// Nombre de pages des faux mangas RAR.
+    pub const RAR_PAGES: usize = 6;
+
+    /// Faux manga RAR : deux chapitres en sous-dossiers, pages écrites dans l'ordre inverse
+    /// de lecture, et un `ComicInfo.xml`. La page d'ordinal `i` a la couleur `page_color(i)`.
+    pub fn rar(dir: &Path, name: &str, version: rars::ArchiveVersion, solid: bool) -> PathBuf {
+        let pages: Vec<(String, Vec<u8>)> = (0..RAR_PAGES)
+            .rev()
+            .map(|i| {
+                let name = format!("ch{}/{:02}.png", i / 3 + 1, i % 3 + 1);
+                (name, png(60, 90, page_color(i)))
+            })
+            .collect();
+        let mut files: Vec<(&str, &[u8])> = pages
+            .iter()
+            .map(|(n, b)| (n.as_str(), b.as_slice()))
+            .collect();
+        files.push(("ComicInfo.xml", b"<ComicInfo/>"));
+        write_rar(dir, name, &files, version, solid)
+    }
+
     pub fn not_a_zip(dir: &Path) -> PathBuf {
         let path = dir.join("not-a-zip.cbz");
         std::fs::write(&path, b"Ceci n'est pas une archive.").unwrap();

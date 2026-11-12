@@ -2,7 +2,8 @@
 //!
 //! Les fichiers sont ouverts en lecture seule et ne sont jamais modifiés. Le CBZ est lu
 //! via l'annuaire central : chaque entrée est accessible directement par son index,
-//! sans extraction complète, zip64 compris. Le CBR viendra derrière le même trait.
+//! sans extraction complète, zip64 compris. Le CBR (RAR) passe par le même trait : voir
+//! [`rar`].
 
 use std::collections::BTreeMap;
 use std::fs::File;
@@ -11,6 +12,9 @@ use std::path::{Path, PathBuf};
 
 use zip::result::ZipError;
 use zip::{CompressionMethod, ZipArchive};
+
+pub mod rar;
+pub use rar::RarArchive;
 
 /// Nature d'une entrée d'archive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -141,6 +145,51 @@ pub trait Archive {
             .map_err(ArchiveError::from_read_error)?;
         Ok(out)
     }
+
+    /// Lire une entrée oblige à décoder toutes celles qui la précèdent (RAR solid).
+    fn is_solid(&self) -> bool {
+        false
+    }
+
+    /// Archive découpée en plusieurs fichiers (`.part2.rar`…), non gérée.
+    fn is_multivolume(&self) -> bool {
+        false
+    }
+
+    /// Lit chacune des entrées `indices` et remet son contenu (ou son erreur) à `visit`,
+    /// dans l'ordre de l'archive, une seule fois chacune. Une archive solid est décodée en
+    /// une seule passe au lieu d'une par entrée.
+    fn read_each(
+        &mut self,
+        indices: &[usize],
+        visit: &mut dyn FnMut(usize, Result<Vec<u8>, ArchiveError>),
+    ) {
+        let mut sorted = indices.to_vec();
+        sorted.sort_unstable();
+        sorted.dedup();
+        for i in sorted {
+            let read = self.read_entry(i);
+            visit(i, read);
+        }
+    }
+}
+
+/// Le format se reconnaît à son contenu, pas à l'extension : bien des `.cbr` sont des zip.
+pub fn is_rar(path: &Path) -> bool {
+    let mut magic = [0u8; 6];
+    File::open(path)
+        .and_then(|mut f| f.read_exact(&mut magic))
+        .is_ok()
+        && magic == *b"Rar!\x1a\x07"
+}
+
+/// Ouvre un CBZ ou un CBR selon son contenu.
+pub fn open(path: &Path) -> Result<Box<dyn Archive + Send>, ArchiveError> {
+    Ok(if is_rar(path) {
+        Box::new(RarArchive::open(path)?)
+    } else {
+        Box::new(CbzArchive::open(path)?)
+    })
 }
 
 /// Archive CBZ (zip).

@@ -20,8 +20,8 @@ use axum::{Json, Router};
 use clap::Args;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use shiori_core::{Archive, CbzArchive, PageId, PageStatus, Severity, VolumeId};
-use shiori_db::{Db, LibraryError, PageFile, RunFilter, RunStatus};
+use shiori_core::{Archive, PageId, PageStatus, Severity, VolumeId, open_archive as open_file};
+use shiori_db::{Db, LibraryError, PageFile, PageSource, RunFilter, RunStatus};
 use tokio::net::TcpListener;
 use tokio::sync::Semaphore;
 use tower_http::trace::TraceLayer;
@@ -456,19 +456,17 @@ async fn page_image(
             ));
         }
     };
+    let media_type = page.media_type.clone();
     let original = async {
-        let (index, raw, crc) = (page.archive_index, page.entry_name_raw.clone(), page.crc32);
-        tokio::task::spawn_blocking(move || read_page(&path, stamp, index, &raw, crc))
+        let app = app.clone();
+        tokio::task::spawn_blocking(move || read_page(&app.images, &path, stamp, &page))
             .await
             .map_err(|_| corrupt("lecture interrompue"))?
     };
     let (bytes, media_type) = match resize {
         None => {
-            let media_type = page.media_type.clone();
-            (
-                original.await?,
-                media_type.unwrap_or_else(|| "application/octet-stream".into()),
-            )
+            let media_type = media_type.unwrap_or_else(|| "application/octet-stream".into());
+            (original.await?, media_type)
         }
         Some((w, f)) => (
             resized(&app, id, w, f, original).await?,
@@ -520,20 +518,20 @@ fn corrupt(message: impl Into<String>) -> ApiError {
 }
 
 /// Lit l'entrée et vérifie que c'est bien la page enregistrée : même nom brut, même CRC.
-/// Le CRC est revérifié à la lecture.
+/// Le CRC est revérifié à la lecture. Un RAR solid est servi depuis son extraction en cache.
 fn read_page(
+    images: &Images,
     path: &std::path::Path,
     stamp: (i64, i64),
-    index: usize,
-    raw: &[u8],
-    crc: u32,
+    page: &PageSource,
 ) -> Result<Vec<u8>, ApiError> {
+    let index = page.archive_index;
     let archive = open_archive(path, stamp)?;
     let mut archive = archive.lock().unwrap_or_else(PoisonError::into_inner);
     let same = archive
         .entries()
         .get(index)
-        .is_some_and(|e| e.name_raw == raw && e.crc32 == crc);
+        .is_some_and(|e| e.name_raw == page.entry_name_raw && e.crc32 == page.crc32);
     if !same {
         return Err(ApiError::new(
             StatusCode::CONFLICT,
@@ -541,13 +539,38 @@ fn read_page(
             "l'archive ne contient plus cette page à sa place : à rescanner",
         ));
     }
+    if archive.is_solid() {
+        return images
+            .extracted(&page.volume_id, index, page.size, |dir| {
+                extract_all(&mut **archive, dir)
+            })
+            .map_err(|e| corrupt(e.to_string()));
+    }
     archive
         .read_entry(index)
         .map_err(|e| corrupt(e.to_string()))
 }
 
+/// Toutes les pages lisibles d'un tome, en une passe, dans `dir/<index>`. Une page illisible
+/// manque simplement : sa lecture échouera avec une erreur explicite.
+fn extract_all(archive: &mut dyn Archive, dir: &std::path::Path) -> std::io::Result<()> {
+    let files: Vec<usize> = archive
+        .entries()
+        .iter()
+        .filter(|e| e.kind == shiori_core::EntryKind::File)
+        .map(|e| e.index)
+        .collect();
+    let mut written = Ok(());
+    archive.read_each(&files, &mut |index, bytes| {
+        if let (Ok(bytes), Ok(())) = (bytes, &written) {
+            written = std::fs::write(dir.join(index.to_string()), bytes);
+        }
+    });
+    written
+}
+
 /// Archive ouverte, partagée entre les requêtes d'un même tome.
-type OpenArchive = Arc<Mutex<CbzArchive>>;
+type OpenArchive = Arc<Mutex<Box<dyn Archive + Send>>>;
 
 /// Annuaires centraux ouverts récemment, indexés par (chemin, taille, date) : un fichier
 /// modifié puis rescanné n'est jamais lu avec son ancien annuaire. Ouvrir celui d'un webtoon
@@ -569,7 +592,7 @@ fn open_archive(path: &std::path::Path, stamp: (i64, i64)) -> Result<OpenArchive
     }
     // Ouverture hors du verrou : les autres tomes restent servis pendant ce temps.
     let archive = Arc::new(Mutex::new(
-        CbzArchive::open(path).map_err(|e| corrupt(e.to_string()))?,
+        open_file(path).map_err(|e| corrupt(e.to_string()))?,
     ));
     let mut open = lock();
     open.retain(|(p, _, _)| p != path);

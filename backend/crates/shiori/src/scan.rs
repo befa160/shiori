@@ -20,7 +20,7 @@ use tokio::task::JoinSet;
 
 #[derive(Args)]
 pub struct ScanArgs {
-    /// Dossiers (parcourus récursivement) ou fichiers .cbz.
+    /// Dossiers (parcourus récursivement) ou fichiers .cbz / .cbr.
     #[arg(required = true)]
     paths: Vec<PathBuf>,
     /// Décode entièrement chaque image (lent ; AVIF : en-tête seulement).
@@ -280,7 +280,7 @@ fn collect(roots: &[PathBuf]) -> Result<Vec<Target>> {
         }
     }
     if found.is_empty() {
-        bail!("aucun fichier .cbz trouvé");
+        bail!("aucun fichier .cbz ou .cbr trouvé");
     }
     Ok(found
         .into_iter()
@@ -303,15 +303,15 @@ pub(crate) fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
         let path = entry.path();
         if kind.is_dir() {
             walk(&path, out);
-        } else if kind.is_file() && is_cbz(&path) {
+        } else if kind.is_file() && is_comic(&path) {
             out.push(path);
         }
     }
 }
 
-fn is_cbz(path: &Path) -> bool {
+fn is_comic(path: &Path) -> bool {
     path.extension()
-        .is_some_and(|e| e.eq_ignore_ascii_case("cbz"))
+        .is_some_and(|e| e.eq_ignore_ascii_case("cbz") || e.eq_ignore_ascii_case("cbr"))
 }
 
 fn exit_code(results: &[Outcome], fail_on: FailOn) -> ExitCode {

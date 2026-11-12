@@ -11,7 +11,9 @@ use std::path::{Path, PathBuf};
 use imagesize::{Compression, ImageType};
 use serde::{Deserialize, Serialize, Serializer};
 
-use crate::archive::{Archive, ArchiveError, CbzArchive, Entry, EntryKind};
+use std::collections::{BTreeMap, HashMap};
+
+use crate::archive::{self, ArchiveError, Entry, EntryKind};
 use crate::id::{PageId, VolumeId};
 use crate::order::compare_entry_names;
 
@@ -29,6 +31,7 @@ pub enum Severity {
 pub enum IssueCode {
     ArchiveUnreadable,
     ArchiveTruncated,
+    MultivolumeArchive,
     EncryptedEntry,
     UnsupportedCompression,
     CrcMismatch,
@@ -45,6 +48,7 @@ pub enum IssueCode {
     Subdirectories,
     ArchiveOrderDiffers,
     IgnoredEntry,
+    SolidArchive,
 }
 
 impl IssueCode {
@@ -53,6 +57,7 @@ impl IssueCode {
         match self {
             ArchiveUnreadable
             | ArchiveTruncated
+            | MultivolumeArchive
             | EncryptedEntry
             | UnsupportedCompression
             | CrcMismatch
@@ -68,7 +73,7 @@ impl IssueCode {
             | NonImageEntry
             | Subdirectories
             | ArchiveOrderDiffers => Severity::Warning,
-            IgnoredEntry => Severity::Info,
+            IgnoredEntry | SolidArchive => Severity::Info,
         }
     }
 }
@@ -121,6 +126,8 @@ pub struct FileReport {
     pub path: PathBuf,
     /// Absent si le fichier n'a même pas pu être lu.
     pub volume_id: Option<VolumeId>,
+    /// `cbz` ou `cbr`, d'après le contenu du fichier.
+    pub format: &'static str,
     pub size: u64,
     pub status: Status,
     pub pages: Vec<Page>,
@@ -146,6 +153,7 @@ impl FileReport {
         Self {
             path: path.to_path_buf(),
             volume_id: None,
+            format: "cbz",
             size: 0,
             status: Status::Ok,
             pages: Vec::new(),
@@ -172,7 +180,7 @@ impl FileReport {
     }
 }
 
-/// Scanne un fichier CBZ. Ne modifie jamais le fichier et ne panique pas sur une
+/// Scanne un fichier CBZ ou CBR. Ne modifie jamais le fichier et ne panique pas sur une
 /// archive invalide : tout problème devient un [`Issue`].
 pub fn scan_file(path: &Path, options: ScanOptions) -> FileReport {
     guarded(path, || scan_unguarded(path, options))
@@ -218,8 +226,11 @@ fn scan_unguarded(path: &Path, options: ScanOptions) -> FileReport {
         }
     };
     report.volume_id = Some(volume);
+    if archive::is_rar(path) {
+        report.format = "cbr";
+    }
 
-    let mut archive = match CbzArchive::open(path) {
+    let mut archive = match archive::open(path) {
         Ok(a) => a,
         Err(e) => {
             let code = if matches!(e, ArchiveError::Truncated(_)) || starts_like_zip(path) {
@@ -231,6 +242,21 @@ fn scan_unguarded(path: &Path, options: ScanOptions) -> FileReport {
             return report.finish();
         }
     };
+    if archive.is_multivolume() {
+        report.issue(
+            IssueCode::MultivolumeArchive,
+            None,
+            "archive en plusieurs volumes (.part1.rar…), non gérée",
+        );
+        return report.finish();
+    }
+    if archive.is_solid() {
+        report.issue(
+            IssueCode::SolidArchive,
+            None,
+            "archive RAR solid : pages servies depuis un cache d'extraction",
+        );
+    }
 
     let mut conflicts = Vec::new();
     match archive.duplicates() {
@@ -255,14 +281,31 @@ fn scan_unguarded(path: &Path, options: ScanOptions) -> FileReport {
         Err(e) => report.issue(IssueCode::ArchiveUnreadable, None, e.to_string()),
     }
 
-    for entry in archive.entries().to_vec() {
-        if let Some(mut page) = inspect(&mut archive, &volume, &entry, options, &mut report) {
-            if conflicts.contains(&entry.name_raw) {
+    // Un nom présent plusieurs fois : seule sa dernière occurrence fait une page (le zip
+    // fusionne déjà ses doublons, le RAR les liste tous).
+    let entries = archive.entries().to_vec();
+    let last: HashMap<&[u8], usize> = entries
+        .iter()
+        .map(|e| (e.name_raw.as_slice(), e.index))
+        .collect();
+    let mut candidates: BTreeMap<usize, (Page, bool)> = entries
+        .iter()
+        .filter(|e| last[e.name_raw.as_slice()] == e.index)
+        .filter_map(|e| Some((e.index, classify(&volume, e, &mut report)?)))
+        .collect();
+    let indices: Vec<usize> = candidates.keys().copied().collect();
+    archive.read_each(&indices, &mut |index, bytes| {
+        let Some((page, looks_like_image)) = candidates.remove(&index) else {
+            return;
+        };
+        let conflict = conflicts.contains(&page.entry_name_raw);
+        if let Some(mut page) = check(page, looks_like_image, bytes, options, &mut report) {
+            if conflict {
                 page.status = PageStatus::Broken;
             }
             report.pages.push(page);
         }
-    }
+    });
 
     // Le fichier a changé entre le hash et la lecture des entrées : les pages ne
     // correspondent pas forcément au `volume_id`. On ne les garde pas.
@@ -339,15 +382,9 @@ fn is_ignored(name: &str) -> bool {
             .any(|n| base.eq_ignore_ascii_case(n))
 }
 
-/// Examine une entrée : renvoie une page (éventuellement `broken`) ou rien, en
-/// enregistrant les problèmes dans le rapport.
-fn inspect(
-    archive: &mut CbzArchive,
-    volume: &VolumeId,
-    entry: &Entry,
-    options: ScanOptions,
-    report: &mut FileReport,
-) -> Option<Page> {
+/// Première moitié de l'examen d'une entrée, sans la lire : la page à venir et si son nom
+/// ressemble à une image, ou rien si l'entrée est écartée (problème enregistré).
+fn classify(volume: &VolumeId, entry: &Entry, report: &mut FileReport) -> Option<(Page, bool)> {
     let name = entry.name.as_str();
     match entry.kind {
         EntryKind::Dir => return None,
@@ -374,7 +411,7 @@ fn inspect(
     let looks_like_image = ext
         .as_deref()
         .is_some_and(|e| IMAGE_EXTENSIONS.contains(&e));
-    let mut page = Page {
+    let page = Page {
         id: PageId::derive(volume, &entry.name_raw),
         ordinal: 0,
         entry_name: entry.name.clone(),
@@ -388,12 +425,27 @@ fn inspect(
         crc32: entry.crc32,
         status: PageStatus::Broken,
     };
+    Some((page, looks_like_image))
+}
+
+/// Seconde moitié : à partir du contenu lu, une page (éventuellement `broken`) ou rien, en
+/// enregistrant les problèmes dans le rapport.
+fn check(
+    mut page: Page,
+    looks_like_image: bool,
+    bytes: Result<Vec<u8>, ArchiveError>,
+    options: ScanOptions,
+    report: &mut FileReport,
+) -> Option<Page> {
+    let name = page.entry_name.clone();
+    let name = name.as_str();
+    let ext = extension(name);
     let broken = |report: &mut FileReport, code: IssueCode, msg: String, page: Page| {
         report.issue(code, Some(name), msg);
         looks_like_image.then_some(page)
     };
 
-    let bytes = match archive.read_entry(entry.index) {
+    let bytes = match bytes {
         Ok(b) => b,
         Err(e) => return broken(report, issue_for(&e), e.to_string(), page),
     };
