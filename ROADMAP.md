@@ -819,7 +819,7 @@ UPDATE series SET created_at = (SELECT created_at FROM libraries WHERE libraries
 | PATCH | `/api/series/{id}` | `{ publication_status }` (`null` = inconnu) ; la phase 5 l'étendra aux métadonnées |
 | — | `GET /api/admin/scans/{id}/logs` | chaque ligne gagne `series_id` et `volume_id`, retrouvés par le chemin (jointure, sans migration) |
 
-Recherche et filtres **dans le navigateur** sur la liste complète (une requête, résultat immédiat à la frappe), insensibles à la casse et aux accents ; `shortcut:` dans le code : passer côté serveur au-delà d'environ 5 000 séries (Q26 bis).
+Recherche et filtres **dans le navigateur** sur la liste complète (une requête, résultat immédiat à la frappe), insensibles à la casse et aux accents ; `shortcut:` dans le code : passer côté serveur au-delà d'environ 5 000 séries.
 
 ### Navigation
 
