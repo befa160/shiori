@@ -5,17 +5,20 @@ import type { PageInfo, SeriesDetail, VolumeDetail } from '@/api/types'
 import { json, mockApi, renderAt } from '@/test/render'
 
 const VOLUME = 'a'.repeat(64)
-const settings = (reading_mode: 'rtl' | 'ltr' | 'vertical') =>
-  ({ reading_mode, page_layout: 'auto', reading_mode_override: null, page_layout_override: null }) as const
-const page = (n: number, status: 'ok' | 'broken' = 'ok'): PageInfo => ({
+type Mode = 'rtl' | 'ltr' | 'vertical'
+type Layout = 'single' | 'double' | 'auto'
+// Page simple par défaut : jsdom simule un écran paysage, où `auto` passerait en double.
+const settings = (reading_mode: Mode, page_layout: Layout = 'single') =>
+  ({ reading_mode, page_layout, reading_mode_override: null, page_layout_override: null }) as const
+const page = (n: number, status: 'ok' | 'broken' = 'ok', wide = false): PageInfo => ({
   id: `p${n}`,
   ordinal: n - 1,
-  width: 1200,
+  width: wide ? 2400 : 1200,
   height: 1800,
   media_type: 'image/jpeg',
   status,
 })
-const volume = (mode: 'rtl' | 'ltr' | 'vertical' = 'rtl'): VolumeDetail => ({
+const volume = (mode: Mode = 'rtl', layout: Layout = 'single'): VolumeDetail => ({
   id: VOLUME,
   size: 1,
   format: 'cbz',
@@ -24,7 +27,7 @@ const volume = (mode: 'rtl' | 'ltr' | 'vertical' = 'rtl'): VolumeDetail => ({
   scanned_at: '',
   locations: [{ path: '/m/Toriko/Toriko T16.cbz', library_id: 1, series_id: 7 }],
   issues: [],
-  settings: settings(mode),
+  settings: settings(mode, layout),
   progress: null,
 })
 const series: SeriesDetail = {
@@ -38,9 +41,9 @@ const series: SeriesDetail = {
   ],
 }
 
-function api(mode: 'rtl' | 'ltr' | 'vertical' = 'rtl', pages = [page(1), page(2, 'broken'), page(3)]) {
+function api(mode: Mode = 'rtl', pages = [page(1), page(2, 'broken'), page(3)], layout: Layout = 'single') {
   return mockApi({
-    [`/api/volumes/${VOLUME}`]: () => json(volume(mode)),
+    [`/api/volumes/${VOLUME}`]: () => json(volume(mode, layout)),
     [`/api/volumes/${VOLUME}/pages`]: () => json(pages),
     '/api/series/7': () => json(series),
   })
@@ -214,6 +217,80 @@ describe('lecteur', () => {
     })
     renderAt(`/read/${VOLUME}`)
     expect(await screen.findByRole('img', { name: 'Page 1 of 1' })).toBeInTheDocument()
+  })
+})
+
+describe('double page', () => {
+  const book = [page(1), page(2), page(3), page(4, 'ok', true), page(5), page(6)]
+  const shown = () => screen.getAllByRole('img').map((i) => i.getAttribute('alt'))
+
+  it('en paysage, auto montre deux pages : couverture seule, double page seule, paires dans le sens manga', async () => {
+    api('rtl', book, 'auto')
+    renderAt(`/read/${VOLUME}`)
+    expect(await screen.findByRole('img', { name: 'Page 1 sur 6' })).toBeInTheDocument()
+    await userEvent.keyboard('{ArrowLeft}')
+    // Pages 2 et 3 côte à côte : en manga, la 2 est à droite (rangée inversée).
+    expect(shown()).toEqual(['Page 2 sur 6', 'Page 3 sur 6'])
+    expect(screen.getByRole('img', { name: 'Page 2 sur 6' }).parentElement).toHaveClass('flex-row-reverse')
+    expect(screen.getByText('Pages 2 et 3 sur 6', { selector: '[aria-live]' })).toBeInTheDocument()
+    expect(screen.getByText('2–3 / 6')).toBeInTheDocument()
+    // Chaque page reçoit la moitié de l'écran : 1024×768, page 1200×1800 → 512 px → 640.
+    expect(screen.getByRole('img', { name: 'Page 2 sur 6' })).toHaveAttribute('src', '/api/pages/p2/image?w=640&f=avif')
+    await userEvent.keyboard('{ArrowLeft}')
+    expect(shown()).toEqual(['Page 4 sur 6'])
+    await userEvent.keyboard('{ArrowLeft}')
+    expect(shown()).toEqual(['Page 5 sur 6', 'Page 6 sur 6'])
+  })
+
+  it('le panneau Affichage change la disposition, décale les paires et coupe les doubles pages', async () => {
+    api('ltr', book, 'double')
+    renderAt(`/read/${VOLUME}?page=p2`)
+    expect(await screen.findByRole('img', { name: 'Page 2 sur 6' })).toBeInTheDocument()
+    expect(shown()).toEqual(['Page 2 sur 6', 'Page 3 sur 6'])
+    await userEvent.keyboard('{Tab}')
+    await userEvent.click(screen.getByRole('button', { name: 'Affichage' }))
+    await screen.findByRole('button', { name: "Décaler d'une page" })
+    // Toucher la page pour fermer le panneau ne la tourne pas.
+    fireEvent.pointerDown(main(), { pointerType: 'touch', pointerId: 9, clientX: 850, clientY: 300 })
+    fireEvent.pointerUp(main(), { pointerType: 'touch', pointerId: 9, clientX: 850, clientY: 300 })
+    expect(shown()).toEqual(['Page 2 sur 6', 'Page 3 sur 6'])
+    // Selon le moment, Radix a déjà refermé le panneau sur ce toucher extérieur : on le rouvre.
+    if (!screen.queryByRole('button', { name: "Décaler d'une page" })) {
+      await userEvent.click(screen.getByRole('button', { name: 'Affichage' }))
+    }
+    await userEvent.click(await screen.findByRole('button', { name: "Décaler d'une page" }))
+    // Décalé : la page 2 est seule, la 3 démarre la paire suivante.
+    expect(shown()).toEqual(['Page 2 sur 6'])
+    // En simple, la double page est coupée en deux moitiés successives (gauche d'abord en BD).
+    await userEvent.click(screen.getByRole('radio', { name: 'Simple' }))
+    // Échap ferme d'abord le panneau, puis masque les commandes : les touches reviennent aux pages.
+    await userEvent.keyboard('{Escape}')
+    expect(screen.queryByRole('radio', { name: 'Simple' })).toBeNull()
+    expect(screen.getByRole('toolbar', { hidden: true })).not.toHaveClass('invisible')
+    await userEvent.keyboard('{Escape}')
+    expect(screen.getByRole('toolbar', { hidden: true })).toHaveClass('invisible')
+    await userEvent.keyboard('{End}')
+    expect(shown()).toEqual(['Page 6 sur 6'])
+    await userEvent.keyboard('{ArrowLeft}{ArrowLeft}')
+    expect(shown()).toEqual(['Page 4 sur 6 (moitié droite)'])
+    await userEvent.keyboard('{ArrowLeft}')
+    expect(shown()).toEqual(['Page 4 sur 6 (moitié gauche)'])
+    // L'annonce aux lecteurs d'écran dit aussi de quelle moitié il s'agit.
+    expect(screen.getByText('Page 4 sur 6 (moitié gauche)', { selector: '[aria-live]' })).toBeInTheDocument()
+    // Et on repart en avant à travers les deux moitiés, sans rester bloqué sur la première.
+    await userEvent.keyboard('{ArrowRight}')
+    expect(shown()).toEqual(['Page 4 sur 6 (moitié droite)'])
+    await userEvent.keyboard('{ArrowRight}')
+    expect(shown()).toEqual(['Page 5 sur 6'])
+    await userEvent.keyboard('{ArrowLeft}{ArrowLeft}')
+    // L'image entière, deux fois la largeur de la boîte, demandée pour deux écrans de large.
+    const halfImage = screen.getByRole('img', { name: 'Page 4 sur 6 (moitié gauche)' })
+    expect(halfImage).toHaveStyle({ width: '200%' })
+    // Doubles pages entières : une seule vue.
+    await userEvent.keyboard('{Tab}')
+    await userEvent.click(screen.getByRole('button', { name: 'Affichage' }))
+    await userEvent.click(await screen.findByRole('radio', { name: 'Entières' }))
+    expect(shown()).toEqual(['Page 4 sur 6'])
   })
 })
 
