@@ -35,8 +35,9 @@ export function Toolbar({
       aria-label={t('reader.controls')}
       className={cn('pointer-events-none fixed inset-0 flex flex-col justify-between', !chrome && 'invisible')}
     >
-      {/* Marge de 8 px, ou la zone sûre si elle est plus grande (encoche, coins arrondis). */}
-      <header className="pointer-events-auto flex items-center gap-2 bg-black/80 pt-safe pr-[max(0.5rem,env(safe-area-inset-right))] pl-[max(0.5rem,env(safe-area-inset-left))]">
+      {/* Marges de 8 px sur les côtés, 4 px en haut et en bas (l'anneau de focus reste à l'écran),
+          ou la zone sûre si elle est plus grande (encoche, coins arrondis). */}
+      <header className="pointer-events-auto flex items-center gap-2 bg-black/80 pt-[max(0.25rem,env(safe-area-inset-top))] pb-1 pr-[max(0.5rem,env(safe-area-inset-right))] pl-[max(0.5rem,env(safe-area-inset-left))]">
         <Button asChild variant="ghost">
           <Link to={back}>
             <ChevronLeft aria-hidden />
@@ -48,7 +49,7 @@ export function Toolbar({
       </header>
       <div className="mt-auto">
         {end && <div className="pointer-events-auto flex justify-center p-3">{end}</div>}
-        <footer className="pointer-events-auto flex items-center gap-3 bg-black/80 pr-[max(0.5rem,env(safe-area-inset-right))] pb-safe pl-[max(0.5rem,env(safe-area-inset-left))]">
+        <footer className="pointer-events-auto flex items-center gap-3 bg-black/80 pr-[max(0.5rem,env(safe-area-inset-right))] pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] pl-[max(0.5rem,env(safe-area-inset-left))]">
           {children}
         </footer>
       </div>

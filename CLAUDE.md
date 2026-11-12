@@ -32,6 +32,7 @@ Front (depuis `web/`) :
 - Dev : `npm run dev`
 - Build (inclut la vérification de types) : `npm run build`
 - Lint : `npm run lint` (oxlint)
+- Bout en bout : `npm run e2e` (build du front, puis Playwright contre un `shiori serve` de debug sur une base et une bibliothèque générées dans `e2e/.data` ; une fois : `npx playwright install chromium`)
 
 Avant chaque commit : clippy sans avertissement, `cargo fmt` propre, tests verts, build front OK.
 

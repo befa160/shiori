@@ -23,3 +23,9 @@ coverage
 *.njsproj
 *.sln
 *.sw?
+
+# Tests de bout en bout : données générées, rapports et captures
+e2e/.data
+e2e/captures
+test-results
+playwright-report
