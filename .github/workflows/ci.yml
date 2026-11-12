@@ -108,3 +108,37 @@ jobs:
       # Seuils de couverture (80 % lignes et branches) dans vite.config.ts.
       - run: npm run coverage
       - run: npm run build
+
+  # Lecteur dans Chromium contre un vrai `shiori serve` (Q16) : invariant de lecture vérifié
+  # sur chaque page affichée, reprise, tome suivant, captures aux quatre tailles.
+  e2e:
+    name: e2e
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - name: Toolchain
+        working-directory: backend
+        run: rustup show active-toolchain
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+          key: e2e
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: web/.node-version
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run e2e
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: e2e-captures
+          path: |
+            web/e2e/captures
+            web/test-results
+          if-no-files-found: ignore

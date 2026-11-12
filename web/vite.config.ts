@@ -15,6 +15,8 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    // Les tests de bout en bout (`e2e/`) tournent avec Playwright, pas avec Vitest.
+    include: ['src/**/*.test.{ts,tsx}'],
     setupFiles: ['./src/test/setup.ts'],
     coverage: {
       provider: 'v8',
