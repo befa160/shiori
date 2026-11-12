@@ -672,7 +672,15 @@ Trois écrans simples pour atteindre le lecteur : bibliothèques, séries d'une 
   - `GET /api/series/{id}` : `settings` et `progress` par tome (absent si jamais ouvert) ; `GET /api/libraries` et `POST` : `kind` (`manga` si absent). Les bibliothèques existantes deviennent `manga`.
   - Types TypeScript du front alignés sur ces réponses.
   - Couverture : 97,3 % des lignes, 91,3 % des branches (`reading.rs` à 100 %).
-- [ ] **3.4** `feat/browse-minimal` : les trois écrans provisoires.
+- [x] **3.4** `feat/browse-minimal` : les trois écrans provisoires.
+  - `/` bibliothèques (type, nombre de séries et de tomes), `/libraries/:id` séries, `/series/:id` tomes dans l'ordre du serveur : libellé tiré du parseur (« Tome 3 », « Tomes 1–3 », « Chapitre 12,5 », « Spécial », sinon le nom du fichier), nombre de pages, badge « Erreur » ou « Avertissement » (le mot porte le sens, pas seulement la couleur), « Lu », ou « 45 / 183 » avec la barre de progression ambre de 1 px de haut en bas de la carte.
+  - Conception avec UI/UX Pro Max : bouton « Retour » explicite vers l'écran parent (l'historique du navigateur reste intact), lignes entièrement cliquables de 56 px au moins espacées de 8 px, titres tronqués sur deux lignes (titre complet au survol), état vide qui dit quoi faire, chargement par squelettes annoncé aux lecteurs d'écran (`aria-busy`), erreur avec le message du serveur et « Réessayer », titre d'onglet par écran.
+  - Composants par le MCP shadcn : badge, squelette, barre de progression (accessible, `role="progressbar"`) ; le badge destructif reprend le fond foncé du bouton. Le bug du registre (`import { cn } from "cn"`) est revenu : corrigé, et une règle oxlint (`no-restricted-imports`) fait désormais échouer le lint s'il réapparaît. Icônes `lucide-react`.
+  - Ligne de tome pas encore cliquable (`shortcut:` dans le code) : elle deviendra un lien vers le lecteur au lot 3.5.
+  - Liste de contrôle finale UI/UX Pro Max : retour visuel au toucher ajouté (`active:` sur les lignes et les boutons), le survol n'existant pas sur tablette.
+  - Captures Playwright aux quatre tailles, OS émulé en clair, sur une vraie bibliothèque (CBR réels, titre très long, tome abîmé, tome lu, tome en cours) : aucun défaut d'alignement, focus clavier visible sur les lignes.
+  - Identifiant invalide dans l'adresse (`/series/abc`, `/libraries/0`) : « Page introuvable » sans appeler l'API (avant : message technique du serveur, en anglais). Pendant « Réessayer », la requête repasse en chargement et les squelettes le montrent.
+  - 35 tests Vitest, couverture 100 % des lignes, 97 % des branches.
 - [ ] **3.5** `feat/reader-paged` : lecteur paginé simple (`rtl`/`ltr`), choix de la largeur, préchargement, repli sur l'originale, cartes d'erreur, navigation (tap, balayage, clavier, curseur).
 - [ ] **3.6** `feat/reader-double` : disposition double et `auto`, couverture et doubles pages seules, décalage, coupe des doubles pages en mode simple.
 - [ ] **3.7** `feat/reader-vertical` : mode webtoon virtualisé, essai sur le webtoon réel de 12 760 pages.

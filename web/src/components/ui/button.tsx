@@ -10,16 +10,17 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        // `active:` : retour visuel au toucher, sans survol sur tablette (liste de contrôle UI/UX Pro Max).
+        default: "bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80",
         // Fond rouge foncé (6,5:1 avec le blanc) : le rouge des textes d'erreur est trop clair pour un fond.
         destructive:
           "bg-destructive-fill text-white hover:bg-destructive-fill/90 focus-visible:ring-destructive/40",
         outline:
           "border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+          "bg-secondary text-secondary-foreground hover:bg-secondary/80 active:bg-secondary/70",
         ghost:
-          "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
+          "hover:bg-accent hover:text-accent-foreground active:bg-accent dark:hover:bg-accent/50",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
