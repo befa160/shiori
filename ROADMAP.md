@@ -651,6 +651,12 @@ Trois écrans simples pour atteindre le lecteur : bibliothèques, séries d'une 
   - Client de l'API : erreurs `ApiError { status, code, message }` avec le code stable du serveur, `network` si le serveur est injoignable ; une erreur 4xx n'est jamais réessayée par TanStack Query. `pageImageUrl` ne connaît que la liste fixe des largeurs.
   - `npm run dev` relaie `/api` vers `shiori serve` sur `127.0.0.1:7878`. Vérifié dans Chromium contre le vrai serveur.
   - Job CI `web` : `npm run coverage` (seuils de 80 % lignes et branches) avant le build. 15 tests, couverture 100 %.
+  - **Reprise UI** (PR à part, après coup) : skills UI/UX Pro Max, MCP shadcn et captures Playwright aux quatre tailles, qui n'avaient pas été utilisés au lot 3.1.
+    - Contrastes WCAG calculés : texte 17:1, secondaire ≥ 5,6:1, ambre 8,3:1. Corrigés : texte d'erreur `#F87171` (le rouge d'origine faisait 4,4:1 sur une carte), fond des boutons destructifs `#B91C1C` (6,5:1 avec le blanc, au lieu de 2,8:1), bordure des champs `#71717A` (≥ 3,4:1, règle des éléments non textuels).
+    - L'application est toujours sombre : les variantes `dark:` des composants shadcn suivent la classe `dark` de `<html>`, pas le thème de l'OS (vérifié avec un OS émulé en clair).
+    - Focus clavier visible partout : contour ambre de 2 px décalé de 2 px (8,3:1). L'anneau ambre à 50 % du Button shadcn, trop pâle autour d'un bouton ambre, est retiré. Mouvements réduits respectés (`prefers-reduced-motion`).
+    - Button ajouté par le MCP shadcn, tailles relevées pour la tablette (44 px par défaut). La commande générée importait `cn` depuis un paquet npm du même nom (installé sans raison) au lieu de `@/lib/utils`, et oubliait `class-variance-authority` : corrigé. **À chaque `shadcn add` : vérifier les imports et les dépendances** (liste de contrôle du MCP).
+    - Police : pile système de Tailwind, sans police web (hors ligne, rapide, rien chargé depuis un service tiers).
 - [x] **3.2** `feat/embed-web` : `rust-embed`, repli SPA, en-têtes de cache, binaire qui compile sans `web/dist`.
   - `web.rs`, générique sur le dossier intégré (testé avec un petit dossier de fixtures) : le routeur sert l'API sous `/api` (route inconnue = 404 JSON, `/api` compris) et le front partout ailleurs, derrière la même protection DNS rebinding.
   - Repli SPA seulement pour un chemin sans extension (`/read/…`) : un fichier introuvable (vieux `assets/index-abc.js` après une mise à jour) reste un vrai 404, jamais `index.html` servi à la place d'un script. Autre méthode que GET/HEAD hors `/api` : 405 JSON.

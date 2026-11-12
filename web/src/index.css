@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* L'application est toujours sombre : les variantes `dark:` des composants shadcn suivent la
+   classe `dark` posée sur <html>, pas le thème de l'OS (sinon, OS en clair = composants en clair). */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* Thème sombre natif (CLAUDE.md, direction UI/UX) : variables au format shadcn/ui. */
 :root {
   color-scheme: dark;
@@ -11,12 +15,17 @@
   --muted-foreground: #a1a1aa;
   --accent: #2a2a2a;
   --accent-foreground: #f4f4f5;
+  --secondary: #2a2a2a;
+  --secondary-foreground: #f4f4f5;
   /* Ambre réservé à l'action principale, aux états actifs et aux barres de progression. */
   --primary: #e5a00d;
   --primary-foreground: #121212;
-  --destructive: #ef4444;
+  /* Contrastes WCAG mesurés (relecture UI/UX Pro Max) : texte d'erreur ≥ 5,2:1 sur fond, carte et
+     survol ; bouton destructif 6,5:1 avec texte blanc ; bordure de champ ≥ 3,4:1 (éléments non textuels). */
+  --destructive: #f87171;
+  --destructive-fill: #b91c1c;
   --border: #2a2a2a;
-  --input: #2a2a2a;
+  --input: #71717a;
   --ring: #e5a00d;
   --radius: 0.375rem;
 }
@@ -32,7 +41,10 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
   --color-destructive: var(--destructive);
+  --color-destructive-fill: var(--destructive-fill);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -60,5 +72,22 @@
   body {
     background-color: var(--background);
     color: var(--foreground);
+  }
+  /* Focus clavier toujours visible : anneau ambre (8,3:1 sur le fond), jamais à la souris. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+/* Mouvements réduits à la demande du système : transitions et animations quasi instantanées. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
