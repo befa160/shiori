@@ -35,6 +35,7 @@ mod browse;
 mod library;
 mod reading;
 mod runs;
+mod settings;
 
 pub use browse::{
     LibrarySummary, PageFile, PageInfo, PageSource, SeriesDetail, SeriesSummary, SeriesVolume,
@@ -45,6 +46,7 @@ pub use reading::{
     LibraryKind, PageLayout, Progress, ReadingMode, ReadingSettings, SaveProgress, SettingsChange,
 };
 pub use runs::{LogLine, RunCounts, RunFilter, RunOrigin, RunStatus, RunSummary};
+pub use settings::{Language, Settings};
 
 pub struct Db {
     pool: SqlitePool,

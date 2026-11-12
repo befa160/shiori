@@ -11,6 +11,9 @@
   --foreground: #f4f4f5;
   --card: #1e1e1e;
   --card-foreground: #f4f4f5;
+  /* Menus déroulants (Select…) : même surface que les cartes. */
+  --popover: #1e1e1e;
+  --popover-foreground: #f4f4f5;
   --muted: #2a2a2a;
   --muted-foreground: #a1a1aa;
   --accent: #2a2a2a;
@@ -35,6 +38,8 @@
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);

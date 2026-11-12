@@ -29,6 +29,11 @@ export interface Progress {
   updated_at: string
 }
 
+export interface Settings {
+  /** `null` : personne n'a choisi, l'interface suit la langue du navigateur. */
+  language: 'fr' | 'en' | null
+}
+
 export interface Health {
   status: 'ok'
   version: string

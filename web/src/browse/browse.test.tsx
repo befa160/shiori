@@ -58,7 +58,7 @@ describe('bibliothèques', () => {
           : new Promise<Response>((resolve) => (release = () => resolve(json([library])))),
     })
     renderAt('/')
-    expect(await screen.findByRole('alert')).toHaveTextContent('erreur interne')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Erreur interne du serveur')
     await userEvent.click(screen.getByRole('button', { name: 'Réessayer' }))
     expect(await screen.findByText('Chargement…')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Réessayer' })).toBeNull()
@@ -82,7 +82,7 @@ describe('séries d’une bibliothèque', () => {
       '/api/libraries/9/series': () => json({ code: 'not_found', message: 'bibliothèque introuvable' }, 404),
     })
     renderAt('/libraries/9')
-    expect(await screen.findByRole('alert')).toHaveTextContent('bibliothèque introuvable')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Bibliothèque introuvable')
     expect(screen.getByRole('heading', { name: 'Bibliothèque' })).toBeInTheDocument()
   })
 })
@@ -114,7 +114,7 @@ describe('tomes d’une série', () => {
   it('revient à l’accueil si la série est inconnue', async () => {
     mockApi({ '/api/series/9': () => json({ code: 'not_found', message: 'série introuvable' }, 404) })
     renderAt('/series/9')
-    expect(await screen.findByRole('alert')).toHaveTextContent('série introuvable')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Série introuvable')
     expect(screen.getByRole('link', { name: 'Séries' })).toHaveAttribute('href', '/')
   })
 })
@@ -124,6 +124,7 @@ describe('identifiant invalide dans l’adresse', () => {
     const fetch = mockApi({})
     renderAt(path)
     expect(screen.getByRole('heading', { name: 'Page introuvable' })).toBeInTheDocument()
-    expect(fetch).not.toHaveBeenCalled()
+    // Seuls les réglages (langue) sont demandés, jamais la ressource.
+    expect(fetch.mock.calls.map((c) => c[0])).toEqual(['/api/settings'])
   })
 })

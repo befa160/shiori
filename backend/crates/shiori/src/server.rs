@@ -22,8 +22,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use shiori_core::{Archive, PageId, PageStatus, Severity, VolumeId, open_archive as open_file};
 use shiori_db::{
-    Db, LibraryError, LibraryKind, PageFile, PageLayout, PageSource, ReadingMode, RunFilter,
-    RunStatus, SaveProgress, SettingsChange,
+    Db, Language, LibraryError, LibraryKind, PageFile, PageLayout, PageSource, ReadingMode,
+    RunFilter, RunStatus, SaveProgress, SettingsChange,
 };
 use tokio::net::TcpListener;
 use tokio::sync::Semaphore;
@@ -131,6 +131,7 @@ pub async fn serve(
 pub fn router(app: Arc<App>, local_only: bool) -> Router {
     let router = Router::new()
         .route("/api/health", get(health))
+        .route("/api/settings", get(settings).put(save_settings))
         .route("/api/libraries", get(libraries).post(create_library))
         .route("/api/libraries/{id}", delete(delete_library))
         .route("/api/libraries/{id}/series", get(library_series))
@@ -270,6 +271,28 @@ fn volume_id(raw: &str) -> Result<VolumeId, ApiError> {
 
 async fn health() -> Json<serde_json::Value> {
     Json(json!({ "status": "ok", "version": env!("CARGO_PKG_VERSION") }))
+}
+
+async fn settings(State(app): State<Arc<App>>) -> ApiResult<shiori_db::Settings> {
+    Ok(Json(app.db.settings().await?))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct NewSettings {
+    /// Obligatoire : `null` (revenir à la langue du navigateur) doit être écrit, un corps vide
+    /// ne remet rien à zéro.
+    #[serde(deserialize_with = "present")]
+    language: Option<Option<Language>>,
+}
+
+async fn save_settings(
+    State(app): State<Arc<App>>,
+    body: Result<Json<NewSettings>, JsonRejection>,
+) -> ApiResult<shiori_db::Settings> {
+    let Json(new) =
+        body.map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, "invalid_body", e.body_text()))?;
+    Ok(Json(app.db.set_language(new.language.flatten()).await?))
 }
 
 async fn libraries(State(app): State<Arc<App>>) -> ApiResult<Vec<shiori_db::LibrarySummary>> {

@@ -681,7 +681,19 @@ Trois écrans simples pour atteindre le lecteur : bibliothèques, séries d'une 
   - Captures Playwright aux quatre tailles, OS émulé en clair, sur une vraie bibliothèque (CBR réels, titre très long, tome abîmé, tome lu, tome en cours) : aucun défaut d'alignement, focus clavier visible sur les lignes.
   - Identifiant invalide dans l'adresse (`/series/abc`, `/libraries/0`) : « Page introuvable » sans appeler l'API (avant : message technique du serveur, en anglais). Pendant « Réessayer », la requête repasse en chargement et les squelettes le montrent.
   - 35 tests Vitest, couverture 100 % des lignes, 97 % des branches.
-- [ ] **3.5** `feat/reader-paged` : lecteur paginé simple (`rtl`/`ltr`), choix de la largeur, préchargement, repli sur l'originale, cartes d'erreur, navigation (tap, balayage, clavier, curseur).
+- [x] **3.4b** `feat/i18n` (ajouté le 2026-11-12, avant le lecteur pour qu'il naisse bilingue) : interface en français et en anglais.
+  - Décisions (Q19 à Q21, ci-dessous) : français + anglais ; langue **enregistrée côté serveur** et choisie par un sélecteur, globale tant qu'il n'y a pas de comptes, par compte ensuite ; **l'interface traduit** d'après les codes stables de l'API, serveur et CLI restent en français.
+  - Serveur : migration `0005_settings.sql` (une ligne `app_settings`, `language` à `NULL` tant que personne n'a choisi), `GET` / `PUT /api/settings` ; `language` est obligatoire dans le `PUT` (un corps vide ne remet rien à zéro, il faut écrire `null`).
+  - Front : i18next + react-i18next, catalogues `fr.ts` (source) et `en.ts` typé sur le français (clé manquante = erreur de types), clés typées dans `t()`. Pluriels par `Intl.PluralRules` (« 0 tome » en français, « 0 volumes » en anglais), nombres par `Intl.NumberFormat` (« 12 760 » / « 12,760 »). Sans choix enregistré : langue du navigateur parmi fr / en, sinon anglais. `<html lang>` suit la langue.
+  - Erreurs : `errorText` traduit le code (`volume_changed`, `network`…), précise ce qui est introuvable selon l'écran, et garde le message du serveur pour un code inconnu.
+  - Sélecteur de langue (Select shadcn par le MCP) dans le cadre commun : chaque langue écrite dans sa propre langue, menu sous le sélecteur, entrées de 44 px, focus global. Le choix change la langue tout de suite et l'enregistre ; un échec d'enregistrement remet la langue d'avant.
+  - Défauts trouvés par les captures Playwright et corrigés : le thème ne définissait pas la couleur `popover`, le menu du Select s'ouvrait transparent par-dessus le sélecteur. Un test vérifie désormais que chaque couleur utilisée par un composant est définie dans le thème (prouvé en échec sans `popover`). Le bug `cn` du registre shadcn est revenu avec le Select, bloqué par la règle oxlint.
+  - Captures aux quatre tailles en anglais (libellés de longueurs différentes), choix gardé après rechargement (serveur à `fr`, navigateur en anglais).
+  - **Système de notifications** (demandé après la review) : Sonner, la solution recommandée par shadcn (ajouté par le MCP), thème sombre fixe (sans `next-themes`), fermeture au bout de 5 s, au-dessus de la zone sûre du bas sur mobile, monté hors des routes pour que le lecteur s'en serve aussi. Premier usage : un échec d'enregistrement de la langue n'est plus silencieux (« Langue non enregistrée, réessayez plus tard » et la cause). Le test a trouvé un vrai défaut : la notification partait dans la langue qui venait d'échouer (`t` capturé au rendu) ; elle utilise désormais `i18n.t`, une fois la langue d'avant remise.
+  - Le client de l'API appelle sa fonction générique `request` (elle fait aussi des `PUT`).
+  - 44 tests Vitest, 100 % des lignes, 97,8 % des branches.
+  - À surveiller : le script principal fait 580 ko (182 ko compressé), servi sans compression mais mis en cache pour toujours. Compression côté serveur (`tower-http`) et découpage par route à envisager avec le lecteur.
+- [ ] **3.5** `feat/reader-paged` (le lecteur, hors du cadre commun, doit lui aussi appliquer la langue enregistrée : un lien direct vers `/read/…` ne doit pas s'ouvrir dans la langue du navigateur) : lecteur paginé simple (`rtl`/`ltr`), choix de la largeur, préchargement, repli sur l'originale, cartes d'erreur, navigation (tap, balayage, clavier, curseur).
 - [ ] **3.6** `feat/reader-double` : disposition double et `auto`, couverture et doubles pages seules, décalage, coupe des doubles pages en mode simple.
 - [ ] **3.7** `feat/reader-vertical` : mode webtoon virtualisé, essai sur le webtoon réel de 12 760 pages.
 - [ ] **3.8** `feat/reader-progress` : reprise, enregistrement, réglages retenus par série, tome suivant, zoom.
@@ -700,6 +712,9 @@ Propositions retenues :
 - **Q15 Zoom** : double tap ×2 et déplacement en mode paginé, pincement natif en vertical, dans le lot 3.8.
 - **Q16 Playwright dans la CI** : oui, job Linux seulement (navigateur Chromium, environ 1 à 2 min de plus par PR).
 - **Q17 Découpage serveur des très hautes images** : reporté, aucun cas réel (voir les mesures) ; repli sur l'originale en attendant.
+- **Q19 Langues** ✅ (2026-11-12) : français (source) et anglais.
+- **Q20 Choix de la langue** ✅ : enregistré côté serveur, par un sélecteur dans l'interface ; global tant qu'il n'y a pas de comptes, par compte avec l'authentification.
+- **Q21 Qui traduit** ✅ : l'interface, d'après les codes stables de l'API ; serveur et CLI restent en français (le message du serveur sert de secours). Pas de catalogue côté Rust.
 - **Q18 Breakpoint tablette 8" en portrait** (CLAUDE.md) : sans objet en phase 3 (le lecteur en est exclu, la navigation provisoire est une simple liste) ; à valider en phase 4.
 
 ## Fonctionnalités ajoutées en cours de route
@@ -738,3 +753,4 @@ L'ordre de lecture ne dépend jamais de l'ordre dans l'archive : le lecteur reç
 - 2026-11-12 : CBR solid servi depuis un cache d'extraction en rotation (plafond partagé avec les rendus, le moins récemment lu part en premier, jamais le dernier tome lu), validé sur un vrai CBR solid WinRAR ; phase 2 terminée.
 - 2026-11-12 : plan de la phase 3 proposé (lecteur web, front embarqué, progression), en attente de validation (Q11, Q12, Q14 bloquantes).
 - 2026-11-12 : plan de la phase 3 validé : progression côté serveur (Q11), type de bibliothèque qui donne le sens de lecture par défaut (Q12), doubles pages coupées en deux moitiés par défaut en mode simple (Q14) ; défauts Q13, Q15 à Q18 retenus.
+- 2026-11-12 : interface bilingue français / anglais (lot 3.4b) ; langue enregistrée côté serveur, traduction par l'interface d'après les codes stables de l'API.

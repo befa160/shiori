@@ -1,9 +1,11 @@
 import type { UseQueryResult } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { errorText } from '@/i18n/errors'
 import { cn } from '@/lib/utils'
 import { NotFound } from '@/pages/NotFound'
 
@@ -58,17 +60,21 @@ export function QueryState<T>({
   query,
   empty,
   isEmpty,
+  notFound,
   children,
 }: {
   query: UseQueryResult<T>
   empty: ReactNode
+  /** Message à la place du « introuvable » générique du serveur. */
+  notFound?: string
   isEmpty: (data: T) => boolean
   children: (data: T) => ReactNode
 }) {
+  const { t } = useTranslation()
   if (query.isPending) {
     return (
       <div aria-busy="true" className="space-y-2">
-        <span className="sr-only">Chargement…</span>
+        <span className="sr-only">{t('common.loading')}</span>
         {[0, 1, 2].map((i) => (
           <Skeleton key={i} className="h-14 bg-card" />
         ))}
@@ -78,10 +84,10 @@ export function QueryState<T>({
   if (query.isError) {
     return (
       <div role="alert" className="space-y-3 rounded-md bg-card p-4">
-        <p className="text-destructive first-letter:uppercase">{query.error.message}</p>
+        <p className="text-destructive first-letter:uppercase">{errorText(query.error, t, notFound)}</p>
         {/* Pendant le nouvel essai, la requête repasse en chargement : les squelettes le montrent. */}
         <Button variant="secondary" onClick={() => query.refetch()}>
-          Réessayer
+          {t('common.retry')}
         </Button>
       </div>
     )

@@ -76,6 +76,7 @@ Le lecteur est plein écran et immersif (barre d'outils masquée, tap au centre 
 - Barre de progression fine (`h-1`, amber-500) collée en bas de la couverture pour les tomes en cours. Au survol (desktop) : léger zoom, bordure lumineuse subtile, bouton d'action rapide.
 - Navigation : sidebar fixe/rétractable (Bibliothèques, Séries, Statistiques) + recherche globale à partir du breakpoint `lg` ; en dessous, barre d'onglets fixe en bas (4 onglets max). Breakpoint à valider pour la tablette 8" en portrait.
 - PWA : zones sûres via `env(safe-area-inset-*)` (les classes `pb-safe`/`pt-safe` ne sont pas natives de Tailwind), bouton « Retour » explicite sur les pages de détail (barre du navigateur masquée en standalone), carrousels sans scrollbar visible mais défilement tactile fluide.
+- Interface bilingue (français, langue source, et anglais) : aucun texte en dur, tout passe par les catalogues `web/src/i18n/fr.ts` et `en.ts` (le catalogue anglais est typé sur le français, une clé manquante casse le build). Les erreurs de l'API et les codes de scan se traduisent d'après leur code stable ; la langue est enregistrée côté serveur (`/api/settings`), par compte quand l'authentification arrivera.
 - Vérification visuelle : données de test avec titres très longs et couvertures manquantes ; captures Playwright en 390×844 (mobile), 800×1280 et 1280×800 (tablette 8"), 1440×900 (desktop), et correction des défauts d'alignement.
 
 ## Méthode de travail

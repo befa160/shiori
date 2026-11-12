@@ -280,3 +280,47 @@ async fn library_kind_is_listed_and_validated() {
         (StatusCode::BAD_REQUEST, Some("invalid_body"))
     );
 }
+
+#[tokio::test]
+async fn language_setting_round_trip() {
+    let f = fixture(None).await;
+    assert_eq!(
+        call(&f.app, "GET", "/api/settings", None).await,
+        (StatusCode::OK, json!({ "language": null }))
+    );
+    let (status, saved) = call(
+        &f.app,
+        "PUT",
+        "/api/settings",
+        Some(json!({ "language": "en" })),
+    )
+    .await;
+    assert_eq!(
+        (status, saved),
+        (StatusCode::OK, json!({ "language": "en" }))
+    );
+    assert_eq!(
+        call(&f.app, "GET", "/api/settings", None).await.1,
+        json!({ "language": "en" })
+    );
+    let (_, reset) = call(
+        &f.app,
+        "PUT",
+        "/api/settings",
+        Some(json!({ "language": null })),
+    )
+    .await;
+    assert_eq!(reset, json!({ "language": null }));
+    for body in [
+        json!({ "language": "de" }),
+        json!({ "langue": "fr" }),
+        json!({}),
+    ] {
+        let (status, error) = call(&f.app, "PUT", "/api/settings", Some(body.clone())).await;
+        assert_eq!(
+            (status, error["code"].as_str()),
+            (StatusCode::BAD_REQUEST, Some("invalid_body")),
+            "{body}"
+        );
+    }
+}

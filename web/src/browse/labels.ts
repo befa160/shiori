@@ -1,33 +1,22 @@
-import type { LibraryKind, SeriesVolume } from '@/api/types'
+import type { TFunction } from 'i18next'
+import type { SeriesVolume } from '@/api/types'
 
-const number = (n: number) => n.toLocaleString('fr-FR')
-
-/** Nom d'un tome dans sa série, d'après le parseur de noms du serveur. */
-export function volumeLabel(v: SeriesVolume): string {
+/** Nom d'un tome dans sa série, d'après le parseur de noms du serveur, dans la langue donnée. */
+export function volumeLabel(v: SeriesVolume, t: TFunction, language: string): string {
   if (v.number === null) {
-    return v.kind === 'special' ? 'Spécial' : v.file_name
+    return v.kind === 'special' ? t('volume.special') : v.file_name
   }
-  const range = v.number_end === null ? number(v.number) : `${number(v.number)}–${number(v.number_end)}`
-  const plural = v.number_end !== null
+  const n = new Intl.NumberFormat(language)
+  const range = v.number_end === null ? n.format(v.number) : `${n.format(v.number)}–${n.format(v.number_end)}`
+  const count = v.number_end === null ? 1 : 2
   switch (v.kind) {
     case 'volume':
-      return `${plural ? 'Tomes' : 'Tome'} ${range}`
+      return t('volume.volume', { range, count })
     case 'chapter':
-      return `${plural ? 'Chapitres' : 'Chapitre'} ${range}`
+      return t('volume.chapter', { range, count })
     case 'special':
-      return `Spécial ${range}`
+      return t('volume.specialNumber', { range })
     case 'unknown':
-      return `N° ${range}`
+      return t('volume.unknown', { range })
   }
-}
-
-export const KIND_LABELS: Record<LibraryKind, string> = {
-  manga: 'Manga',
-  comics: 'BD / comics',
-  webtoon: 'Webtoon',
-}
-
-/** « 1 série », « 12 séries ». */
-export function count(n: number, one: string, many: string): string {
-  return `${number(n)} ${n === 1 ? one : many}`
 }

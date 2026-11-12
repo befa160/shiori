@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { json, mockApi } from '@/test/render'
-import { ApiError, WIDTHS, api, get, pageImageUrl } from './client'
+import { ApiError, WIDTHS, api, pageImageUrl, request } from './client'
 
 afterEach(() => vi.unstubAllGlobals())
 
-describe('get', () => {
+describe('request', () => {
   it('renvoie le JSON et demande du JSON', async () => {
     const fetch = mockApi({ '/api/libraries': () => json([{ id: 1, name: 'Manga' }]) })
     expect(await api.libraries()).toEqual([{ id: 1, name: 'Manga' }])
@@ -13,7 +13,7 @@ describe('get', () => {
 
   it('renvoie null pour un 204', async () => {
     mockApi({ '/api/vide': () => new Response(null, { status: 204 }) })
-    expect(await get('/vide')).toBeNull()
+    expect(await request('/vide')).toBeNull()
   })
 
   it("garde le code et le message d'une erreur de l'API", async () => {
