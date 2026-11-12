@@ -101,6 +101,7 @@ describe('tomes d’une série', () => {
     expect(within(items[1]).getByText(/Toriko T02.cbz · 180 pages/)).toBeInTheDocument()
     expect(within(items[2]).getByText('Erreur')).toBeInTheDocument()
     expect(within(items[2]).getByText('12 pages')).toBeInTheDocument()
+    expect(within(items[0]).getByRole('link')).toHaveAttribute('href', '/read/a')
     await userEvent.click(screen.getByRole('link', { name: 'Séries' }))
     expect(router.state.location.pathname).toBe('/libraries/1')
   })

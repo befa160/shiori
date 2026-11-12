@@ -44,6 +44,17 @@ export const en: Translations = {
     statusError: 'Error',
     statusWarning: 'Warning',
   },
+  reader: {
+    back: 'Back',
+    next: 'Next page',
+    previous: 'Previous page',
+    page: 'Page',
+    pageOf: 'Page {{current}} of {{total}}',
+    controls: 'Reader controls',
+    empty: 'This volume has no readable page.',
+    notFound: 'Volume not found',
+    pageFailed: 'This page could not be displayed',
+  },
   kinds: {
     manga: 'Manga',
     comics: 'Comics',
