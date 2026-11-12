@@ -105,4 +105,6 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
       - run: npm run lint
+      # Seuils de couverture (80 % lignes et branches) dans vite.config.ts.
+      - run: npm run coverage
       - run: npm run build
