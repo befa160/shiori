@@ -1,0 +1,93 @@
+import type { UseQueryResult } from '@tanstack/react-query'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
+import type { ReactNode } from 'react'
+import { Link, useParams } from 'react-router'
+import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
+import { NotFound } from '@/pages/NotFound'
+
+/** Monte l'écran seulement si `:id` est un entier positif ; sinon « Page introuvable », au lieu
+ * d'envoyer `NaN` à l'API et d'afficher son message technique. */
+export function WithId({ children }: { children: (id: number) => ReactNode }) {
+  const id = Number(useParams().id)
+  return Number.isInteger(id) && id > 0 ? children(id) : <NotFound />
+}
+
+/** Bouton « Retour » explicite vers l'écran parent (la barre du navigateur est masquée en PWA). */
+export function BackLink({ to, label }: { to: string; label: string }) {
+  return (
+    <Button asChild variant="ghost" className="-ml-3 text-muted-foreground">
+      <Link to={to}>
+        <ChevronLeft aria-hidden />
+        {label}
+      </Link>
+    </Button>
+  )
+}
+
+/** Ligne d'une liste, entièrement cliquable : cible tactile de 56 px au moins. */
+export function Row({ to, children, className }: { to: string; children: ReactNode; className?: string }) {
+  return (
+    <li>
+      <Link
+        to={to}
+        className={cn(
+          'relative flex min-h-14 items-center gap-3 overflow-hidden rounded-md bg-card px-4 py-3 transition-colors hover:bg-accent active:bg-muted',
+          className,
+        )}
+      >
+        <div className="min-w-0 flex-1">{children}</div>
+        <ChevronRight aria-hidden className="size-5 shrink-0 text-muted-foreground" />
+      </Link>
+    </li>
+  )
+}
+
+/** Titre tronqué sur deux lignes (CLAUDE.md) ; le titre complet reste lisible au survol. */
+export function RowTitle({ children }: { children: string }) {
+  return (
+    <p title={children} className="line-clamp-2 font-medium break-words">
+      {children}
+    </p>
+  )
+}
+
+/** Chargement, erreur ou liste vide ; sinon le contenu. */
+export function QueryState<T>({
+  query,
+  empty,
+  isEmpty,
+  children,
+}: {
+  query: UseQueryResult<T>
+  empty: ReactNode
+  isEmpty: (data: T) => boolean
+  children: (data: T) => ReactNode
+}) {
+  if (query.isPending) {
+    return (
+      <div aria-busy="true" className="space-y-2">
+        <span className="sr-only">Chargement…</span>
+        {[0, 1, 2].map((i) => (
+          <Skeleton key={i} className="h-14 bg-card" />
+        ))}
+      </div>
+    )
+  }
+  if (query.isError) {
+    return (
+      <div role="alert" className="space-y-3 rounded-md bg-card p-4">
+        <p className="text-destructive first-letter:uppercase">{query.error.message}</p>
+        {/* Pendant le nouvel essai, la requête repasse en chargement : les squelettes le montrent. */}
+        <Button variant="secondary" onClick={() => query.refetch()}>
+          Réessayer
+        </Button>
+      </div>
+    )
+  }
+  if (isEmpty(query.data)) {
+    return <div className="rounded-md bg-card p-4 text-muted-foreground">{empty}</div>
+  }
+  return children(query.data)
+}

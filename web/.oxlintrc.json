@@ -12,6 +12,17 @@
       {
         "allowConstantExport": true
       }
+    ],
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          {
+            "name": "cn",
+            "message": "Le paquet npm `cn` n'est pas celui du projet : importer `cn` depuis `@/lib/utils` (bug du registre shadcn, voir ROADMAP lot 3.1)."
+          }
+        ]
+      }
     ]
   },
   "overrides": [
