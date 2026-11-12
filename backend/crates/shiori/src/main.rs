@@ -16,7 +16,7 @@ struct Cli {
     /// Plus de journaux sur la sortie d'erreur (-v : info, -vv : debug).
     #[arg(short, long, action = ArgAction::Count, global = true)]
     verbose: u8,
-    /// N'affiche ni tableau ni résumé : seul le code de sortie compte.
+    /// Silencieux : `scan` n'affiche ni tableau ni résumé, `serve` ne dit pas où il écoute.
     #[arg(short, long, global = true)]
     quiet: bool,
     #[command(subcommand)]
