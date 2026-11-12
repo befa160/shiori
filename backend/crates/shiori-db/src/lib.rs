@@ -40,7 +40,7 @@ pub use browse::{
     VolumeDetail, VolumeLocation,
 };
 pub use library::{Library, LibraryError};
-pub use runs::{RunCounts, RunOrigin, RunStatus};
+pub use runs::{LogLine, RunCounts, RunFilter, RunOrigin, RunStatus, RunSummary};
 
 pub struct Db {
     pool: SqlitePool,

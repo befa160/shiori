@@ -15,19 +15,19 @@ use axum::extract::{Path, Query, Request, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{delete, get};
+use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use clap::Args;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use shiori_core::{Archive, CbzArchive, PageId, PageStatus, VolumeId};
-use shiori_db::{Db, LibraryError, PageFile};
+use shiori_core::{Archive, CbzArchive, PageId, PageStatus, Severity, VolumeId};
+use shiori_db::{Db, LibraryError, PageFile, RunFilter, RunStatus};
 use tokio::net::TcpListener;
 use tokio::sync::Semaphore;
 use tower_http::trace::TraceLayer;
 
 use crate::cache::Images;
-use crate::job::Scanner;
+use crate::job::{ScanRequest, Scanner, StartError};
 use crate::render::{self, Format, RENDER_VERSION, WIDTHS};
 
 #[derive(Args)]
@@ -135,6 +135,11 @@ pub fn router(app: Arc<App>, local_only: bool) -> Router {
         .route("/api/volumes/{id}", get(volume))
         .route("/api/volumes/{id}/pages", get(pages))
         .route("/api/pages/{id}/image", get(page_image))
+        .route("/api/admin/scans", get(scans).post(start_scan))
+        .route("/api/admin/scans/current", get(current_scan))
+        .route("/api/admin/scans/current/cancel", post(cancel_scan))
+        .route("/api/admin/scans/{id}", get(scan))
+        .route("/api/admin/scans/{id}/logs", get(scan_logs))
         .fallback(async || ApiError::new(StatusCode::NOT_FOUND, "not_found", "route inconnue"))
         .method_not_allowed_fallback(async || {
             ApiError::new(
@@ -584,4 +589,135 @@ fn etag_matches(headers: &HeaderMap, etag: &str) -> bool {
         .flat_map(|v| v.split(','))
         .map(|t| t.trim().trim_start_matches("W/"))
         .any(|t| t == etag || t == "*")
+}
+
+impl From<StartError> for ApiError {
+    fn from(e: StartError) -> Self {
+        let (status, code) = match &e {
+            StartError::AlreadyRunning => (StatusCode::CONFLICT, "scan_already_running"),
+            StartError::UnknownLibrary => (StatusCode::NOT_FOUND, "not_found"),
+            StartError::OutsideLibrary(_) => (StatusCode::BAD_REQUEST, "path_outside_library"),
+            StartError::NotFound(_) => (StatusCode::NOT_FOUND, "path_not_found"),
+            StartError::Db(_) => (StatusCode::INTERNAL_SERVER_ERROR, "internal"),
+        };
+        if status.is_server_error() {
+            tracing::error!("lancement d'un scan : {e}");
+            return Self::new(status, code, "erreur interne");
+        }
+        Self::new(status, code, e.to_string())
+    }
+}
+
+fn invalid_query(e: QueryRejection) -> ApiError {
+    ApiError::new(StatusCode::BAD_REQUEST, "invalid_query", e.body_text())
+}
+
+/// Taille de page des listes : 50 par défaut, 500 au plus.
+fn limit(requested: Option<u32>) -> u32 {
+    requested.unwrap_or(50).clamp(1, 500)
+}
+
+#[derive(Deserialize)]
+struct NewScan {
+    library_id: i64,
+    /// Dossier ou fichier sous la racine ; absent : toute la bibliothèque.
+    path: Option<PathBuf>,
+    #[serde(default)]
+    deep: bool,
+    #[serde(default)]
+    rehash: bool,
+}
+
+async fn start_scan(
+    State(app): State<Arc<App>>,
+    body: Result<Json<NewScan>, JsonRejection>,
+) -> Result<(StatusCode, Json<serde_json::Value>), ApiError> {
+    let Json(new) =
+        body.map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, "invalid_body", e.body_text()))?;
+    let request = ScanRequest {
+        library_id: new.library_id,
+        path: new.path,
+        deep: new.deep,
+        rehash: new.rehash,
+    };
+    let run = app.scanner.start(app.db.clone(), request).await?;
+    Ok((StatusCode::ACCEPTED, Json(json!({ "run": run }))))
+}
+
+/// Progression de la passe en cours, ou 204 si rien ne tourne.
+async fn current_scan(State(app): State<Arc<App>>) -> Response {
+    match app.scanner.progress().await {
+        Some(progress) => Json(progress).into_response(),
+        None => StatusCode::NO_CONTENT.into_response(),
+    }
+}
+
+async fn cancel_scan(
+    State(app): State<Arc<App>>,
+) -> Result<(StatusCode, Json<serde_json::Value>), ApiError> {
+    match app.scanner.cancel().await {
+        true => Ok((StatusCode::ACCEPTED, Json(json!({ "cancelling": true })))),
+        false => Err(ApiError::new(
+            StatusCode::NOT_FOUND,
+            "no_scan_running",
+            "aucun scan en cours",
+        )),
+    }
+}
+
+#[derive(Deserialize)]
+struct ScansQuery {
+    status: Option<RunStatus>,
+    library_id: Option<i64>,
+    before: Option<i64>,
+    limit: Option<u32>,
+}
+
+async fn scans(
+    State(app): State<Arc<App>>,
+    query: Result<Query<ScansQuery>, QueryRejection>,
+) -> ApiResult<Vec<shiori_db::RunSummary>> {
+    let Query(q) = query.map_err(invalid_query)?;
+    let filter = RunFilter {
+        status: q.status,
+        library_id: q.library_id,
+        before: q.before,
+        limit: limit(q.limit),
+    };
+    Ok(Json(app.db.runs(&filter).await?))
+}
+
+async fn scan(
+    State(app): State<Arc<App>>,
+    Path(id): Path<String>,
+) -> ApiResult<shiori_db::RunSummary> {
+    app.db
+        .run(int_id(&id)?)
+        .await?
+        .map(Json)
+        .ok_or_else(|| ApiError::not_found("passe de scan"))
+}
+
+#[derive(Deserialize)]
+struct LogsQuery {
+    /// Gravité minimale : `info` (tout), `warning`, `error`.
+    level: Option<Severity>,
+    after: Option<i64>,
+    limit: Option<u32>,
+}
+
+async fn scan_logs(
+    State(app): State<Arc<App>>,
+    Path(id): Path<String>,
+    query: Result<Query<LogsQuery>, QueryRejection>,
+) -> ApiResult<Vec<shiori_db::LogLine>> {
+    let id = int_id(&id)?;
+    let Query(q) = query.map_err(invalid_query)?;
+    if app.db.run(id).await?.is_none() {
+        return Err(ApiError::not_found("passe de scan"));
+    }
+    let min = q.level.unwrap_or(Severity::Info);
+    Ok(Json(
+        app.db.run_logs(id, min, q.after, limit(q.limit)).await?,
+    ))
 }
