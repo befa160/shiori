@@ -281,6 +281,14 @@ async fn errors_are_json_with_stable_codes() {
             StatusCode::METHOD_NOT_ALLOWED,
             "method_not_allowed",
         ),
+        // Le front prend tout ce qui n'est pas `/api` : `/api` lui-même reste une erreur JSON.
+        ("GET", "/api".to_owned(), StatusCode::NOT_FOUND, "not_found"),
+        (
+            "POST",
+            "/read/x".to_owned(),
+            StatusCode::METHOD_NOT_ALLOWED,
+            "method_not_allowed",
+        ),
         (
             "GET",
             "/api/libraries/abc/series".to_owned(),
@@ -398,6 +406,13 @@ async fn local_server_rejects_foreign_hosts() {
     ] {
         assert_eq!(status(bad).await, StatusCode::FORBIDDEN, "{bad}");
     }
+    // Le front est protégé comme l'API.
+    let front = Request::get("/read/x").header("host", "evil.example");
+    let response = app
+        .clone()
+        .oneshot(front.body(Body::empty()).unwrap())
+        .await;
+    assert_eq!(response.unwrap().status(), StatusCode::FORBIDDEN);
     // Sans en-tête `Host` du tout.
     let (code, error) = call(&app, "GET", "/api/health", None).await;
     assert_eq!(
@@ -453,4 +468,20 @@ async fn run_opens_the_database_and_reports_bind_errors() {
     let addr = taken.local_addr().unwrap().to_string();
     let err = server::run(args(&addr), true, async {}).await.unwrap_err();
     assert!(format!("{err:#}").contains(&addr), "{err:#}");
+}
+
+/// Hors `/api`, le routeur sert le front : `index.html` si `web/dist` est construit, sinon la
+/// page qui explique comment le construire. Du HTML dans les deux cas, jamais du JSON.
+#[tokio::test]
+async fn other_paths_are_the_web_front() {
+    let f = fixture().await;
+    let request = Request::get("/read/0123").body(Body::empty()).unwrap();
+    let response = f.app.clone().oneshot(request).await.unwrap();
+    assert!(
+        [StatusCode::OK, StatusCode::SERVICE_UNAVAILABLE].contains(&response.status()),
+        "{}",
+        response.status()
+    );
+    let kind = response.headers()["content-type"].to_str().unwrap();
+    assert!(kind.starts_with("text/html"), "{kind}");
 }

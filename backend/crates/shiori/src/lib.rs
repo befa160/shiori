@@ -13,6 +13,7 @@ pub mod job;
 pub mod render;
 pub mod scan;
 pub mod server;
+pub mod web;
 
 /// Données de l'utilisateur : `$SHIORI_DATA_DIR`, sinon le dossier de données de l'OS.
 fn data_dir() -> Result<PathBuf> {

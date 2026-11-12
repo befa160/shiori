@@ -140,7 +140,7 @@ pub fn router(app: Arc<App>, local_only: bool) -> Router {
         .route("/api/admin/scans/current/cancel", post(cancel_scan))
         .route("/api/admin/scans/{id}", get(scan))
         .route("/api/admin/scans/{id}/logs", get(scan_logs))
-        .fallback(async || ApiError::new(StatusCode::NOT_FOUND, "not_found", "route inconnue"))
+        .fallback(crate::web::fallback)
         .method_not_allowed_fallback(async || {
             ApiError::new(
                 StatusCode::METHOD_NOT_ALLOWED,
@@ -189,7 +189,7 @@ pub struct ApiError {
 }
 
 impl ApiError {
-    fn new(status: StatusCode, code: &'static str, message: impl Into<String>) -> Self {
+    pub(crate) fn new(status: StatusCode, code: &'static str, message: impl Into<String>) -> Self {
         Self {
             status,
             code,
@@ -353,7 +353,7 @@ async fn pages(
 }
 
 /// Une page ne change jamais sous un même ID (principe 2) : cache permanent.
-const IMMUTABLE: &str = "public, max-age=31536000, immutable";
+pub(crate) const IMMUTABLE: &str = "public, max-age=31536000, immutable";
 
 #[derive(Deserialize)]
 struct ImageQuery {
@@ -604,7 +604,7 @@ fn open_archive(path: &std::path::Path, stamp: (i64, i64)) -> Result<OpenArchive
 }
 
 /// `If-None-Match` : liste d'ETags, éventuellement faibles (`W/`), ou `*`.
-fn etag_matches(headers: &HeaderMap, etag: &str) -> bool {
+pub(crate) fn etag_matches(headers: &HeaderMap, etag: &str) -> bool {
     headers
         .get_all(header::IF_NONE_MATCH)
         .iter()

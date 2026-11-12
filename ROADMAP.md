@@ -651,7 +651,13 @@ Trois écrans simples pour atteindre le lecteur : bibliothèques, séries d'une 
   - Client de l'API : erreurs `ApiError { status, code, message }` avec le code stable du serveur, `network` si le serveur est injoignable ; une erreur 4xx n'est jamais réessayée par TanStack Query. `pageImageUrl` ne connaît que la liste fixe des largeurs.
   - `npm run dev` relaie `/api` vers `shiori serve` sur `127.0.0.1:7878`. Vérifié dans Chromium contre le vrai serveur.
   - Job CI `web` : `npm run coverage` (seuils de 80 % lignes et branches) avant le build. 15 tests, couverture 100 %.
-- [ ] **3.2** `feat/embed-web` : `rust-embed`, repli SPA, en-têtes de cache, binaire qui compile sans `web/dist` ; la CI construit le front avant le binaire de release.
+- [x] **3.2** `feat/embed-web` : `rust-embed`, repli SPA, en-têtes de cache, binaire qui compile sans `web/dist`.
+  - `web.rs`, générique sur le dossier intégré (testé avec un petit dossier de fixtures) : le routeur sert l'API sous `/api` (route inconnue = 404 JSON, `/api` compris) et le front partout ailleurs, derrière la même protection DNS rebinding.
+  - Repli SPA seulement pour un chemin sans extension (`/read/…`) : un fichier introuvable (vieux `assets/index-abc.js` après une mise à jour) reste un vrai 404, jamais `index.html` servi à la place d'un script. Autre méthode que GET/HEAD hors `/api` : 405 JSON.
+  - En-têtes : `assets/` (noms avec hash de Vite) immuables ; `index.html` et le reste en `no-cache` avec ETag (sha256) et `304`. `nosniff` partout.
+  - Sans `web/dist` (compilation du backend seul, CI) : `503` et une page qui explique `npm run build`. En debug les fichiers sont relus sur le disque à chaque requête : reconstruire le front suffit, sans recompiler.
+  - **Vérifié** : binaire release construit, puis `web/dist` déplacé : le front est toujours servi (intégré), `/read/abc` donne `index.html`, l'asset haché est immuable, un vieil asset fait 404, `If-None-Match` donne 304.
+  - Pas de binaire de release dans la CI aujourd'hui : construire le front avant `cargo build --release` sera une étape du job de release (phase 6, distribution).
 - [ ] **3.3** `feat/reading-progress` : migration 0004, `kind` des bibliothèques, routes de progression et de réglages, progression dans les réponses des séries et des tomes.
 - [ ] **3.4** `feat/browse-minimal` : les trois écrans provisoires.
 - [ ] **3.5** `feat/reader-paged` : lecteur paginé simple (`rtl`/`ltr`), choix de la largeur, préchargement, repli sur l'originale, cartes d'erreur, navigation (tap, balayage, clavier, curseur).
