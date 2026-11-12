@@ -38,10 +38,10 @@ pub struct ServeArgs {
     /// Base SQLite (défaut : <dossier de données>/shiori.db, ou $SHIORI_DATA_DIR/shiori.db).
     #[arg(long, value_name = "FICHIER")]
     pub db: Option<PathBuf>,
-    /// Cache des pages redimensionnées (défaut : dossier de cache de l'OS, ou $SHIORI_CACHE_DIR).
+    /// Cache des pages redimensionnées et des CBR solid extraits (défaut : dossier de cache de l'OS, ou $SHIORI_CACHE_DIR).
     #[arg(long, value_name = "DOSSIER")]
     pub cache_dir: Option<PathBuf>,
-    /// Taille maximale de ce cache, en Mio ; au-delà, les pages les moins lues sont effacées.
+    /// Taille maximale de ce cache, en Mio ; au-delà, ce qui a été le moins récemment lu est effacé.
     #[arg(long, value_name = "MIO", default_value_t = 2048)]
     pub cache_max_mib: u64,
     /// Fichiers scannés en parallèle par un scan lancé depuis l'API (défaut : nombre de cœurs).

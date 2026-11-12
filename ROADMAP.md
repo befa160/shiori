@@ -7,7 +7,7 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 |---|---|---|
 | 0 | Outillage (Rust, structure, Ponytail, Graphify, UI/UX Pro Max, MCP shadcn + Playwright) | ✅ |
 | 1 | CLI de scan d'intégrité + schéma SQLite + CI linux/windows, puis graphe Graphify | ✅ |
-| 2 | API axum + streaming/redimensionnement des images + parseur de noms + job de scan + API d'administration des scans | 🚧 plan validé |
+| 2 | API axum + streaming/redimensionnement des images + parseur de noms + job de scan + API d'administration des scans + CBR | ✅ |
 | 3 | Lecteur web (sens de lecture, webtoon, doubles pages) | ⏳ |
 | 4 | Bibliothèque façon Plex + statuts/filtres + menu d'administration (scans, journaux) + DESIGN_SYSTEM.md | ⏳ |
 | 5 | Métadonnées web + édition manuelle | ⏳ |
@@ -255,7 +255,7 @@ Générées par du code au moment des tests, sans binaire versionné : détermin
 - **Q4 Base par défaut** ✅ : la CLI écrit dans `<dossier de données>/shiori.db` ; `--db` surcharge, `--no-db` produit seulement le rapport.
 - **Q5 Doublons identiques** ✅ : avertissement, une seule page conservée ; doublons au contenu différent = erreur.
 
-## Phase 2 : serveur, images, bibliothèques et scans (plan validé le 2026-11-11)
+## Phase 2 : serveur, images, bibliothèques et scans (plan validé le 2026-11-11, terminée le 2026-11-12)
 
 ### Objectif
 
@@ -499,7 +499,26 @@ Arrêt propre sur Ctrl-C (`with_graceful_shutdown`) : un scan en cours est annul
   - Format reconnu au contenu (`Rar!`), pas à l'extension ; `volumes.format` = `cbz` ou `cbr`. Nouvelle méthode du trait `read_each` (une passe pour tout le tome), codes `solid_archive` (info) et `multivolume_archive` (erreur). Cache `<cache>/extract/<tome>/<index>` sous le même plafond que les rendus, jamais le dernier tome lu évincé.
   - **Essai sur deux vrais CBR** (binaire release, bibliothèque et scan par l'API) : `Toriko-v16.cbr` (RAR 4 non solid, 142 Mo, 210 pages) et `tome-67.cbr` (RAR solid créé par WinRAR, 119 Mo, 183 pages dans 10 dossiers de chapitre, rangées hors ordre naturel). Scan des deux en 4,2 s. Toriko : page en 7 à 18 ms. Tome 67 : première page 1,7 à 1,9 s disque chaud (4,8 s à froid), le temps d'extraire tout le tome (114 Mo dans le cache), puis 2 ms par page ; AVIF 640 px en 0,36 s. Serveur à 69 Mo de RAM.
   - Couverture : 97,1 % des lignes, 91,1 % des branches.
-- [ ] **2.9** `chore/phase2-wrap` : essai réel, mise à jour de CLAUDE.md (commandes `serve`), bilan de phase ici, `/graphify . --update`.
+- [x] **2.9** `chore/phase2-wrap` : essai réel, mise à jour de CLAUDE.md (commandes `serve`), bilan de phase ici, `/graphify . --update`.
+  - **Essai final de bout en bout** (binaire release, uniquement par l'API) : une bibliothèque avec les trois vrais fichiers (webtoon CBZ de 2 Go et 12 760 pages, Toriko CBR non solid, tome 67 CBR solid WinRAR). Scan des trois en 24,5 s (webtoon déjà en mémoire), progression visible, 3 séries. Première, dernière et page du milieu de chaque tome en 2 à 25 ms (première page du solid : 2,7 s, extraction comprise), AVIF 640 px en 0,3 à 0,6 s, JPEG 320 px en 30 à 140 ms. Rescan sans changement en 152 ms. Arrêt propre par Ctrl+C, puis redémarrage : historique conservé, tome solid relu depuis le cache en 16 ms.
+  - Aide de `serve` corrigée : `--quiet` décrit aussi son effet sur `serve`, `--cache-dir` et `--cache-max-mib` mentionnent les CBR solid extraits.
+  - Graphe Graphify mis à jour (`--update`) : 1 086 nœuds, 2 349 arêtes, 55 communautés, aucune arête pendante ni fusionnée. Code par AST ; `CLAUDE.md`, `ROADMAP.md` et `docs/cbr.md` réextraits sémantiquement (87 814 jetons), les nœuds de leur ancienne extraction remplacés. Nœuds centraux : `Db`, `ArchiveError`, `IssueCode`, `write_zip`, `FileReport`, `App`. Gabarit Vite (README, images) toujours écarté ; les migrations SQL restent sans nœud (grammaire SQL absente).
+
+### Bilan de la phase 2
+
+- Livré :
+  - `shiori serve` : API JSON des bibliothèques, séries, tomes et pages, protégée contre le DNS rebinding en écoute locale. Pages servies par leur ID, originales ou redimensionnées (AVIF ou JPEG, 9 largeurs), URL immuables et ETag fort, erreurs explicites `{ code, message }` sans cache.
+  - Parseur de noms de tomes (110 cas, `PARSER_VERSION` figée), bibliothèques et séries (un dossier par série, fichiers de la racine regroupés).
+  - Job de scan (une passe à la fois, annulation, journaux, conservation configurable) et API d'administration des scans.
+  - CBR via `rars` (pur Rust) : non solid lu par index, solid extrait une fois dans le cache, sous un seul plafond partagé avec les rendus.
+- Validé sur de vrais fichiers : webtoon de 2 Go (12 760 pages, archive en désordre), bibliothèque réelle de 450 fichiers pour le parseur, CBR RAR 4 non solid et CBR solid créé par WinRAR.
+- Qualité : 166 tests, CI Linux / Windows / macOS verte, couverture 97,1 % des lignes et 91,1 % des branches. 9 PR (#11 à #19), chacune passée en review Ponytail.
+- Reste ouvert pour la suite :
+  - la progression d'un scan compte par fichier : un seul très gros fichier reste à `done: 0` jusqu'à sa fin ;
+  - la première page d'un tome solid attend son extraction complète (environ 2 s pour 120 Mo), une seule extraction à la fois (`shortcut:` dans le code) ;
+  - le cache n'efface un tome extrait ou un rendu que par rotation (plafond atteint, le moins récemment lu part) : un tome supprimé ou modifié y reste jusque-là ;
+  - pas de décodeur AVIF pur Rust : une page AVIF est servie en originale, jamais redimensionnée ;
+  - chiffres pleine chasse (`第１巻`) non reconnus par le parseur ; CBR multivolume refusé.
 
 ### Questions de la phase 2 (résolues le 2026-11-11)
 
@@ -543,3 +562,4 @@ L'ordre de lecture ne dépend jamais de l'ordre dans l'archive : le lecteur reç
 - 2026-11-11 : formule des `page_id` figée par un test d'instantané (`id::tests::page_id_is_frozen`). Ordre naturel : à valeur égale, `9` précède `09` (comportement d'`alphanumeric-sort`, déterministe).
 - 2026-11-11 : note CBR ([docs/cbr.md](docs/cbr.md)) et plan de la phase 2 proposés, en attente de validation (Q1, Q6, Q9 bloquantes).
 - 2026-11-11 : plan de la phase 2 validé : CBR en phase 2 avec `rars` (lecture directe des RAR non solid, cache d'extraction des solid), images AVIF + JPEG en Rust pur, un dossier par série, défauts Q7, Q8, Q10 retenus.
+- 2026-11-12 : CBR solid servi depuis un cache d'extraction en rotation (plafond partagé avec les rendus, le moins récemment lu part en premier, jamais le dernier tome lu), validé sur un vrai CBR solid WinRAR ; phase 2 terminée.
