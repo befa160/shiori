@@ -1,5 +1,11 @@
-// Crochets partagés par les deux modes du lecteur : taille de l'écran et touches Échap / Tab.
-import { useEffect, useState } from 'react'
+// Crochets partagés par les deux modes du lecteur : taille de l'écran, touches Échap / Tab,
+// enregistrement de la progression.
+import { useQueryClient } from '@tanstack/react-query'
+import { useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
+import { api } from '@/api/client'
+import i18n from '@/i18n'
+import { errorText } from '@/i18n/errors'
 
 export function useViewport() {
   const read = () => ({ width: window.innerWidth, height: window.innerHeight })
@@ -37,4 +43,50 @@ export function useChromeKeys(chrome: boolean, setChrome: (shown: boolean) => vo
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   })
+}
+
+/** Enregistre sur le serveur la page lue : 1 s après le dernier changement (feuilleter n'envoie
+ * pas une requête par page), et tout de suite quand l'onglet passe en arrière-plan ou que le
+ * lecteur se ferme (`keepalive` : la requête survit à la fermeture de l'onglet). */
+export function useSaveProgress(volumeId: string, pageId: string | undefined) {
+  const queryClient = useQueryClient()
+  const state = useRef<{ pending?: string; saved?: string; flush?: () => void }>({})
+  useEffect(() => {
+    const s = state.current
+    s.flush = () => {
+      const page = s.pending
+      s.pending = undefined
+      if (!page || page === s.saved) return
+      s.saved = page
+      api
+        .saveProgress(volumeId, page, { keepalive: true })
+        // Les listes qui montrent la progression la redemanderont à leur prochain affichage.
+        .then(() => {
+          void queryClient.invalidateQueries({ queryKey: ['series'], refetchType: 'none' })
+          void queryClient.invalidateQueries({ queryKey: ['volumes', volumeId], exact: true, refetchType: 'none' })
+        })
+        .catch((error: Error) => {
+          if (s.saved === page) s.saved = undefined
+          // Un seul message, même si chaque page suivante échoue aussi.
+          toast.error(i18n.t('reader.progressNotSaved'), { id: 'progress', description: errorText(error, i18n.t) })
+        })
+    }
+  }, [volumeId, queryClient])
+  useEffect(() => {
+    const s = state.current
+    s.pending = pageId
+    const timer = window.setTimeout(() => s.flush?.(), 1000)
+    return () => window.clearTimeout(timer)
+  }, [pageId])
+  useEffect(() => {
+    const s = state.current
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') s.flush?.()
+    }
+    document.addEventListener('visibilitychange', onHide)
+    return () => {
+      document.removeEventListener('visibilitychange', onHide)
+      s.flush?.()
+    }
+  }, [])
 }

@@ -1,4 +1,15 @@
-import type { Health, Library, PageInfo, SeriesDetail, SeriesSummary, Settings, VolumeDetail } from './types'
+import type {
+  Health,
+  Library,
+  PageInfo,
+  Progress,
+  ReadingSettings,
+  SeriesDetail,
+  SeriesSummary,
+  Settings,
+  SettingsPatch,
+  VolumeDetail,
+} from './types'
 
 /** Erreur de l'API : code stable (`page_broken`, `volume_changed`…) et message en français. */
 export class ApiError extends Error {
@@ -46,6 +57,10 @@ export const api = {
   series: (id: number, init?: RequestInit) => must<SeriesDetail>(`/series/${id}`, init),
   volume: (id: string, init?: RequestInit) => must<VolumeDetail>(`/volumes/${id}`, init),
   pages: (volumeId: string, init?: RequestInit) => must<PageInfo[]>(`/volumes/${volumeId}/pages`, init),
+  saveProgress: (volumeId: string, pageId: string, init?: RequestInit) =>
+    must<Progress>(`/volumes/${volumeId}/progress`, { ...init, method: 'PUT', body: JSON.stringify({ page_id: pageId }) }),
+  saveSeriesSettings: (seriesId: number, patch: SettingsPatch) =>
+    must<ReadingSettings>(`/series/${seriesId}/settings`, { method: 'PATCH', body: JSON.stringify(patch) }),
 }
 
 /** Largeurs que le serveur sait produire (backend/crates/shiori/src/render.rs, `WIDTHS`). */

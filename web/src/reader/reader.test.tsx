@@ -103,7 +103,9 @@ describe('lecteur', () => {
     const toolbar = screen.getByRole('toolbar', { hidden: true })
     expect(toolbar).toHaveClass('invisible')
     tap(450)
-    expect(toolbar).not.toHaveClass('invisible')
+    // Au centre, le tap attend un éventuel second tap (zoom) avant de montrer les commandes.
+    expect(toolbar).toHaveClass('invisible')
+    await waitFor(() => expect(toolbar).not.toHaveClass('invisible'))
     expect(within(toolbar).getByRole('link', { name: 'Retour' })).toHaveAttribute('href', '/series/7')
     await userEvent.click(within(toolbar).getByRole('button', { name: 'Page suivante' }))
     expect(screen.getByRole('img', { name: /^Page 2 sur 3/ })).toBeInTheDocument()
@@ -304,6 +306,161 @@ describe('panneau Affichage ouvert', () => {
     fireEvent.pointerDown(main(), { pointerType: 'touch', pointerId: 9, clientX: 850, clientY: 300 })
     fireEvent.pointerUp(main(), { pointerType: 'touch', pointerId: 9, clientX: 850, clientY: 300 })
     expect(img()).toHaveAccessibleName('Page 1 sur 3')
+  })
+})
+
+describe('progression, réglages de la série, tome suivant', () => {
+  const NEXT = 'c'.repeat(64)
+  const progress = (ordinal: number) => ({ page_id: `p${ordinal + 1}`, ordinal, page_count: 3, finished: ordinal === 2, updated_at: '' })
+  const twoVolumes: SeriesDetail = {
+    ...series,
+    volumes: [...series.volumes, { ...series.volumes[0], volume_id: NEXT, number: 17, file_name: 'Toriko T17.cbz' }],
+  }
+  function serve(over: Partial<VolumeDetail> = {}, extra: Record<string, () => Response> = {}) {
+    return mockApi({
+      [`/api/volumes/${VOLUME}`]: () => json({ ...volume('ltr'), ...over }),
+      [`/api/volumes/${VOLUME}/pages`]: () => json([page(1), page(2, 'broken'), page(3)]),
+      '/api/series/7': () => json(twoVolumes),
+      ...extra,
+    })
+  }
+  /** Corps des requêtes envoyées avec cette méthode. */
+  const sent = (fetch: ReturnType<typeof mockApi>, method: string) =>
+    fetch.mock.calls
+      .filter(([, init]) => init?.method === method)
+      .map(([url, init]) => [url, JSON.parse(init?.body as string)])
+
+  it('reprend à la dernière page lue ; un tome terminé repart du début', async () => {
+    serve({ progress: progress(1) })
+    const { unmount } = renderAt(`/read/${VOLUME}`)
+    expect(await screen.findByRole('img', { name: /^Page 2 sur 3/ })).toBeInTheDocument()
+    unmount()
+    serve({ progress: progress(2) })
+    renderAt(`/read/${VOLUME}`)
+    expect(await screen.findByRole('img', { name: 'Page 1 sur 3' })).toBeInTheDocument()
+  })
+
+  it('enregistre la page lue une seconde après, aussitôt en arrière-plan ou en quittant', async () => {
+    const url = `/api/volumes/${VOLUME}/progress`
+    const fetch = serve({}, { [url]: () => json(progress(0)) })
+    const { unmount } = renderAt(`/read/${VOLUME}`)
+    await screen.findByRole('img', { name: 'Page 1 sur 3' })
+    // Feuilleter n'envoie que la page où l'on s'arrête.
+    await userEvent.keyboard('{ArrowRight}{ArrowRight}')
+    expect(sent(fetch, 'PUT')).toEqual([])
+    await waitFor(() => expect(sent(fetch, 'PUT')).toEqual([[url, { page_id: 'p3' }]]), { timeout: 2000 })
+    expect(fetch.mock.calls.find(([, init]) => init?.method === 'PUT')?.[1]).toMatchObject({ keepalive: true })
+    // Onglet en arrière-plan : tout de suite, sans attendre la seconde.
+    await userEvent.keyboard('{ArrowLeft}')
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' })
+    act(() => void document.dispatchEvent(new Event('visibilitychange')))
+    Reflect.deleteProperty(document, 'visibilityState')
+    expect(sent(fetch, 'PUT').at(-1)).toEqual([url, { page_id: 'p2' }])
+    // Quitter le lecteur aussi.
+    await userEvent.keyboard('{ArrowLeft}')
+    unmount()
+    expect(sent(fetch, 'PUT').at(-1)).toEqual([url, { page_id: 'p1' }])
+    expect(sent(fetch, 'PUT')).toHaveLength(3)
+  })
+
+  it('le sens de lecture et la disposition choisis sont retenus pour la série', async () => {
+    vi.stubGlobal('scrollTo', vi.fn())
+    const fetch = serve({ settings: settings('rtl') }, { '/api/series/7/settings': () => json(settings('ltr')) })
+    renderAt(`/read/${VOLUME}`)
+    await screen.findByRole('img', { name: 'Page 1 sur 3' })
+    await showControls()
+    await userEvent.click(screen.getByRole('button', { name: 'Affichage' }))
+    expect(await screen.findByRole('radio', { name: 'Manga' })).toHaveAttribute('aria-checked', 'true')
+    await userEvent.click(screen.getByRole('radio', { name: 'BD' }))
+    await userEvent.click(screen.getByRole('radio', { name: 'Double' }))
+    expect(sent(fetch, 'PATCH')).toEqual([
+      ['/api/series/7/settings', { reading_mode: 'ltr' }],
+      ['/api/series/7/settings', { page_layout: 'double' }],
+    ])
+    // Appliqués tout de suite : en BD, la flèche droite avance.
+    await userEvent.keyboard('{Escape}{Escape}{ArrowRight}')
+    expect(screen.getByRole('img', { name: /^Page 2 sur 3/ })).toBeInTheDocument()
+    // Webtoon : le lecteur passe en défilement vertical, et le panneau y reste pour en revenir.
+    await showControls()
+    await userEvent.click(screen.getByRole('button', { name: 'Affichage' }))
+    await userEvent.click(await screen.findByRole('radio', { name: 'Webtoon' }))
+    expect(await screen.findByRole('navigation', { name: 'Fin du tome' })).toBeInTheDocument()
+    expect(sent(fetch, 'PATCH').at(-1)).toEqual(['/api/series/7/settings', { reading_mode: 'vertical' }])
+    await showControls()
+    await userEvent.click(screen.getByRole('button', { name: 'Affichage' }))
+    expect(await screen.findByRole('radio', { name: 'Webtoon' })).toHaveAttribute('aria-checked', 'true')
+  })
+
+  it('un échec d’enregistrement est signalé, sans bloquer la lecture', async () => {
+    // Aucune réponse prévue pour la progression ni les réglages : le serveur répond 404.
+    const fetch = serve()
+    renderAt(`/read/${VOLUME}`)
+    await screen.findByRole('img', { name: 'Page 1 sur 3' })
+    expect(await screen.findByText("La page lue n'a pas pu être enregistrée", {}, { timeout: 2000 })).toBeInTheDocument()
+    await showControls()
+    await userEvent.click(screen.getByRole('button', { name: 'Affichage' }))
+    await userEvent.click(await screen.findByRole('radio', { name: 'Manga' }))
+    expect(await screen.findByText("Le réglage n'a pas pu être enregistré pour la série")).toBeInTheDocument()
+    // Le réglage reste appliqué pour la séance, même quand le tome est redemandé au serveur
+    // (retour sur l'onglet) : en manga, la flèche gauche avance.
+    const asked = fetch.mock.calls.filter(([url]) => url === `/api/volumes/${VOLUME}`).length
+    await act(async () => void window.dispatchEvent(new Event('visibilitychange')))
+    await waitFor(() => expect(fetch.mock.calls.filter(([url]) => url === `/api/volumes/${VOLUME}`).length).toBeGreaterThan(asked))
+    await userEvent.keyboard('{Escape}{Escape}{ArrowLeft}')
+    expect(screen.getByRole('img', { name: /^Page 2 sur 3/ })).toBeInTheDocument()
+  })
+
+  it('après la dernière page, les commandes proposent le tome suivant', async () => {
+    serve()
+    const { router } = renderAt(`/read/${VOLUME}?page=p3`)
+    await screen.findByRole('img', { name: 'Page 3 sur 3' })
+    const toolbar = screen.getByRole('toolbar', { hidden: true })
+    // Dès la dernière page (une fois la série connue), le bouton est dans la barre.
+    expect(await within(toolbar).findByRole('link', { name: 'Tome suivant' })).toHaveAttribute('href', `/read/${NEXT}`)
+    expect(toolbar).toHaveClass('invisible')
+    await userEvent.keyboard('{ArrowRight}')
+    expect(toolbar).not.toHaveClass('invisible')
+    await userEvent.click(within(toolbar).getByRole('link', { name: 'Tome suivant' }))
+    expect(router.state.location.pathname).toBe(`/read/${NEXT}`)
+  })
+})
+
+describe('zoom au double tap', () => {
+  it('double, puis simple : le point touché reste visible, tourner la page ou un double tap le quitte', async () => {
+    api('ltr')
+    renderAt(`/read/${VOLUME}`)
+    await screen.findByRole('img', { name: 'Page 1 sur 3' })
+    const tap = (x: number) => {
+      fireEvent.pointerDown(main(), { clientX: x, clientY: 300 })
+      fireEvent.pointerUp(main(), { clientX: x, clientY: 300 })
+    }
+    const wait = () => act(() => new Promise((done) => setTimeout(done, 350)))
+    tap(450)
+    tap(460)
+    // Deux fois la place de l'écran (2048×1536) : page de 1 024 px, demandée en 1 080.
+    expect(img()).toHaveAttribute('src', '/api/pages/p1/image?w=1080&f=avif')
+    expect(img()).toHaveStyle({ width: '1024px' })
+    expect(main()).toHaveClass('overflow-auto')
+    // On s'y déplace et on y pince comme d'habitude ; seul notre double tap zoome.
+    expect(main()).toHaveStyle({ touchAction: 'manipulation' })
+    // Le premier tap n'a pas montré les commandes.
+    await wait()
+    expect(screen.getByRole('toolbar', { hidden: true })).toHaveClass('invisible')
+    // Zoomé, un tap sur le côté ne tourne pas la page ; un double tap revient à l'écran.
+    tap(850)
+    expect(img()).toHaveAccessibleName('Page 1 sur 3')
+    tap(850)
+    expect(main()).toHaveClass('overflow-hidden')
+    await wait()
+    tap(850)
+    expect(screen.getByRole('img', { name: /^Page 2 sur 3/ })).toBeInTheDocument()
+    // Tourner la page quitte le zoom.
+    tap(450)
+    tap(450)
+    expect(main()).toHaveClass('overflow-auto')
+    await userEvent.keyboard('{ArrowRight}')
+    expect(img()).toHaveAccessibleName('Page 3 sur 3')
+    expect(main()).toHaveClass('overflow-hidden')
   })
 })
 
