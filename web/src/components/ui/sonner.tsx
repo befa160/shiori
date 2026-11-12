@@ -9,13 +9,15 @@ import type { CSSProperties } from "react"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 
 // Shiori est toujours sombre : thème fixe (pas de next-themes). Notifications fermées seules au
-// bout de 5 s (non critiques), au-dessus de la zone sûre du bas sur mobile (PWA).
+// bout de 5 s (non critiques), au-dessus de la barre d'onglets et de la zone sûre du bas (PWA).
+const BOTTOM = "calc(var(--tabbar-height) + env(safe-area-inset-bottom) + 16px)"
 const Toaster = ({ ...props }: ToasterProps) => {
   return (
     <Sonner
       theme="dark"
       duration={5000}
-      mobileOffset={{ bottom: "calc(env(safe-area-inset-bottom) + 16px)" }}
+      offset={{ bottom: BOTTOM }}
+      mobileOffset={{ bottom: BOTTOM }}
       className="toaster group"
       icons={{
         success: <CircleCheckIcon className="size-4" />,

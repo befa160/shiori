@@ -9,6 +9,20 @@ export const fr = {
     home: 'Shiori, accueil',
     language: 'Langue',
     languageNotSaved: 'Langue non enregistrée, réessayez plus tard',
+    skip: 'Aller au contenu',
+    navigation: 'Navigation principale',
+    collapse: 'Réduire le menu',
+    expand: 'Déplier le menu',
+  },
+  nav: {
+    home: 'Accueil',
+    libraries: 'Bibliothèques',
+    admin: 'Administration',
+  },
+  admin: {
+    title: 'Administration',
+    language: "Langue de l'interface",
+    languageHelp: "Enregistrée sur le serveur : elle s'applique sur tous vos appareils.",
   },
   loadFailed: {
     title: "Cet écran n'a pas pu s'afficher",

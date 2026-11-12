@@ -31,6 +31,21 @@
   --input: #71717a;
   --ring: #e5a00d;
   --radius: 0.375rem;
+  /* Sidebar (lot 4.2) : surface des cartes, entrée active en ambre. */
+  --sidebar: var(--card);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-accent: var(--accent);
+  --sidebar-border: var(--border);
+  /* Hauteur de la barre d'onglets du bas (hors zone sûre) ; nulle à partir de `lg`, où la sidebar
+     la remplace. Le contenu et les notifications s'écartent d'autant. */
+  --tabbar-height: 3.5rem;
+}
+
+@media (width >= 64rem) {
+  :root {
+    --tabbar-height: 0px;
+  }
 }
 
 @theme inline {
@@ -54,6 +69,11 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --radius-md: var(--radius);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-border: var(--sidebar-border);
 }
 
 /* Zones sûres de la PWA : `pt-safe`, `pb-safe`… ne sont pas natives de Tailwind. */

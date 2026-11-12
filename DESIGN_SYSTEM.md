@@ -75,7 +75,7 @@ Autres paires : `#121212` sur ambre 8,4:1 ; blanc sur `#B91C1C` 6,5:1. Le texte 
 | Largeur | Navigation | Exemple |
 |---|---|---|
 | `< lg` (< 1024 px) | barre d'onglets fixe en bas, 4 onglets au plus, au-dessus de `env(safe-area-inset-bottom)` ; le contenu réserve sa hauteur en bas | mobile 390 px, tablette 8" en portrait (800 px) |
-| `≥ lg` | sidebar fixe à gauche (16 rem, réductible en icônes à 3 rem), recherche globale en tête | tablette en paysage (1280 px), bureau |
+| `≥ lg` | sidebar fixe à gauche (16 rem, réductible en icônes à 3,75 rem : entrée de 44 px et ses marges), recherche globale en tête | tablette en paysage (1280 px), bureau |
 
 - Zones sûres : utilitaires `pt-safe`, `pb-safe`, `pl-safe`, `pr-safe` de `index.css` (absents de Tailwind) ; quand un élément a déjà une marge, prendre la plus grande des deux (`max()`), pas la somme ni l'une à la place de l'autre.
 - Contenu : `mx-auto max-w-screen-2xl`, `px-4 lg:px-8`. Pas de défilement horizontal de la page.
@@ -149,7 +149,7 @@ Quand la série n'a pas de couverture **ou** que l'image échoue (`onError`), m�
 
 ### Navigation
 
-- **Sidebar** (`≥ lg`, Sidebar shadcn) : surface `card`, entrées de 44 px, icône lucide + libellé ; entrée active `bg-accent text-primary` et `aria-current="page"` ; réduite, les icônes ont une infobulle et un nom accessible. État réduit gardé dans `localStorage`.
+- **Sidebar** (`≥ lg`, Sidebar shadcn) : surface `card`, entrées de 44 px, icône lucide + libellé ; entrée active `bg-accent text-primary` et `aria-current="page"` ; réduite, les icônes ont une infobulle et un nom accessible. État réduit gardé dans `localStorage`. Lien « Aller au contenu » en premier arrêt du clavier, visible au focus.
 - **Barre d'onglets** (`< lg`) : `fixed inset-x-0 bottom-0`, surface `card` avec bordure haute `border-border`, 4 onglets égaux, icône au-dessus d'un libellé `text-xs` (jamais l'icône seule), onglet actif en ambre + `aria-current="page"`, hauteur 56 px + zone sûre.
 - **Listes cliquables** (`Row`, administration) : ligne entière cliquable, 56 px au moins, 8 px entre deux lignes.
 

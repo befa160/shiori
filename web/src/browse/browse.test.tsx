@@ -32,7 +32,7 @@ describe('bibliothèques', () => {
     mockApi({ '/api/libraries': () => json([library]), '/api/libraries/1/series': () => json(series) })
     const { router } = renderAt('/')
     expect(screen.getByText('Chargement…').parentElement).toHaveAttribute('aria-busy', 'true')
-    const row = await screen.findByRole('link', { name: /Mangas/ })
+    const row = await within(screen.getByRole('main')).findByRole('link', { name: /Mangas/ })
     expect(row).toHaveTextContent('Manga · 2 séries · 1 tome')
     await userEvent.click(row)
     expect(router.state.location.pathname).toBe('/libraries/1')
@@ -63,7 +63,7 @@ describe('bibliothèques', () => {
     expect(await screen.findByText('Chargement…')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Réessayer' })).toBeNull()
     release()
-    expect(await screen.findByRole('link', { name: /Mangas/ })).toBeInTheDocument()
+    expect(await within(screen.getByRole('main')).findByRole('link', { name: /Mangas/ })).toBeInTheDocument()
   })
 })
 
@@ -91,7 +91,7 @@ describe('tomes d’une série', () => {
   it('montre chaque tome dans l’ordre du serveur, son état et sa progression', async () => {
     mockApi({ '/api/series/7': () => json(detail) })
     const { router } = renderAt('/series/7')
-    const items = await screen.findAllByRole('listitem')
+    const items = await within(screen.getByRole('main')).findAllByRole('listitem')
     expect(items.map((li) => within(li).getAllByTitle(/./)[0].textContent)).toEqual(['Tome 1', 'Tome 2', 'bonus.cbr'])
     expect(within(items[0]).getByText('Lu')).toBeInTheDocument()
     expect(within(items[0]).queryByRole('progressbar')).toBeNull()
@@ -125,7 +125,7 @@ describe('identifiant invalide dans l’adresse', () => {
     const fetch = mockApi({})
     renderAt(path)
     expect(screen.getByRole('heading', { name: 'Page introuvable' })).toBeInTheDocument()
-    // Seuls les réglages (langue) sont demandés, jamais la ressource.
-    expect(fetch.mock.calls.map((c) => c[0])).toEqual(['/api/settings'])
+    // Seuls les réglages (langue) et les bibliothèques (sidebar) sont demandés, jamais la ressource.
+    expect(new Set(fetch.mock.calls.map((c) => c[0]))).toEqual(new Set(['/api/settings', '/api/libraries']))
   })
 })
