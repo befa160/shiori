@@ -8,7 +8,7 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 | 0 | Outillage (Rust, structure, Ponytail, Graphify, UI/UX Pro Max, MCP shadcn + Playwright) | ✅ |
 | 1 | CLI de scan d'intégrité + schéma SQLite + CI linux/windows, puis graphe Graphify | ✅ |
 | 2 | API axum + streaming/redimensionnement des images + parseur de noms + job de scan + API d'administration des scans + CBR | ✅ |
-| 3 | Lecteur web (sens de lecture, webtoon, doubles pages) | ⏳ |
+| 3 | Lecteur web (sens de lecture, webtoon, doubles pages) + front embarqué + progression de lecture | ❓ plan proposé |
 | 4 | Bibliothèque façon Plex + statuts/filtres + menu d'administration (scans, journaux) + DESIGN_SYSTEM.md | ⏳ |
 | 5 | Métadonnées web + édition manuelle | ⏳ |
 | 6 | Distribution : image Docker, PWA finalisée, binaires Linux/Windows en release, Dependabot, documentation (technique, installation, fonctionnelle) | ⏳ |
@@ -529,6 +529,149 @@ Arrêt propre sur Ctrl-C (`with_graceful_shutdown`) : un scan en cours est annul
 - **Q8 Largeurs** ✅ : `160, 320, 480, 640, 800, 1080, 1280, 1600, 2048`.
 - **Q10 Réseau** ✅ : pas d'authentification en phase 2, écoute sur `127.0.0.1` par défaut, ouverture au réseau par `--listen`.
 
+## Phase 3 : lecteur web (plan proposé le 2026-11-12)
+
+### Objectif
+
+Ouvrir un tome dans le navigateur, servi par le même binaire, et le lire jusqu'au bout sans jamais voir une mauvaise page : manga de droite à gauche, BD de gauche à droite, webtoon en défilement vertical continu, page simple ou double, reprise exacte là où on s'était arrêté, sur n'importe quel appareil.
+
+Le lecteur ne décide rien lui-même : il reçoit la liste ordonnée des pages (`ordinal`, dimensions, type, statut) et affiche chaque page par son ID (invariant de lecture, principe 3). Une page `broken` ou une erreur de lecture s'affiche **à sa place** comme une erreur explicite avec son code, jamais remplacée par une autre image (principe 4).
+
+Hors périmètre :
+- la bibliothèque façon Plex (grille de couvertures, « Continuer la lecture », recherche, filtres) et le menu d'administration : phase 4 ;
+- les métadonnées : phase 5 ;
+- l'authentification et les comptes : « Plus tard » ;
+- la PWA finalisée (installation, hors ligne) : phase 6. La phase 3 pose seulement les zones sûres et le plein écran.
+
+### Mesures qui orientent le plan
+
+Faites le 2026-11-12, sur les trois vrais fichiers :
+
+| Fichier | Pages | Largeur (min / médiane / max) | Hauteur max | Pages plus larges que hautes |
+|---|---|---|---|---|
+| Webtoon CBZ | 12 760 | 480 / 800 / 800 | 1 280 | 70 (fins de bandes, jusqu'à 1 px de haut) |
+| Major T67 (CBR solid) | 183 | 814 / 1 005 / 2 011 | 1 602 | 2 doubles pages |
+| Toriko T16 (CBR) | 210 | 1 200 | 1 883 | 0 |
+
+- **Le webtoon réel est déjà découpé en bandes de 800×1280** par l'outil de téléchargement. Découper les très hautes images côté serveur (prévu dans le README) n'a pas de cas réel aujourd'hui : reporté, avec repli sur l'originale si un rendu échoue (`render_failed`, lot 2.5).
+- **12 760 pages** : le mode vertical doit être virtualisé (seules les pages proches de l'écran existent dans le DOM), avec la place de chaque page réservée d'après ses dimensions du scan, donc aucun saut de mise en page.
+- Une page « plus large que haute » n'est une double page qu'en mode paginé : en vertical, une fin de bande de 800×1 est une bande comme une autre.
+
+### Découpage
+
+```
+backend/crates/shiori-db   + migration 0004_reading.sql : progression par tome, préférences de lecture
+backend/crates/shiori      + web.rs : front embarqué (rust-embed), repli SPA, en-têtes de cache
+                           + routes de progression et de préférences
+web/                       Tailwind 4 + shadcn/ui, React Router, TanStack Query, Vitest
+  src/api/                 client typé de l'API (types alignés sur les réponses JSON)
+  src/reader/              lecteur : calcul des vues (pures, testées), modes paginé et vertical
+  src/browse/              navigation minimale provisoire : bibliothèques → séries → tomes
+```
+
+### Dépendances ajoutées (dernières versions au 2026-11-12)
+
+| Où | Paquet | Rôle |
+|---|---|---|
+| backend | `rust-embed` 8.14 (pur Rust, MIT) | fichiers de `web/dist` dans le binaire en release, lus sur le disque en debug |
+| web | `tailwindcss` 4.3 + `@tailwindcss/vite` | styles (direction UI de CLAUDE.md) |
+| web | `shadcn` 4.23 (composants copiés dans le projet) | boutons, curseur, menus de la barre d'outils |
+| web | `react-router` 8.5 | routes `/`, `/series/:id`, `/read/:volumeId` |
+| web | `@tanstack/react-query` 5.107 | cache des réponses de l'API, préchargement |
+| web | `@tanstack/react-virtual` 3.14 | liste virtualisée du mode vertical |
+| web (dev) | `vitest` 5.1, `@vitest/coverage-v8`, `@testing-library/react`, `@testing-library/user-event`, `jsdom` | tests et couverture ≥ 80 % lignes et branches |
+| web (dev) | `@playwright/test` 1.65 | bout en bout dans un vrai navigateur, contre `shiori serve` (Q16) |
+
+### Base : migration `0004_reading.sql`
+
+```sql
+-- Progression : une ligne par tome lu. Clé = identité du tome (hash du fichier, principe 8) :
+-- renommer ou déplacer le fichier ne perd rien.
+CREATE TABLE reading_progress (
+  volume_id   TEXT PRIMARY KEY REFERENCES volumes(id) ON DELETE CASCADE,
+  page_id     TEXT NOT NULL,     -- dernière page vue (identité stable, jamais un index brut)
+  ordinal     INTEGER NOT NULL,  -- sa position, pour l'affichage « 42 / 183 »
+  finished_at TEXT,              -- dernière page atteinte
+  updated_at  TEXT NOT NULL
+);
+-- Préférences de lecture par série ; NULL = défaut de la bibliothèque (Q12).
+ALTER TABLE series ADD COLUMN reading_mode TEXT CHECK (reading_mode IN ('rtl','ltr','vertical'));
+ALTER TABLE series ADD COLUMN page_layout  TEXT CHECK (page_layout IN ('single','double','auto'));
+-- Q12 : type de bibliothèque, qui donne le mode par défaut de ses séries.
+ALTER TABLE libraries ADD COLUMN kind TEXT NOT NULL DEFAULT 'manga' CHECK (kind IN ('manga','comics','webtoon'));
+```
+
+- Un tome dont le fichier change reçoit une nouvelle identité : sa progression ne s'applique pas à un contenu différent. Elle n'est pas transférée en phase 3 ; à rediscuter si le cas se présente (fichier retouché par un outil).
+- Une page de progression qui n'existe plus dans le tome (impossible tant que l'identité du tome est le hash du fichier) est refusée à l'écriture : `page_id` doit appartenir au tome.
+
+### Routes ajoutées
+
+| Méthode | Route | Rôle |
+|---|---|---|
+| GET | `/api/volumes/{id}/progress` | `{ page_id, ordinal, page_count, finished }` ou `204` si jamais ouvert |
+| PUT | `/api/volumes/{id}/progress` | `{ page_id }` → enregistre ; `finished` calculé par le serveur (dernier ordinal) ; `422 page_not_in_volume` |
+| DELETE | `/api/volumes/{id}/progress` | « marquer comme non lu » |
+| PATCH | `/api/series/{id}/settings` | `{ reading_mode?, page_layout? }` (`null` = revenir au défaut) |
+| — | `GET /api/series/{id}` et `GET /api/volumes/{id}` | gagnent `progress` par tome et les réglages effectifs (`reading_mode`, `page_layout`) |
+| — | `POST /api/libraries` | gagne `kind` (défaut `manga`) |
+| GET | `/`, `/series/…`, `/read/…` | front embarqué ; toute route inconnue hors `/api` renvoie `index.html` (repli SPA) |
+
+En-têtes du front : fichiers de `assets/` (noms avec hash de Vite) en `Cache-Control: public, max-age=31536000, immutable` ; `index.html` en `no-cache`, pour qu'une mise à jour du binaire soit vue tout de suite. Le binaire compile même si `web/dist` est absent (dev du backend seul) et sert alors une page qui explique de lancer `npm run build`.
+
+### Lecteur
+
+- **Route** `/read/:volumeId`, plein écran, barre d'outils masquée ; un tap au centre l'affiche. Bouton « Retour » explicite (principe PWA de CLAUDE.md).
+- **Modes** : `rtl` (manga), `ltr` (BD), `vertical` (webtoon). Mode et disposition se changent dans la barre d'outils et sont retenus pour la série (`PATCH /settings`).
+- **Disposition en mode paginé** : `single`, `double`, `auto` (double en paysage, simple en portrait). En double : la couverture (ordinal 0) seule, une page plus large que haute toujours seule, les autres par deux dans le sens de lecture. Un bouton « décaler d'une page » corrige un tome dont les doubles pages tombent mal.
+- **Doubles pages en mode simple** (Q14) : affichées en entier, ajustées à l'écran, ou coupées en deux moitiés successives (droite puis gauche en `rtl`). La coupe se fait côté client sur la même image (même URL immuable, rien de nouveau côté serveur).
+- **Calcul des vues** dans des fonctions pures (`views(pages, mode, layout, orientation, offset)` → suite de vues de 1 ou 2 pages) : c'est là que vit toute la logique, testée à part, table de cas comme le parseur de noms.
+- **Images** : largeur demandée = la plus petite de la liste fixe ≥ largeur affichée × `devicePixelRatio` (une page AVIF ou plus étroite que demandé : l'originale, comme le serveur le fait déjà). Format AVIF ; sur `render_failed`, repli sur l'originale. Préchargement des 2 vues suivantes et de la précédente. Place réservée par `aspect-ratio` d'après `width`/`height` du scan.
+- **Erreurs à leur place** : une page `broken` (`422 page_broken`), un fichier changé (`409 volume_changed`), un tome introuvable (`410 volume_unavailable`)… s'affichent comme une carte d'erreur à l'emplacement de la page, avec le code et un message en français. Le lecteur ne saute jamais une page et ne répète jamais la précédente.
+- **Navigation** : zones de tap gauche / droite (selon le sens de lecture), balayage, clavier (flèches, espace, Page précédente / suivante, Début / Fin), curseur de pages dans la barre d'outils (« 42 / 183 »). Fin de tome : carte « Tome suivant » (ordre de `GET /api/series/{id}`, déjà trié par le serveur).
+- **Mode vertical** : liste virtualisée, largeur ajustée à l'écran (plafonnée à 800 px de contenu sur un grand écran), position de lecture = première page visible.
+- **Progression** : enregistrée environ 1 s après le dernier changement de page et quand l'onglet passe en arrière-plan (`fetch` avec `keepalive`) ; à l'ouverture, reprise sur la page enregistrée (lien direct possible : `/read/:volumeId?page=<page_id>`).
+- **Zoom** (Q15) : double tap pour zoomer ×2 et déplacement au doigt en mode paginé ; pincement natif du navigateur en vertical.
+
+### Navigation provisoire (en attendant la phase 4)
+
+Trois écrans simples pour atteindre le lecteur : bibliothèques, séries d'une bibliothèque, tomes d'une série (avec la progression de chacun). Thème sombre et couleurs de CLAUDE.md, mais pas de grille de couvertures ni de sidebar : la phase 4 les remplacera. Créer une bibliothèque et lancer un scan restent à faire par l'API ou la CLI.
+
+### Tests
+
+- **Rust** : migration 0004, routes de progression et de réglages (cas d'erreur compris), front embarqué (index, assets immuables, repli SPA, `/api` inconnu reste un 404 JSON, `web/dist` absent).
+- **Vitest** : calcul des vues (table de cas : simple, double, couverture seule, double page seule, décalage, `rtl`/`ltr`, orientation), choix de la largeur, client de l'API, composants du lecteur (carte d'erreur à la place d'une page cassée, jamais une autre image ; navigation clavier et tap ; enregistrement de la progression).
+- **Bout en bout (Playwright)** contre `shiori serve` sur les fixtures de `shiori-testkit` : l'invariant de lecture dans un vrai navigateur (la vue n affiche la couleur de l'ordinal n, en CBZ et en CBR solid), une page cassée affichée en erreur à sa place, reprise après rechargement. Captures en 390×844, 800×1280, 1280×800 et 1440×900 (CLAUDE.md).
+- Couverture front : seuils Vitest à 80 % lignes et branches, ajoutés au job CI `web`.
+
+### Lots (une branche + une PR chacun)
+
+- [ ] **3.1** `feat/web-foundation` : retrait du gabarit Vite, Tailwind 4, shadcn/ui, thème sombre de CLAUDE.md, React Router, TanStack Query, client typé de l'API, Vitest avec seuils de couverture dans la CI.
+- [ ] **3.2** `feat/embed-web` : `rust-embed`, repli SPA, en-têtes de cache, binaire qui compile sans `web/dist` ; la CI construit le front avant le binaire de release.
+- [ ] **3.3** `feat/reading-progress` : migration 0004, `kind` des bibliothèques, routes de progression et de réglages, progression dans les réponses des séries et des tomes.
+- [ ] **3.4** `feat/browse-minimal` : les trois écrans provisoires.
+- [ ] **3.5** `feat/reader-paged` : lecteur paginé simple (`rtl`/`ltr`), choix de la largeur, préchargement, repli sur l'originale, cartes d'erreur, navigation (tap, balayage, clavier, curseur).
+- [ ] **3.6** `feat/reader-double` : disposition double et `auto`, couverture et doubles pages seules, décalage, coupe des doubles pages en mode simple.
+- [ ] **3.7** `feat/reader-vertical` : mode webtoon virtualisé, essai sur le webtoon réel de 12 760 pages.
+- [ ] **3.8** `feat/reader-progress` : reprise, enregistrement, réglages retenus par série, tome suivant, zoom.
+- [ ] **3.9** `test/reader-e2e` : Playwright dans la CI, invariant de lecture dans le navigateur, captures aux quatre tailles et corrections d'alignement.
+- [ ] **3.10** `chore/phase3-wrap` : essai réel sur tablette (ou sa taille), README à jour, bilan de phase, `/graphify . --update`.
+
+### Questions de la phase 3
+
+Bloquantes (à trancher avant le lot 3.3) :
+
+- **Q11 Progression** ❓ : où l'enregistrer ? Proposition : **côté serveur**, en base (un seul utilisateur implicite tant qu'il n'y a pas de comptes), pour reprendre la même page sur la tablette et sur le PC. Autre choix : dans le navigateur seulement (`localStorage`), plus simple mais propre à chaque appareil.
+- **Q12 Mode par défaut** ❓ : quel sens de lecture quand la série n'a pas de réglage ? Proposition : un **type de bibliothèque** choisi à sa création (`manga` → droite à gauche, `comics` → gauche à droite, `webtoon` → vertical), puis un réglage par série qui l'emporte. Autre choix : un seul défaut global (droite à gauche).
+- **Q14 Doubles pages en mode simple** ❓ : par défaut, les afficher **en entier** (réduites à l'écran) ou **coupées en deux moitiés** successives ? Proposition : en entier par défaut, coupe activable dans la barre d'outils.
+
+Non bloquantes (propositions retenues sauf avis contraire) :
+
+- **Q13 Disposition par défaut** : `auto` (double en paysage, simple en portrait), couverture seule.
+- **Q15 Zoom** : double tap ×2 et déplacement en mode paginé, pincement natif en vertical, dans le lot 3.8.
+- **Q16 Playwright dans la CI** : oui, job Linux seulement (navigateur Chromium, environ 1 à 2 min de plus par PR).
+- **Q17 Découpage serveur des très hautes images** : reporté, aucun cas réel (voir les mesures) ; repli sur l'originale en attendant.
+- **Q18 Breakpoint tablette 8" en portrait** (CLAUDE.md) : sans objet en phase 3 (le lecteur en est exclu, la navigation provisoire est une simple liste) ; à valider en phase 4.
+
 ## Fonctionnalités ajoutées en cours de route
 
 ### Menu d'administration des scans (demandé le 2026-11-11)
@@ -563,3 +706,4 @@ L'ordre de lecture ne dépend jamais de l'ordre dans l'archive : le lecteur reç
 - 2026-11-11 : note CBR ([docs/cbr.md](docs/cbr.md)) et plan de la phase 2 proposés, en attente de validation (Q1, Q6, Q9 bloquantes).
 - 2026-11-11 : plan de la phase 2 validé : CBR en phase 2 avec `rars` (lecture directe des RAR non solid, cache d'extraction des solid), images AVIF + JPEG en Rust pur, un dossier par série, défauts Q7, Q8, Q10 retenus.
 - 2026-11-12 : CBR solid servi depuis un cache d'extraction en rotation (plafond partagé avec les rendus, le moins récemment lu part en premier, jamais le dernier tome lu), validé sur un vrai CBR solid WinRAR ; phase 2 terminée.
+- 2026-11-12 : plan de la phase 3 proposé (lecteur web, front embarqué, progression), en attente de validation (Q11, Q12, Q14 bloquantes).

@@ -5,7 +5,7 @@
 
 Lecteur de mangas, BD et webtoons auto-hébergé. Un seul binaire Rust sert la bibliothèque et une application web installable (PWA), pensée d'abord pour la lecture sur tablette.
 
-> **État : en développement.** Seule la commande `shiori scan` (scan d'intégrité des archives CBZ) est utilisable ; le lecteur arrive dans les phases suivantes. L'avancement détaillé est dans [ROADMAP.md](ROADMAP.md).
+> **État : en développement.** Utilisables aujourd'hui : `shiori scan` (scan d'intégrité des archives CBZ et CBR) et `shiori serve` (API JSON : bibliothèques, séries, tomes, pages servies originales ou redimensionnées, pilotage des scans). Le lecteur web arrive en phase 3. L'avancement détaillé est dans [ROADMAP.md](ROADMAP.md).
 
 ## Pourquoi
 
@@ -24,10 +24,10 @@ Shiori est conçu pour que ces défauts soient impossibles :
 |---|---|
 | **Scan d'intégrité** | CRC de chaque entrée, en-têtes et dimensions des images, doublons, fichiers parasites, ordre, archives tronquées ; rapport JSON et dans l'interface |
 | **Lecteur** | Gauche→droite, droite→gauche (manga), vertical continu (webtoon) ; page simple ou double ; découpage des doubles pages ; reprise exacte de la lecture |
-| **Webtoons** | Images très hautes découpées côté serveur, chargement paresseux, aucun saut de mise en page |
+| **Webtoons** | Défilement vertical continu, chargement paresseux, aucun saut de mise en page (place de chaque page réservée d'après le scan) |
 | **Bibliothèque** | Grille d'affiches, séries, « Continuer la lecture », recherche, filtres par statut de publication et de lecture |
 | **Métadonnées** | ComicInfo.xml, AniList, MangaDex, MangaUpdates, Comic Vine… ; édition manuelle avec verrouillage par champ |
-| **Formats** | CBZ (zip, zip64) ; CBR envisagé ensuite. Images jpg, png, webp, avif, servies redimensionnées en WebP/AVIF |
+| **Formats** | CBZ (zip, zip64) et CBR (RAR 4 et 5, solid compris, en Rust pur). Images jpg, png, webp, avif, servies redimensionnées en AVIF (pages) et JPEG (miniatures) |
 | **Déploiement** | Image Docker et binaires autonomes Linux et Windows |
 
 ## Architecture
@@ -37,7 +37,7 @@ backend/                 workspace Rust
   crates/shiori-core/    archives, identités stables, ordre des pages, scan d'intégrité (sans base ni async)
   crates/shiori-db/      base SQLite : persistance des scans, détection de changement
   crates/shiori-testkit/ fixtures de test générées par du code
-  crates/shiori/         binaire : CLI de scan, puis serveur web
+  crates/shiori/         binaire : CLI de scan et serveur HTTP (API, images, job de scan)
 web/                     application React 19 + TypeScript + Vite
 ```
 
@@ -68,6 +68,13 @@ cargo run --release -p shiori -- scan /chemin/vers/ma/bibliotheque
 ```
 
 Options utiles : `--deep` (décode chaque image), `--json rapport.json` (rapport complet), `--no-db` (sans base), `--fail-on warning`.
+
+Lancer le serveur (API sous `/api`, sans authentification, écoute sur `127.0.0.1:7878` par défaut) :
+
+```bash
+cd backend
+cargo run --release -p shiori -- serve
+```
 
 Toute modification passe par une branche et une pull request. La CI vérifie le format, clippy et les tests sous Linux, Windows et macOS, le build du front, et une couverture de tests d'au moins 80 % des lignes et des branches. Les règles complètes sont dans [CLAUDE.md](CLAUDE.md).
 
