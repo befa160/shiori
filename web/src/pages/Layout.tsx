@@ -64,8 +64,10 @@ function AppSidebar() {
         <Link
           to="/"
           aria-label={t('layout.home')}
-          className="px-2 text-lg font-semibold group-data-[collapsible=icon]:hidden"
+          className="flex items-center gap-2 rounded-md px-2 py-1 text-lg font-semibold group-data-[collapsible=icon]:hidden"
         >
+          {/* Variante claire du logo, pour le fond sombre ; décorative, le lien a déjà son nom. */}
+          <img src="/shiori-mark-light.svg" alt="" width={28} height={28} />
           Shiori
         </Link>
         <SidebarTrigger label={t(state === 'expanded' ? 'layout.collapse' : 'layout.expand')} />

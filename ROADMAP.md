@@ -856,6 +856,11 @@ Pour chaque lot d'interface : skill UI/UX Pro Max avant de coder et en contrôle
   - Review Ponytail, corrigé : sidebar dépliée, l'infobulle masquée restait reliée à l'entrée (`aria-describedby`) et les lecteurs d'écran lisaient le libellé deux fois ; elle n'existe plus que sidebar réduite (testé).
   - Reste : dans le lecteur sur mobile, une notification monte de 56 px de trop (`--tabbar-height` est globale alors que le lecteur n'a pas de barre d'onglets) ; cosmétique.
   - 110 tests Vitest, 99,2 % des lignes, 96 % des branches ; 7 tests e2e verts.
+- [x] **4.2b** `feat/logo` (ajouté le 2026-11-12) : logos fournis par l'auteur.
+  - Dans `web/public/` : favicon ICO (32 et 48 px) et SVG (crème quand l'OS est sombre), icône d'écran d'accueil iOS (180 px), icônes Android 192 / 512 et maskable 512, et la marque en deux variantes. Logo clair en tête de la sidebar (décoratif, à côté du nom), logo dans le README selon le thème de GitHub.
+  - Manifeste minimal (`manifest.webmanifest` : nom, icônes, `standalone`, fond `#121212`) pour que les icônes Android servent dès maintenant ; la PWA finalisée (hors ligne, installation guidée) reste en phase 6. Types servis vérifiés (`application/manifest+json`, `image/x-icon`).
+  - DESIGN_SYSTEM.md : section « Logo » ; ses couleurs (bleu nuit, crème, rouge) sont réservées au logo, l'interface garde son ambre.
+  - Captures aux quatre tailles, focus clavier sur le logo.
 - [ ] **4.3** `feat/library-api` : migration 0006, `GET /api/series`, résumé enrichi, `GET /api/continue`, `PATCH /api/series/{id}`, `created_at` écrit par le scan.
 - [ ] **4.4** `feat/library-grid` : `CoverCard` (`aspect-[2/3]`, miniatures JPEG à la demande avec `srcset` 160/320/480, barre `h-1`, survol : zoom léger, liseré, bouton « Lire »), couverture de repli (dégradé sombre + titre) si absente ou en erreur, accueil avec le carrousel « Continuer la lecture » (défilement natif accroché, sans barre visible) et les étagères, page bibliothèque en grille ; données de test à titres très longs et couvertures manquantes.
 - [ ] **4.5** `feat/library-filters` : recherche, filtres statut de lecture / statut de publication / bibliothèque, tris (nom, dernière lecture, récemment ajoutés), le tout dans l'adresse ; champ relié à la sidebar et à l'onglet.

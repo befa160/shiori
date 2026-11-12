@@ -44,6 +44,19 @@ Thème sombre unique (`color-scheme: dark`, classe `dark` fixe sur `<html>` : un
 
 Autres paires : `#121212` sur ambre 8,4:1 ; blanc sur `#B91C1C` 6,5:1. Le texte secondaire tombe à 4,1:1 sur `#3F3F46` (zinc-700) : **pas de texte secondaire sur une surface plus claire que `#2A2A2A`**.
 
+### Logo
+
+Marque fournie par l'auteur (`web/public/`) : une page à coin corné, bleu nuit `#1E2A4A` (crème `#F5EFE3` sur fond sombre) et rouge `#E0452B`.
+
+| Fichier | Usage |
+|---|---|
+| `shiori-mark-light.svg` | en-tête de la sidebar (fond sombre), README en thème sombre |
+| `shiori-mark.svg` | README en thème clair |
+| `favicon.svg`, `favicon.ico` | onglet du navigateur (le SVG passe en crème quand l'OS est sombre) |
+| `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`, `icon-maskable-512.png` | écran d'accueil iOS et Android (manifeste) |
+
+Ces couleurs sont **réservées au logo** : l'interface garde son ambre pour l'action principale et les états actifs. Dans l'interface, le logo est décoratif (`alt=""`) à côté du nom « Shiori ».
+
 ## Typographie
 
 - Pile système de Tailwind (`font-sans`), aucune police web : hors ligne, rapide, rien chargé chez un tiers.
