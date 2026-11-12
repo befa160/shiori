@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fittedWidth, keyMove, moveIndex, pageUrl, requestWidth, swipeAction, tapAction } from './controls'
+import { fittedWidth, keyMove, moveIndex, pageUrl, requestWidth, stripHeight, stripUrl, swipeAction, tapAction } from './controls'
 
 describe('fittedWidth', () => {
   it('ajuste la page à l’écran sans la déformer', () => {
@@ -33,6 +33,21 @@ describe('pageUrl', () => {
   it('demande une AVIF à la taille de l’écran, ou l’originale', () => {
     expect(pageUrl(page, { width: 390, height: 844 }, false, 2)).toBe('/api/pages/p/image?w=800&f=avif')
     expect(pageUrl(page, { width: 390, height: 844 }, true, 2)).toBe('/api/pages/p/image')
+  })
+})
+
+describe('bandes de webtoon', () => {
+  const strip = (width: number | null) =>
+    ({ id: 's', ordinal: 0, width, height: width === null ? null : 1280, media_type: 'image/jpeg', status: 'ok' }) as const
+  it('sert l’originale sauf pour une bande plus de trois fois trop large', () => {
+    expect(stripUrl(strip(800), 390, 1)).toBe('/api/pages/s/image')
+    expect(stripUrl(strip(800), 800, 2)).toBe('/api/pages/s/image')
+    expect(stripUrl(strip(2400), 390, 1)).toBe('/api/pages/s/image?w=480&f=avif')
+    expect(stripUrl(strip(null), 390, 1)).toBe('/api/pages/s/image')
+  })
+  it('réserve la hauteur d’après le scan, une page portrait pour une bande cassée', () => {
+    expect(stripHeight({ width: 800, height: 1280 }, 400)).toBe(640)
+    expect(stripHeight({ width: null, height: null }, 400)).toBe(600)
   })
 })
 

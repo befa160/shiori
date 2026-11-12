@@ -34,6 +34,16 @@ export function pageUrl(
   return pageImageUrl(page.id, width === null ? undefined : { width, format: 'avif' })
 }
 
+/** Bande de webtoon : l'originale tant qu'elle ne fait pas plus de trois fois la largeur utile.
+ * Le navigateur la réduit sans rien coûter au serveur, alors qu'un défilement rapide demanderait
+ * sinon un encodage AVIF par bande traversée (mesuré : 408 requêtes en un défilement). Seules
+ * les bandes vraiment très larges sont redimensionnées. */
+export function stripUrl(page: PageInfo, column: number, pixelRatio = window.devicePixelRatio): string {
+  const huge = page.width !== null && page.width > 3 * column * pixelRatio
+  const width = huge ? requestWidth(column, pixelRatio, page) : null
+  return pageImageUrl(page.id, width === null ? undefined : { width, format: 'avif' })
+}
+
 /** Touche clavier → déplacement, selon le sens de lecture. */
 export function keyMove(key: string, shift: boolean, direction: Direction): Move | null {
   const forward = direction === 'rtl' ? 'ArrowLeft' : 'ArrowRight'
@@ -82,6 +92,13 @@ export function swipeAction(
   // En manga, la page se tourne vers la droite : balayer vers la droite avance.
   return dx > 0 === (direction === 'rtl') ? 'next' : 'previous'
 }
+
+/** Largeur maximale de la colonne webtoon : au-delà, une bande serait agrandie pour rien. */
+export const MAX_COLUMN = 800
+
+/** Hauteur d'une bande à la largeur de la colonne, d'après le scan (page cassée : 2:3). */
+export const stripHeight = (page: Pick<PageInfo, 'width' | 'height'>, column: number) =>
+  page.width && page.height ? (column * page.height) / page.width : column * 1.5
 
 /** Index après un déplacement, borné au tome. */
 export function moveIndex(index: number, move: Move, count: number): number {

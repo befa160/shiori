@@ -50,6 +50,13 @@ function api(mode: Mode = 'rtl', pages = [page(1), page(2, 'broken'), page(3)], 
 }
 
 const img = () => screen.getByRole('img', { name: /^Page \d sur 3$/ })
+
+/** Tab montre les commandes et met le focus sur « Retour » à l'image suivante : on l'attend, sinon
+ * un clic juste après (machine lente) ouvrirait un panneau que ce focus tardif refermerait. */
+async function showControls() {
+  await userEvent.keyboard('{Tab}')
+  await waitFor(() => expect(screen.getByRole('link', { name: 'Retour' })).toHaveFocus())
+}
 const main = () => screen.getByRole('main')
 
 beforeEach(() => {
@@ -169,8 +176,8 @@ describe('lecteur', () => {
     expect(screen.getByText('2 / 3')).toBeInTheDocument()
   })
 
-  it('reprend la page donnée dans l’adresse et lit le webtoon en paginé en attendant le lot 3.7', async () => {
-    api('vertical')
+  it('reprend la page donnée dans l’adresse', async () => {
+    api('ltr')
     renderAt(`/read/${VOLUME}?page=p3`)
     expect(await screen.findByRole('img', { name: 'Page 3 sur 3' })).toBeInTheDocument()
     await userEvent.keyboard('{ArrowLeft}') // gauche à droite : la flèche gauche recule
@@ -247,17 +254,8 @@ describe('double page', () => {
     renderAt(`/read/${VOLUME}?page=p2`)
     expect(await screen.findByRole('img', { name: 'Page 2 sur 6' })).toBeInTheDocument()
     expect(shown()).toEqual(['Page 2 sur 6', 'Page 3 sur 6'])
-    await userEvent.keyboard('{Tab}')
+    await showControls()
     await userEvent.click(screen.getByRole('button', { name: 'Affichage' }))
-    await screen.findByRole('button', { name: "Décaler d'une page" })
-    // Toucher la page pour fermer le panneau ne la tourne pas.
-    fireEvent.pointerDown(main(), { pointerType: 'touch', pointerId: 9, clientX: 850, clientY: 300 })
-    fireEvent.pointerUp(main(), { pointerType: 'touch', pointerId: 9, clientX: 850, clientY: 300 })
-    expect(shown()).toEqual(['Page 2 sur 6', 'Page 3 sur 6'])
-    // Selon le moment, Radix a déjà refermé le panneau sur ce toucher extérieur : on le rouvre.
-    if (!screen.queryByRole('button', { name: "Décaler d'une page" })) {
-      await userEvent.click(screen.getByRole('button', { name: 'Affichage' }))
-    }
     await userEvent.click(await screen.findByRole('button', { name: "Décaler d'une page" }))
     // Décalé : la page 2 est seule, la 3 démarre la paire suivante.
     expect(shown()).toEqual(['Page 2 sur 6'])
@@ -287,10 +285,25 @@ describe('double page', () => {
     const halfImage = screen.getByRole('img', { name: 'Page 4 sur 6 (moitié gauche)' })
     expect(halfImage).toHaveStyle({ width: '200%' })
     // Doubles pages entières : une seule vue.
-    await userEvent.keyboard('{Tab}')
+    await showControls()
     await userEvent.click(screen.getByRole('button', { name: 'Affichage' }))
     await userEvent.click(await screen.findByRole('radio', { name: 'Entières' }))
     expect(shown()).toEqual(['Page 4 sur 6'])
+  })
+})
+
+describe('panneau Affichage ouvert', () => {
+  it('toucher la page pour le fermer ne la tourne pas', async () => {
+    api('ltr', [page(1), page(2), page(3)], 'single')
+    renderAt(`/read/${VOLUME}`)
+    await screen.findByRole('img', { name: 'Page 1 sur 3' })
+    await showControls()
+    await userEvent.click(screen.getByRole('button', { name: 'Affichage' }))
+    await screen.findByRole('radio', { name: 'Simple' })
+    // Côté « page suivante » : le toucher ferme seulement le panneau (Radix, à son rythme).
+    fireEvent.pointerDown(main(), { pointerType: 'touch', pointerId: 9, clientX: 850, clientY: 300 })
+    fireEvent.pointerUp(main(), { pointerType: 'touch', pointerId: 9, clientX: 850, clientY: 300 })
+    expect(img()).toHaveAccessibleName('Page 1 sur 3')
   })
 })
 
