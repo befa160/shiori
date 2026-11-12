@@ -77,6 +77,14 @@
 }
 
 /* Zones sûres de la PWA : `pt-safe`, `pb-safe`… ne sont pas natives de Tailwind. */
+/* Carrousels : défilement tactile et molette conservés, barre masquée (CLAUDE.md, PWA). */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 @utility pt-safe {
   padding-top: env(safe-area-inset-top);
 }

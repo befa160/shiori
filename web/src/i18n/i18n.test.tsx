@@ -41,7 +41,7 @@ describe('langue de l’interface', () => {
   it('suit le réglage du serveur, et <html lang> avec elle', async () => {
     mockApi({ '/api/settings': () => json({ language: 'en' }), '/api/libraries': () => json([]) })
     renderAt('/')
-    expect(await screen.findByRole('heading', { name: 'Libraries' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Home', level: 1 })).toBeInTheDocument()
     expect(document.documentElement.lang).toBe('en')
   })
 
@@ -49,7 +49,7 @@ describe('langue de l’interface', () => {
     vi.spyOn(navigator, 'languages', 'get').mockReturnValue(['en-US'])
     mockApi({ '/api/settings': () => json({ language: null }), '/api/libraries': () => json([]) })
     renderAt('/')
-    expect(await screen.findByRole('heading', { name: 'Libraries' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Home', level: 1 })).toBeInTheDocument()
   })
 
   it('change tout de suite au choix dans le sélecteur et l’enregistre sur le serveur', async () => {
@@ -58,10 +58,10 @@ describe('langue de l’interface', () => {
       '/api/settings': () => json({ language: 'fr' }),
     })
     renderAt('/')
-    await screen.findByRole('heading', { name: 'Bibliothèques' })
+    await screen.findByRole('heading', { name: 'Accueil', level: 1 })
     await userEvent.click(screen.getByRole('combobox', { name: 'Langue' }))
     await userEvent.click(await screen.findByRole('option', { name: 'English' }))
-    expect(await screen.findByRole('heading', { name: 'Libraries' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Home', level: 1 })).toBeInTheDocument()
     const put = fetch.mock.calls.find((c) => c[1]?.method === 'PUT')
     expect(put?.[0]).toBe('/api/settings')
     expect(JSON.parse(String(put?.[1]?.body))).toEqual({ language: 'en' })
@@ -74,10 +74,10 @@ describe('langue de l’interface', () => {
       '/api/settings': () => (saves++ === 0 ? json({ language: 'fr' }) : json({ code: 'internal', message: 'erreur' }, 500)),
     })
     renderAt('/')
-    await screen.findByRole('heading', { name: 'Bibliothèques' })
+    await screen.findByRole('heading', { name: 'Accueil', level: 1 })
     await userEvent.click(screen.getByRole('combobox', { name: 'Langue' }))
     await userEvent.click(await screen.findByRole('option', { name: 'English' }))
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Bibliothèques' })).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Accueil', level: 1 })).toBeInTheDocument())
     expect(i18n.language).toBe('fr')
     // Jamais en silence : une notification dit pourquoi, dans la langue revenue.
     expect(await screen.findByText('Langue non enregistrée, réessayez plus tard')).toBeInTheDocument()

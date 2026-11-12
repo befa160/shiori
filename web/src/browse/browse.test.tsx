@@ -38,52 +38,32 @@ const detail: SeriesDetail = {
   ],
 }
 
-describe('bibliothèques', () => {
-  it('liste chaque bibliothèque avec son type et ses compteurs, puis ouvre ses séries', async () => {
-    mockApi({ '/api/libraries': () => json([library]), '/api/libraries/1/series': () => json(series) })
-    const { router } = renderAt('/')
-    expect(screen.getByText('Chargement…').parentElement).toHaveAttribute('aria-busy', 'true')
-    const row = await within(screen.getByRole('main')).findByRole('link', { name: /Mangas/ })
-    expect(row).toHaveTextContent('Manga · 2 séries · 1 tome')
-    await userEvent.click(row)
-    expect(router.state.location.pathname).toBe('/libraries/1')
-    expect(await screen.findByRole('heading', { name: 'Mangas' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Toriko/ })).toHaveTextContent('1 tome')
-    const long = screen.getByRole('link', { name: new RegExp(longName.slice(0, 20)) })
-    expect(within(long).getByTitle(longName)).toHaveClass('line-clamp-2')
-  })
-
-  it('explique quoi faire quand il n’y en a aucune', async () => {
-    mockApi({ '/api/libraries': () => json([]) })
-    renderAt('/')
-    expect(await screen.findByText("Aucune bibliothèque pour l'instant.")).toBeInTheDocument()
-  })
-
-  it('affiche une erreur et réessaie, en le montrant pendant le nouvel essai', async () => {
-    let calls = 0
-    let release = () => {}
-    mockApi({
-      '/api/libraries': () =>
-        ++calls === 1
-          ? json({ code: 'internal', message: 'erreur interne' }, 500)
-          : new Promise<Response>((resolve) => (release = () => resolve(json([library])))),
-    })
-    renderAt('/')
-    expect(await screen.findByRole('alert')).toHaveTextContent('Erreur interne du serveur')
-    await userEvent.click(screen.getByRole('button', { name: 'Réessayer' }))
-    expect(await screen.findByText('Chargement…')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Réessayer' })).toBeNull()
-    release()
-    expect(await within(screen.getByRole('main')).findByRole('link', { name: /Mangas/ })).toBeInTheDocument()
-  })
-})
-
 describe('séries d’une bibliothèque', () => {
-  it('revient aux bibliothèques et signale une bibliothèque vide', async () => {
+  it('montre les séries en grille de couvertures', async () => {
+    const read = { ...series[0], reading_status: 'read', read_count: 1, cover_page_id: 'c7', resume_volume_id: 'v7' } as const
+    const reading = { ...series[1], reading_status: 'in_progress', read_count: 1 } as const
+    mockApi({ '/api/libraries': () => json([library]), '/api/libraries/1/series': () => json([read, reading]) })
+    renderAt('/libraries/1')
+    const main = within(screen.getByRole('main'))
+    const toriko = await main.findByRole('link', { name: /^Toriko/ })
+    expect(toriko).toHaveAttribute('href', '/series/7')
+    expect(toriko).toHaveTextContent('Lu')
+    // Image décorative (`alt=""`) : pas de rôle `img`, le lien porte déjà le titre.
+    expect(toriko.querySelector('img')).toHaveAttribute('src', '/api/pages/c7/image?w=320&f=jpeg')
+    expect(main.getByRole('link', { name: 'Lire Toriko' })).toHaveAttribute('href', '/read/v7')
+    const long = main.getByRole('link', { name: new RegExp(longName.slice(0, 20)) })
+    expect(within(long).getByTitle(longName)).toHaveClass('line-clamp-2')
+    expect(within(long).getByRole('progressbar', { name: '1 tome lu sur 3' })).toHaveAttribute('aria-valuenow', '33')
+    // Sans couverture : couverture générée ; sans tome à reprendre : pas de bouton « Lire ».
+    expect(within(long).getByTestId('fallback-cover')).toHaveTextContent(longName)
+    expect(main.queryByRole('link', { name: `Lire ${longName}` })).toBeNull()
+  })
+
+  it("revient à l'accueil et signale une bibliothèque vide", async () => {
     mockApi({ '/api/libraries': () => json([library]), '/api/libraries/1/series': () => json([]) })
     const { router } = renderAt('/libraries/1')
     expect(await screen.findByText(/Aucune série/)).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('link', { name: 'Bibliothèques' }))
+    await userEvent.click(within(screen.getByRole('main')).getByRole('link', { name: 'Accueil' }))
     expect(router.state.location.pathname).toBe('/')
   })
 

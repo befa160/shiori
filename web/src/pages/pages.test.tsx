@@ -13,7 +13,7 @@ describe('page introuvable', () => {
     expect(screen.getByRole('heading', { name: 'Page introuvable' })).toBeInTheDocument()
     await userEvent.click(screen.getByRole('link', { name: "Retour à l'accueil" }))
     expect(router.state.location.pathname).toBe('/')
-    expect(await screen.findByRole('heading', { name: 'Bibliothèques' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Accueil', level: 1 })).toBeInTheDocument()
   })
 })
 

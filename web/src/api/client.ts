@@ -1,4 +1,5 @@
 import type {
+  ContinueItem,
   Health,
   Library,
   PageInfo,
@@ -54,6 +55,8 @@ export const api = {
     must<Settings>('/settings', { method: 'PUT', body: JSON.stringify(settings) }),
   libraries: (init?: RequestInit) => must<Library[]>('/libraries', init),
   librarySeries: (id: number, init?: RequestInit) => must<SeriesSummary[]>(`/libraries/${id}/series`, init),
+  allSeries: (init?: RequestInit) => must<SeriesSummary[]>('/series', init),
+  continueReading: (init?: RequestInit) => must<ContinueItem[]>('/continue', init),
   series: (id: number, init?: RequestInit) => must<SeriesDetail>(`/series/${id}`, init),
   volume: (id: string, init?: RequestInit) => must<VolumeDetail>(`/volumes/${id}`, init),
   pages: (volumeId: string, init?: RequestInit) => must<PageInfo[]>(`/volumes/${volumeId}/pages`, init),
