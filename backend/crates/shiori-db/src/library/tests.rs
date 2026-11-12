@@ -66,7 +66,10 @@ async fn setup() -> (tempfile::TempDir, Db, Library) {
     let db = Db::open(&dir.path().join("t.db")).await.unwrap();
     let root = dir.path().join("manga");
     std::fs::create_dir(&root).unwrap();
-    let library = db.create_library(" Manga ", &root).await.unwrap();
+    let library = db
+        .create_library(" Manga ", &root, LibraryKind::Manga)
+        .await
+        .unwrap();
     (dir, db, library)
 }
 
@@ -95,43 +98,50 @@ async fn libraries_are_validated() {
 
     let err = |r: Result<Library, LibraryError>| r.unwrap_err().to_string();
     assert!(matches!(
-        db.create_library("  ", &other).await,
+        db.create_library("  ", &other, LibraryKind::Manga).await,
         Err(LibraryError::EmptyName)
     ));
     assert!(matches!(
-        db.create_library("Manga", &other).await,
+        db.create_library("Manga", &other, LibraryKind::Manga).await,
         Err(LibraryError::NameTaken(_))
     ));
     assert!(matches!(
-        db.create_library("Fichier", &file).await,
+        db.create_library("Fichier", &file, LibraryKind::Manga)
+            .await,
         Err(LibraryError::NotADirectory(_))
     ));
     assert!(matches!(
-        db.create_library("Absent", &dir.path().join("absent"))
+        db.create_library("Absent", &dir.path().join("absent"), LibraryKind::Manga)
             .await,
         Err(LibraryError::NotADirectory(_))
     ));
     // Un chemin relatif dépendrait du dossier de lancement du serveur.
     assert!(matches!(
-        db.create_library("Relatif", Path::new("manga")).await,
+        db.create_library("Relatif", Path::new("manga"), LibraryKind::Manga)
+            .await,
         Err(LibraryError::NotADirectory(_))
     ));
     let sub = dir.path().join("manga/sous");
     std::fs::create_dir(&sub).unwrap();
-    assert!(err(db.create_library("Sous", &sub).await).contains("« Manga »"));
+    assert!(err(db.create_library("Sous", &sub, LibraryKind::Manga).await).contains("« Manga »"));
     assert!(matches!(
-        db.create_library("Parent", dir.path()).await,
+        db.create_library("Parent", dir.path(), LibraryKind::Manga)
+            .await,
         Err(LibraryError::Overlaps(..))
     ));
     // Un `/` final ne crée pas une seconde racine.
     let mut slash = dir.path().join("manga").into_os_string();
     slash.push("/");
     assert!(matches!(
-        db.create_library("Bis", Path::new(&slash)).await,
+        db.create_library("Bis", Path::new(&slash), LibraryKind::Manga)
+            .await,
         Err(LibraryError::Overlaps(..))
     ));
 
-    let bd = db.create_library("BD", &other).await.unwrap();
+    let bd = db
+        .create_library("BD", &other, LibraryKind::Manga)
+        .await
+        .unwrap();
     let names: Vec<String> = db
         .libraries()
         .await

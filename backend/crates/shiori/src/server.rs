@@ -15,13 +15,16 @@ use axum::extract::{Path, Query, Request, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{delete, get, post};
+use axum::routing::{delete, get, patch, post};
 use axum::{Json, Router};
 use clap::Args;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use shiori_core::{Archive, PageId, PageStatus, Severity, VolumeId, open_archive as open_file};
-use shiori_db::{Db, LibraryError, PageFile, PageSource, RunFilter, RunStatus};
+use shiori_db::{
+    Db, LibraryError, LibraryKind, PageFile, PageLayout, PageSource, ReadingMode, RunFilter,
+    RunStatus, SaveProgress, SettingsChange,
+};
 use tokio::net::TcpListener;
 use tokio::sync::Semaphore;
 use tower_http::trace::TraceLayer;
@@ -132,7 +135,12 @@ pub fn router(app: Arc<App>, local_only: bool) -> Router {
         .route("/api/libraries/{id}", delete(delete_library))
         .route("/api/libraries/{id}/series", get(library_series))
         .route("/api/series/{id}", get(series))
+        .route("/api/series/{id}/settings", patch(series_settings))
         .route("/api/volumes/{id}", get(volume))
+        .route(
+            "/api/volumes/{id}/progress",
+            get(progress).put(save_progress).delete(clear_progress),
+        )
         .route("/api/volumes/{id}/pages", get(pages))
         .route("/api/pages/{id}/image", get(page_image))
         .route("/api/admin/scans", get(scans).post(start_scan))
@@ -272,6 +280,9 @@ async fn libraries(State(app): State<Arc<App>>) -> ApiResult<Vec<shiori_db::Libr
 struct NewLibrary {
     name: String,
     root: PathBuf,
+    /// Donne le sens de lecture par défaut des séries (Q12) ; `manga` si absent.
+    #[serde(default)]
+    kind: LibraryKind,
 }
 
 #[derive(Serialize)]
@@ -279,6 +290,7 @@ struct CreatedLibrary {
     id: i64,
     name: String,
     root: String,
+    kind: LibraryKind,
 }
 
 async fn create_library(
@@ -287,13 +299,17 @@ async fn create_library(
 ) -> Result<(StatusCode, Json<CreatedLibrary>), ApiError> {
     let Json(new) =
         body.map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, "invalid_body", e.body_text()))?;
-    let library = app.db.create_library(&new.name, &new.root).await?;
+    let library = app
+        .db
+        .create_library(&new.name, &new.root, new.kind)
+        .await?;
     Ok((
         StatusCode::CREATED,
         Json(CreatedLibrary {
             id: library.id,
             name: library.name,
             root: library.root,
+            kind: library.kind,
         }),
     ))
 }
@@ -339,6 +355,98 @@ async fn volume(
         .await?
         .map(Json)
         .ok_or_else(|| ApiError::not_found("tome"))
+}
+
+/// Progression d'un tome, ou 204 s'il n'a jamais été ouvert.
+async fn progress(
+    State(app): State<Arc<App>>,
+    Path(id): Path<String>,
+) -> Result<Response, ApiError> {
+    let volume = volume_id(&id)?;
+    if let Some(progress) = app.db.progress(&volume).await? {
+        return Ok(Json(progress).into_response());
+    }
+    match app.db.volume_exists(&volume).await? {
+        true => Ok(StatusCode::NO_CONTENT.into_response()),
+        false => Err(ApiError::not_found("tome")),
+    }
+}
+
+#[derive(Deserialize)]
+struct NewProgress {
+    page_id: String,
+}
+
+async fn save_progress(
+    State(app): State<Arc<App>>,
+    Path(id): Path<String>,
+    body: Result<Json<NewProgress>, JsonRejection>,
+) -> ApiResult<shiori_db::Progress> {
+    let volume = volume_id(&id)?;
+    let Json(new) =
+        body.map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, "invalid_body", e.body_text()))?;
+    let page: PageId = new
+        .page_id
+        .parse()
+        .map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, "invalid_body", format!("{e}")))?;
+    match app.db.save_progress(&volume, &page).await? {
+        SaveProgress::Saved(progress) => Ok(Json(progress)),
+        SaveProgress::UnknownVolume => Err(ApiError::not_found("tome")),
+        SaveProgress::PageNotInVolume => Err(ApiError::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "page_not_in_volume",
+            "cette page n'appartient pas à ce tome",
+        )),
+    }
+}
+
+/// « Marquer comme non lu ».
+async fn clear_progress(
+    State(app): State<Arc<App>>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    match app.db.clear_progress(&volume_id(&id)?).await? {
+        true => Ok(StatusCode::NO_CONTENT),
+        false => Err(ApiError::not_found("tome")),
+    }
+}
+
+/// Champ absent = inchangé, `null` = revenir au défaut de la bibliothèque.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SettingsPatch {
+    #[serde(default, deserialize_with = "present")]
+    reading_mode: Option<Option<ReadingMode>>,
+    #[serde(default, deserialize_with = "present")]
+    page_layout: Option<Option<PageLayout>>,
+}
+
+/// Distingue un champ présent à `null` (`Some(None)`) d'un champ absent (`None`, par défaut).
+fn present<'de, D, T>(d: D) -> Result<Option<Option<T>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<T>::deserialize(d).map(Some)
+}
+
+async fn series_settings(
+    State(app): State<Arc<App>>,
+    Path(id): Path<String>,
+    body: Result<Json<SettingsPatch>, JsonRejection>,
+) -> ApiResult<shiori_db::ReadingSettings> {
+    let id = int_id(&id)?;
+    let Json(patch) =
+        body.map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, "invalid_body", e.body_text()))?;
+    let change = SettingsChange {
+        reading_mode: patch.reading_mode,
+        page_layout: patch.page_layout,
+    };
+    app.db
+        .change_series_settings(id, change)
+        .await?
+        .map(Json)
+        .ok_or_else(|| ApiError::not_found("série"))
 }
 
 async fn pages(
