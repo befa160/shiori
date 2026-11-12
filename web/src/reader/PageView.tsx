@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ApiError, request } from '@/api/client'
+import { ApiError, pageImageUrl, request } from '@/api/client'
 import type { PageInfo } from '@/api/types'
 import i18n from '@/i18n'
 import { errorText } from '@/i18n/errors'
-import { fittedWidth, pageUrl } from './controls'
+import { cn } from '@/lib/utils'
+import { fittedWidth, pageUrl, stripUrl } from './controls'
 import type { Half } from './views'
 
 /** La cause d'un échec d'affichage, demandée au serveur (une balise <img> ne la donne pas). */
@@ -25,11 +26,14 @@ export function PageView({
   total,
   view,
   half,
+  strip = false,
 }: {
   page: PageInfo
   total: number
   view: { width: number; height: number }
   half?: Half
+  /** Bande de webtoon : toute la largeur de la colonne, sans plafond de hauteur à l'écran. */
+  strip?: boolean
 }) {
   const { t } = useTranslation()
   const [original, setOriginal] = useState(false)
@@ -49,13 +53,20 @@ export function PageView({
         role="img"
         aria-label={`${label} : ${error}`}
         style={{ ...box, aspectRatio: box.aspectRatio ?? '2 / 3' }}
-        className="flex max-h-dvh max-w-full items-center justify-center rounded-md border border-destructive/40 bg-card p-6 text-center"
+        className={cn(
+          'flex max-w-full items-center justify-center rounded-md border border-destructive/40 bg-card p-6 text-center',
+          !strip && 'max-h-dvh',
+        )}
       >
         <p className="text-destructive">{error}</p>
       </div>
     )
   }
-  const url = pageUrl(page, half ? { width: view.width * 2, height: view.height } : view, original)
+  const url = strip
+    ? original
+      ? pageImageUrl(page.id)
+      : stripUrl(page, view.width)
+    : pageUrl(page, half ? { width: view.width * 2, height: view.height } : view, original)
   const onError = async () => {
     if (!original && url.includes('?')) {
       setOriginal(true)
@@ -84,7 +95,7 @@ export function PageView({
       alt={label}
       style={box}
       draggable={false}
-      className="max-h-dvh max-w-full object-contain select-none"
+      className={cn('max-w-full object-contain select-none', !strip && 'max-h-dvh')}
       onError={onError}
     />
   )

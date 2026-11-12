@@ -169,8 +169,8 @@ describe('lecteur', () => {
     expect(screen.getByText('2 / 3')).toBeInTheDocument()
   })
 
-  it('reprend la page donnée dans l’adresse et lit le webtoon en paginé en attendant le lot 3.7', async () => {
-    api('vertical')
+  it('reprend la page donnée dans l’adresse', async () => {
+    api('ltr')
     renderAt(`/read/${VOLUME}?page=p3`)
     expect(await screen.findByRole('img', { name: 'Page 3 sur 3' })).toBeInTheDocument()
     await userEvent.keyboard('{ArrowLeft}') // gauche à droite : la flèche gauche recule

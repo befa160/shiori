@@ -1,0 +1,112 @@
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { PageInfo, VolumeDetail } from '@/api/types'
+import { json, mockApi, renderAt } from '@/test/render'
+
+const VOLUME = 'b'.repeat(64)
+// Bandes du webtoon réel : 800×1280 ; la 6e est cassée.
+const strips: PageInfo[] = Array.from({ length: 100 }, (_, i) => ({
+  id: `s${i + 1}`,
+  ordinal: i,
+  width: i === 5 ? null : 800,
+  height: i === 5 ? null : 1280,
+  media_type: 'image/jpeg',
+  status: i === 5 ? 'broken' : 'ok',
+}))
+const volume: VolumeDetail = {
+  id: VOLUME,
+  size: 1,
+  format: 'cbz',
+  status: 'ok',
+  page_count: 100,
+  scanned_at: '',
+  locations: [{ path: '/w/Leviathan/webtoon.cbz', library_id: 1, series_id: null }],
+  issues: [],
+  settings: { reading_mode: 'vertical', page_layout: 'auto', reading_mode_override: null, page_layout_override: null },
+  progress: null,
+}
+
+let scrollTo: ReturnType<typeof vi.fn>
+beforeEach(() => {
+  mockApi({
+    [`/api/volumes/${VOLUME}`]: () => json(volume),
+    [`/api/volumes/${VOLUME}/pages`]: () => json(strips),
+  })
+  scrollTo = vi.fn()
+  vi.stubGlobal('scrollTo', scrollTo)
+  scrollWindow(0)
+})
+
+/** Fait défiler la fenêtre de jsdom (qui ne défile pas d'elle-même) et prévient la page. */
+function scrollWindow(y: number) {
+  Object.defineProperty(window, 'scrollY', { configurable: true, value: y })
+  window.dispatchEvent(new Event('scroll'))
+}
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.restoreAllMocks()
+})
+
+const images = () => screen.getAllByRole('img').map((i) => i.getAttribute('aria-label') ?? i.getAttribute('alt'))
+
+describe('mode webtoon', () => {
+  it('ne met dans la page que les bandes proches de l’écran, à leur place réservée, en originale', async () => {
+    renderAt(`/read/${VOLUME}`)
+    expect(await screen.findByRole('img', { name: 'Page 1 sur 100' })).toBeInTheDocument()
+    // jsdom : 1024×768 → colonne de 800 px, bandes de 1 280 px de haut ; une à l'écran, 3 de marge.
+    expect(images()).toEqual(['Page 1 sur 100', 'Page 2 sur 100', 'Page 3 sur 100', 'Page 4 sur 100'])
+    // 99 bandes de 1 280 px et la bande cassée, à la forme d'une page portrait (800 × 1,5).
+    expect(screen.getByRole('main')).toHaveStyle({ width: '800px', height: `${99 * 1280 + 1200}px` })
+    // 800 px affichés pour une bande de 800 px : l'originale, aucun encodage côté serveur.
+    expect(screen.getByRole('img', { name: 'Page 1 sur 100' })).toHaveAttribute('src', '/api/pages/s1/image')
+  })
+
+  it('suit la bande lue dans l’adresse, et y revient à l’ouverture', async () => {
+    const { router } = renderAt(`/read/${VOLUME}?page=s50`)
+    await screen.findByRole('main')
+    // La 6e bande, cassée, fait 1 200 px (forme d'une page portrait).
+    await waitFor(() => expect(scrollTo).toHaveBeenCalledWith({ top: 48 * 1280 + 1200 }))
+    // Défilement jusqu'à la 11e bande : l'adresse suit (sans réécrire l'historique à chaque pixel).
+    await act(async () => scrollWindow(10 * 1280 + 5))
+    // Pendant le défilement, l'annonce ne suit pas encore : elle attend l'arrêt.
+    expect(screen.getByText('Page 50 sur 100', { selector: '[aria-live]' })).toBeInTheDocument()
+    await waitFor(() => expect(router.state.location.search).toBe('?page=s11'))
+    expect(screen.getByText('Page 11 sur 100', { selector: '[aria-live]' })).toBeInTheDocument()
+    // La bande 6 n'est plus dans la page ; en y revenant, sa carte d'erreur est à sa place.
+    expect(screen.queryByRole('img', { name: /^Page 6 sur 100/ })).toBeNull()
+    await act(async () => scrollWindow(5 * 1280))
+    expect(screen.getByRole('img', { name: /^Page 6 sur 100 :/ })).toHaveTextContent("Page illisible dans l'archive")
+  })
+
+  it('garde la bande lue quand l’écran tourne (la colonne change de largeur)', async () => {
+    renderAt(`/read/${VOLUME}?page=s21`)
+    await screen.findByRole('main')
+    // Colonne de 800 px : la bande 21 commence à 19 × 1 280 + 1 200.
+    await waitFor(() => expect(scrollTo).toHaveBeenLastCalledWith({ top: 19 * 1280 + 1200 }))
+    // Écran de 400 px : colonne de 400, bandes de 640 px ; on revient à la bande 21.
+    await act(async () => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 400 })
+      window.dispatchEvent(new Event('resize'))
+    })
+    await waitFor(() => expect(scrollTo).toHaveBeenLastCalledWith({ top: 19 * 640 + 600 }))
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 })
+  })
+
+  it('un clic montre les commandes ; le curseur saute à la bande choisie', async () => {
+    renderAt(`/read/${VOLUME}`)
+    await screen.findByRole('img', { name: 'Page 1 sur 100' })
+    const toolbar = screen.getByRole('toolbar', { hidden: true })
+    expect(toolbar).toHaveClass('invisible')
+    fireEvent.click(screen.getByRole('main'))
+    expect(toolbar).not.toHaveClass('invisible')
+    expect(within(toolbar).getByRole('link', { name: 'Retour' })).toHaveAttribute('href', '/')
+    expect(within(toolbar).queryByRole('button', { name: 'Affichage' })).toBeNull()
+    const slider = within(toolbar).getByRole('slider', { name: 'Page' })
+    slider.focus()
+    await userEvent.keyboard('{End}')
+    await waitFor(() => expect(scrollTo).toHaveBeenCalledWith({ top: 98 * 1280 + 1200 }))
+    await userEvent.keyboard('{Escape}')
+    expect(toolbar).toHaveClass('invisible')
+  })
+})

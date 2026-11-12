@@ -7,14 +7,16 @@ import { volumeLabel } from '@/browse/labels'
 import { QueryState } from '@/browse/parts'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Slider } from '@/components/ui/slider'
 import { Toggle } from '@/components/ui/toggle'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useLanguage } from '@/i18n/useLanguage'
 import { cn } from '@/lib/utils'
 import { NotFound } from '@/pages/NotFound'
 import { type Direction, type Move, keyMove, moveIndex, pageUrl, swipeAction, tapAction } from './controls'
+import { PageSlider, Toolbar } from './chrome'
+import { useChromeKeys, useViewport } from './hooks'
 import { PageView } from './PageView'
+import { VerticalPages } from './Vertical'
 import { type Layout, type View, buildViews, effectiveLayout, viewOfPage, viewPages, viewParams } from './views'
 
 /** `/read/:volumeId` : l'identifiant d'un tome est un hash de 64 caractères hexadécimaux. */
@@ -30,17 +32,6 @@ export function ReaderRoute() {
   return <Reader volumeId={volumeId} />
 }
 
-function useViewport() {
-  const read = () => ({ width: window.innerWidth, height: window.innerHeight })
-  const [view, setView] = useState(read)
-  useEffect(() => {
-    const update = () => setView(read())
-    window.addEventListener('resize', update)
-    return () => window.removeEventListener('resize', update)
-  }, [])
-  return view
-}
-
 /** Lecteur plein écran, hors du cadre commun : il applique lui-même la langue enregistrée. */
 function Reader({ volumeId }: { volumeId: string }) {
   useLanguage()
@@ -52,8 +43,10 @@ function Reader({ volumeId }: { volumeId: string }) {
   const entry = series.data?.volumes.find((v) => v.volume_id === volumeId)
   const title = [series.data?.name, entry && volumeLabel(entry, t, i18n.language)].filter(Boolean).join(' · ')
   const back = seriesId === null ? '/' : `/series/${seriesId}`
+  const mode = volume.data?.settings.reading_mode
   return (
-    <div className="fixed inset-0 bg-black text-foreground">
+    // Paginé : l'écran fixe ; vertical : le document défile (défilement et clavier natifs).
+    <div className={cn('bg-black text-foreground', mode === 'vertical' ? 'min-h-dvh' : 'fixed inset-0')}>
       <title>{`${title || t('reader.page')} · Shiori`}</title>
       <QueryState
         query={pages}
@@ -68,16 +61,19 @@ function Reader({ volumeId }: { volumeId: string }) {
           </div>
         }
       >
-        {(list) => (
+        {(list) =>
+          mode === 'vertical' ? (
+            <VerticalPages pages={list} title={title} back={back} />
+          ) : (
           <Pages
             pages={list}
-            // shortcut: le mode vertical (webtoon) arrive au lot 3.7 ; d'ici là il se lit paginé, de gauche à droite.
-            direction={volume.data?.settings.reading_mode === 'rtl' ? 'rtl' : 'ltr'}
+            direction={mode === 'rtl' ? 'rtl' : 'ltr'}
             layout={volume.data?.settings.page_layout ?? 'auto'}
             title={title}
             back={back}
           />
-        )}
+          )
+        }
       </QueryState>
     </div>
   )
@@ -105,9 +101,6 @@ function Pages({
   // Pointeurs posés : à deux doigts (pincement pour zoomer), le geste ne tourne jamais la page.
   const pointers = useRef(new Set<number>())
   const pinching = useRef(false)
-  // Position du curseur pendant qu'on le fait glisser : la page ne change qu'au relâchement,
-  // sinon chaque page traversée serait demandée (et encodée) au serveur.
-  const [dragged, setDragged] = useState<number | null>(null)
   // Affichage (réglages retenus par série au lot 3.8) : disposition, décalage, coupe des doubles pages.
   const [layout, setLayout] = useState<Layout>(initialLayout)
   const [offset, setOffset] = useState(false)
@@ -129,34 +122,12 @@ function Pages({
   }
   const goToPage = (ordinal: number) => go(viewOfPage(views, pages[ordinal].id))
 
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      // Échap masque les commandes ; Tab les montre (elles sont invisibles, donc hors du parcours
-      // clavier) : le clavier atteint tout sans piège.
-      const target = event.target as HTMLElement
-      // Panneau Affichage ouvert : ses touches lui appartiennent (Échap le ferme, sans plus).
-      if (target.closest('[data-radix-popper-content-wrapper]')) return
-      if (event.key === 'Escape') {
-        // Le focus quitte la barre qui devient invisible : les flèches retournent aux pages.
-        if (target.closest('[role="toolbar"]')) target.blur()
-        return setChrome(false)
-      }
-      if (event.key === 'Tab' && !chrome) {
-        event.preventDefault()
-        setChrome(true)
-        requestAnimationFrame(() => document.querySelector<HTMLElement>('[role="toolbar"] a, [role="toolbar"] button')?.focus())
-        return
-      }
-      // Dans la barre de commandes, les touches vont au bouton ou au curseur qui a le focus.
-      if (target.closest('[role="toolbar"]')) return
-      const move = keyMove(event.key, event.shiftKey, direction)
-      if (move) {
-        event.preventDefault()
-        go(move)
-      }
+  useChromeKeys(chrome, setChrome, (event) => {
+    const move = keyMove(event.key, event.shiftKey, direction)
+    if (move) {
+      event.preventDefault()
+      go(move)
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
   })
 
   // Précharge les deux pages suivantes et la précédente, à la même taille.
@@ -229,19 +200,11 @@ function Pages({
       <p className="sr-only" aria-live="polite">
         {announced}
       </p>
-      <div
-        role="toolbar"
-        aria-label={t('reader.controls')}
-        className={cn('pointer-events-none fixed inset-0 flex flex-col justify-between', !chrome && 'invisible')}
-      >
-        <header className="pointer-events-auto flex items-center gap-2 bg-black/80 px-2 pt-safe pr-safe pl-safe">
-          <Button asChild variant="ghost">
-            <Link to={back}>
-              <ChevronLeft aria-hidden />
-              {t('reader.back')}
-            </Link>
-          </Button>
-          <p className="min-w-0 flex-1 truncate font-medium">{title}</p>
+      <Toolbar
+        chrome={chrome}
+        title={title}
+        back={back}
+        display={
           <DisplayOptions
             layout={layout}
             shown={shown}
@@ -251,35 +214,28 @@ function Pages({
             onOffset={setOffset}
             onSplit={setSplit}
           />
-        </header>
-        <footer className="pointer-events-auto flex items-center gap-3 bg-black/80 px-2 pr-safe pb-safe pl-safe">
-          <Button variant="ghost" size="icon" aria-label={t(`reader.${left}`)} onClick={() => go(left)}>
-            <ChevronLeft aria-hidden />
-          </Button>
-          <Slider
-            aria-label={t('reader.page')}
-            dir={direction}
-            min={0}
-            max={total - 1}
-            step={1}
-            value={[dragged ?? first.ordinal]}
-            onValueChange={([value]) => setDragged(value)}
-            onValueCommit={([value]) => {
-              setDragged(null)
-              goToPage(value)
-            }}
-          />
-          <Button variant="ghost" size="icon" aria-label={t(`reader.${right}`)} onClick={() => go(right)}>
-            <ChevronRight aria-hidden />
-          </Button>
-          <span className="shrink-0 pr-2 text-sm text-muted-foreground tabular-nums">
-            {dragged !== null || first === last
-              ? number.format((dragged ?? first.ordinal) + 1)
-              : `${number.format(first.ordinal + 1)}–${number.format(last.ordinal + 1)}`}{' '}
-            / {number.format(total)}
-          </span>
-        </footer>
-      </div>
+        }
+      >
+        <Button variant="ghost" size="icon" aria-label={t(`reader.${left}`)} onClick={() => go(left)}>
+          <ChevronLeft aria-hidden />
+        </Button>
+        <PageSlider
+          dir={direction}
+          total={total}
+          value={first.ordinal}
+          onCommit={goToPage}
+          counter={(dragged) =>
+            `${
+              dragged !== null || first === last
+                ? number.format((dragged ?? first.ordinal) + 1)
+                : `${number.format(first.ordinal + 1)}–${number.format(last.ordinal + 1)}`
+            } / ${number.format(total)}`
+          }
+        />
+        <Button variant="ghost" size="icon" aria-label={t(`reader.${right}`)} onClick={() => go(right)}>
+          <ChevronRight aria-hidden />
+        </Button>
+      </Toolbar>
     </>
   )
 }
