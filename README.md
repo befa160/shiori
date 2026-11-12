@@ -5,7 +5,7 @@
 
 Lecteur de mangas, BD et webtoons auto-hébergé. Un seul binaire Rust sert la bibliothèque et une application web installable (PWA), pensée d'abord pour la lecture sur tablette.
 
-> **État : en développement.** Utilisables aujourd'hui : `shiori scan` (scan d'intégrité des archives CBZ et CBR) et `shiori serve` (API JSON : bibliothèques, séries, tomes, pages servies originales ou redimensionnées, pilotage des scans). Le lecteur web arrive en phase 3. L'avancement détaillé est dans [ROADMAP.md](ROADMAP.md).
+> **État : en développement (fin de la phase 3).** Utilisables aujourd'hui : `shiori scan` (scan d'intégrité des archives CBZ et CBR), `shiori serve` (API JSON et images) et **le lecteur web** : bibliothèques, séries, lecture manga (droite à gauche), BD (gauche à droite) et webtoon (défilement vertical), double page, zoom, reprise de la lecture, en français et en anglais. La création des bibliothèques se fait encore par l'API (l'interface d'administration arrive en phase 4). L'avancement détaillé est dans [ROADMAP.md](ROADMAP.md).
 
 ## Pourquoi
 
@@ -69,14 +69,33 @@ cargo run --release -p shiori -- scan /chemin/vers/ma/bibliotheque
 
 Options utiles : `--deep` (décode chaque image), `--json rapport.json` (rapport complet), `--no-db` (sans base), `--fail-on warning`.
 
-Lancer le serveur (API sous `/api`, sans authentification, écoute sur `127.0.0.1:7878` par défaut) :
+Lancer Shiori (interface web et API sous `/api`, sans authentification, écoute sur `127.0.0.1:7878` par défaut). Le front est intégré au binaire de release : le construire d'abord.
 
 ```bash
-cd backend
-cargo run --release -p shiori -- serve
+cd web && npm ci && npm run build
 ```
 
-Toute modification passe par une branche et une pull request. La CI vérifie le format, clippy et les tests sous Linux, Windows et macOS, le build du front, et une couverture de tests d'au moins 80 % des lignes et des branches. Les règles complètes sont dans [CLAUDE.md](CLAUDE.md).
+```bash
+cd backend && cargo run --release -p shiori -- serve
+```
+
+Puis, en attendant l'interface d'administration (phase 4), déclarer une bibliothèque (un dossier par série ; `kind` : `manga`, `comics` ou `webtoon`, qui donne le sens de lecture par défaut) et la scanner :
+
+```bash
+curl -X POST localhost:7878/api/libraries -H 'content-type: application/json' -d '{"name":"Manga","root":"/chemin/vers/mes/mangas","kind":"manga"}'
+```
+
+```bash
+curl -X POST localhost:7878/api/admin/scans -H 'content-type: application/json' -d '{"library_id":1}'
+```
+
+(`1` : l'`id` renvoyé par la commande précédente, à adapter pour chaque bibliothèque.)
+
+et ouvrir <http://localhost:7878>. Dans le lecteur : tap sur les côtés ou flèches pour tourner les pages, tap au centre (ou Tab) pour les commandes, double tap pour zoomer ; le panneau « Affichage » règle le sens de lecture et la disposition, retenus pour la série.
+
+Tests du front : `npm test` (Vitest) et `npm run e2e` (le lecteur dans Chromium contre un vrai serveur, sur une bibliothèque générée ; une fois : `npx playwright install chromium`).
+
+Toute modification passe par une branche et une pull request. La CI vérifie le format, clippy et les tests sous Linux, Windows et macOS, le build du front, le lecteur de bout en bout dans Chromium, et une couverture de tests d'au moins 80 % des lignes et des branches. Les règles complètes sont dans [CLAUDE.md](CLAUDE.md).
 
 ## Licence
 

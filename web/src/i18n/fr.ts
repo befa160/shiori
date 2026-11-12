@@ -10,6 +10,11 @@ export const fr = {
     language: 'Langue',
     languageNotSaved: 'Langue non enregistrée, réessayez plus tard',
   },
+  loadFailed: {
+    title: "Cet écran n'a pas pu s'afficher",
+    hint: "Après une mise à jour de Shiori, recharger la page suffit. Si l'erreur revient, le serveur est peut-être injoignable.",
+    reload: 'Recharger',
+  },
   notFound: {
     title: 'Page introuvable',
     home: "Retour à l'accueil",

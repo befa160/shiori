@@ -465,10 +465,10 @@ describe('zoom au double tap', () => {
 })
 
 describe('tome absent ou vide', () => {
-  it('identifiant invalide : page introuvable', () => {
+  it('identifiant invalide : page introuvable', async () => {
     mockApi({})
     renderAt('/read/pas-un-hash')
-    expect(screen.getByRole('heading', { name: 'Page introuvable' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Page introuvable' })).toBeInTheDocument()
   })
 
   it('tome inconnu : erreur explicite', async () => {

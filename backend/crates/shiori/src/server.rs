@@ -27,6 +27,7 @@ use shiori_db::{
 };
 use tokio::net::TcpListener;
 use tokio::sync::Semaphore;
+use tower_http::compression::CompressionLayer;
 use tower_http::trace::TraceLayer;
 
 use crate::cache::Images;
@@ -157,6 +158,9 @@ pub fn router(app: Arc<App>, local_only: bool) -> Router {
                 "méthode non autorisée sur cette route",
             )
         })
+        // Front (JS, CSS) et JSON compressés (brotli ou gzip, selon le navigateur) : environ trois
+        // fois moins à transférer. Les images, déjà compressées, sont exclues par défaut.
+        .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())
         .with_state(app);
     match local_only {

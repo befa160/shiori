@@ -191,3 +191,50 @@ test('captures aux quatre tailles', async ({ page }) => {
     await shot('webtoon')
   }
 })
+
+test.describe('tablette 8" tactile, en portrait', () => {
+  test.use({ viewport: { width: 800, height: 1280 }, hasTouch: true, isMobile: true })
+
+  test('tap, balayage, commandes et zoom au double tap, au doigt', async ({ page }) => {
+    await page.goto(`/read/${all['E2E Manga T01.cbz'].volume_id}`)
+    await checkShown(page, 'E2E Manga T01.cbz')
+    const live = page.locator('p.sr-only[aria-live]')
+    // Manga : le tiers gauche avance, le droit recule.
+    await page.touchscreen.tap(60, 640)
+    await expect(live).toHaveText('Page 2 sur 12')
+    await page.touchscreen.tap(740, 640)
+    await expect(live).toHaveText('Page 1 sur 12')
+    // Balayage vers la droite : avance (sens manga).
+    const cdp = await page.context().newCDPSession(page)
+    const touch = (type: 'touchStart' | 'touchMove' | 'touchEnd', x: number) =>
+      cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y: 640 }] })
+    await touch('touchStart', 250)
+    for (const x of [320, 400, 480, 550]) await touch('touchMove', x)
+    await touch('touchEnd', 550)
+    await expect(live).toHaveText('Page 2 sur 12')
+    // Tap au centre : les commandes ; encore : masquées.
+    const toolbar = page.getByRole('toolbar', { includeHidden: true })
+    await page.touchscreen.tap(400, 640)
+    await expect(toolbar).not.toHaveClass(/invisible/)
+    await page.touchscreen.tap(400, 640)
+    await expect(toolbar).toHaveClass(/invisible/)
+    // Double tap : zoom ×2, la page déborde et se déplace au doigt ; un second double tap en sort.
+    await page.touchscreen.tap(400, 400)
+    await page.touchscreen.tap(400, 400)
+    const main = page.locator('main')
+    await expect(main).toHaveClass(/overflow-auto/)
+    expect(await main.evaluate((m) => m.scrollWidth > m.clientWidth && m.scrollHeight > m.clientHeight)).toBe(true)
+    await checkShown(page, 'E2E Manga T01.cbz')
+    // Zoomé, glisser le doigt déplace la page (défilement natif) et ne la tourne pas.
+    const left = await main.evaluate((m) => m.scrollLeft)
+    await touch('touchStart', 500)
+    for (const x of [450, 400, 350, 300]) await touch('touchMove', x)
+    await touch('touchEnd', 300)
+    await expect.poll(() => main.evaluate((m) => m.scrollLeft)).toBeGreaterThan(left)
+    await expect(live).toHaveText('Page 2 sur 12')
+    await page.touchscreen.tap(400, 400)
+    await page.touchscreen.tap(400, 400)
+    await expect(main).toHaveClass(/overflow-hidden/)
+    await expect(toolbar).toHaveClass(/invisible/)
+  })
+})

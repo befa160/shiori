@@ -40,7 +40,7 @@ rust-embed = { version = "8.14", default-features = false, features = ["mime-gue
 zip = { version = "9.5", default-features = false, features = ["deflate-flate2-zlib-rs", "deflate64", "lzma", "xz", "ppmd"] }
 tempfile = "3.27"
 tower = { version = "0.5", features = ["util"] }
-tower-http = { version = "0.7", features = ["trace"] }
+tower-http = { version = "0.7", features = ["compression-br", "compression-gzip", "trace"] }
 http-body-util = "0.1"
 shiori-testkit = { path = "crates/shiori-testkit" }
 

@@ -379,3 +379,32 @@ async fn solid_rar_pages_come_from_one_extraction() {
         (StatusCode::INTERNAL_SERVER_ERROR, "page_corrupt".into())
     );
 }
+
+#[tokio::test]
+async fn json_is_compressed_when_asked_images_never() {
+    let f = fixture().await;
+    let volume = f.scan(&fixtures::webtoon(f.dir.path())).await;
+    let pages = f.pages(&volume).await;
+    let get = |uri: String, encoding: Option<&'static str>| {
+        let mut request = Request::get(uri);
+        if let Some(encoding) = encoding {
+            request = request.header(header::ACCEPT_ENCODING, encoding);
+        }
+        f.app.clone().oneshot(request.body(Body::empty()).unwrap())
+    };
+    let list = format!("/api/volumes/{volume}/pages");
+    let plain = body(get(list.clone(), None).await.unwrap()).await.len();
+    for encoding in ["br", "gzip"] {
+        let response = get(list.clone(), Some(encoding)).await.unwrap();
+        assert_eq!(response.headers()[header::CONTENT_ENCODING], encoding);
+        // 300 pages décrites de la même façon : le JSON se compresse très bien.
+        assert!(body(response).await.len() * 4 < plain, "{encoding}");
+    }
+    // Sans `Accept-Encoding`, rien n'est compressé ; une image ne l'est jamais (déjà compressée).
+    let response = get(list, None).await.unwrap();
+    assert!(response.headers().get(header::CONTENT_ENCODING).is_none());
+    let image = format!("/api/pages/{}/image", pages[0]["id"].as_str().unwrap());
+    let response = get(image, Some("br, gzip")).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(response.headers().get(header::CONTENT_ENCODING).is_none());
+}
