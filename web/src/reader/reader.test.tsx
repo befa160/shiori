@@ -254,7 +254,11 @@ describe('double page', () => {
     fireEvent.pointerDown(main(), { pointerType: 'touch', pointerId: 9, clientX: 850, clientY: 300 })
     fireEvent.pointerUp(main(), { pointerType: 'touch', pointerId: 9, clientX: 850, clientY: 300 })
     expect(shown()).toEqual(['Page 2 sur 6', 'Page 3 sur 6'])
-    await userEvent.click(screen.getByRole('button', { name: "Décaler d'une page" }))
+    // Selon le moment, Radix a déjà refermé le panneau sur ce toucher extérieur : on le rouvre.
+    if (!screen.queryByRole('button', { name: "Décaler d'une page" })) {
+      await userEvent.click(screen.getByRole('button', { name: 'Affichage' }))
+    }
+    await userEvent.click(await screen.findByRole('button', { name: "Décaler d'une page" }))
     // Décalé : la page 2 est seule, la 3 démarre la paire suivante.
     expect(shown()).toEqual(['Page 2 sur 6'])
     // En simple, la double page est coupée en deux moitiés successives (gauche d'abord en BD).
