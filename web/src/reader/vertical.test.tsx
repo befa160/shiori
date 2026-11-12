@@ -72,7 +72,8 @@ describe('mode webtoon', () => {
     // Pendant le défilement, l'annonce ne suit pas encore : elle attend l'arrêt.
     expect(screen.getByText('Page 50 sur 100', { selector: '[aria-live]' })).toBeInTheDocument()
     await waitFor(() => expect(router.state.location.search).toBe('?page=s11'))
-    expect(screen.getByText('Page 11 sur 100', { selector: '[aria-live]' })).toBeInTheDocument()
+    // L'annonce suit l'adresse au rendu suivant.
+    expect(await screen.findByText('Page 11 sur 100', { selector: '[aria-live]' })).toBeInTheDocument()
     // La bande 6 n'est plus dans la page ; en y revenant, sa carte d'erreur est à sa place.
     expect(screen.queryByRole('img', { name: /^Page 6 sur 100/ })).toBeNull()
     await act(async () => scrollWindow(5 * 1280))
