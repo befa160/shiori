@@ -61,10 +61,13 @@ export function QueryState<T>({
   empty,
   isEmpty,
   notFound,
+  loading,
   children,
 }: {
   query: UseQueryResult<T>
   empty: ReactNode
+  /** Squelettes à la forme du contenu ; des lignes par défaut. */
+  loading?: ReactNode
   /** Message à la place du « introuvable » générique du serveur. */
   notFound?: string
   isEmpty: (data: T) => boolean
@@ -72,6 +75,7 @@ export function QueryState<T>({
 }) {
   const { t } = useTranslation()
   if (query.isPending) {
+    if (loading) return loading
     return (
       <div aria-busy="true" className="space-y-2">
         <span className="sr-only">{t('common.loading')}</span>

@@ -8,6 +8,12 @@ export const useLibraries = () =>
 export const useLibrarySeries = (id: number) =>
   useQuery({ queryKey: ['libraries', id, 'series'], queryFn: ({ signal }) => api.librarySeries(id, { signal }) })
 
+export const useAllSeries = () =>
+  useQuery({ queryKey: ['series'], queryFn: ({ signal }) => api.allSeries({ signal }) })
+
+export const useContinue = () =>
+  useQuery({ queryKey: ['continue'], queryFn: ({ signal }) => api.continueReading({ signal }) })
+
 export const useSeries = (id: number | null) =>
   useQuery({
     queryKey: ['series', id],

@@ -341,6 +341,27 @@ describe('progression, réglages de la série, tome suivant', () => {
     expect(await screen.findByRole('img', { name: 'Page 1 sur 3' })).toBeInTheDocument()
   })
 
+  it("redemande l'accueil au retour : « Continuer la lecture » et les séries suivent la lecture", async () => {
+    const fetch = serve({}, {
+      [`/api/volumes/${VOLUME}/progress`]: () => json(progress(1)),
+      '/api/libraries': () => json([]),
+      '/api/series': () => json([]),
+      '/api/continue': () => json([]),
+    })
+    const calls = (url: string) => fetch.mock.calls.filter(([u, init]) => u === url && !init?.method).length
+    // Données gardées 30 s comme en production : seule la péremption après l'enregistrement
+    // les fait redemander.
+    const { router } = renderAt('/', { staleTime: 30_000 })
+    await waitFor(() => expect(calls('/api/continue')).toBe(1))
+    await act(() => router.navigate(`/read/${VOLUME}`))
+    await screen.findByRole('img', { name: 'Page 1 sur 3' })
+    await userEvent.keyboard('{ArrowRight}')
+    await waitFor(() => expect(sent(fetch, 'PUT')).toHaveLength(1), { timeout: 2000 })
+    await act(() => router.navigate('/'))
+    await waitFor(() => expect(calls('/api/continue')).toBe(2))
+    expect(calls('/api/series')).toBe(2)
+  })
+
   it('enregistre la page lue une seconde après, aussitôt en arrière-plan ou en quittant', async () => {
     const url = `/api/volumes/${VOLUME}/progress`
     const fetch = serve({}, { [url]: () => json(progress(0)) })

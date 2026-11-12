@@ -5,9 +5,10 @@ import { vi } from 'vitest'
 import { App } from '@/App'
 import { routes } from '@/routes'
 
-/** Rendu de l'application à une URL, sans réessai des requêtes (tests déterministes). */
-export function renderAt(path: string) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+/** Rendu de l'application à une URL, sans réessai des requêtes (tests déterministes). Par défaut
+ * tout est redemandé à chaque affichage ; `staleTime` reprend la durée de la production. */
+export function renderAt(path: string, { staleTime = 0 } = {}) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime } } })
   const router = createMemoryRouter(routes, { initialEntries: [path] })
   return { ...render(<App router={router} queryClient={queryClient} />), router }
 }
