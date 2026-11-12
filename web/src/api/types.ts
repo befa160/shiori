@@ -11,6 +11,9 @@ export type LibraryKind = 'manga' | 'comics' | 'webtoon'
 export type ReadingMode = 'rtl' | 'ltr' | 'vertical'
 /** `auto` : double en paysage, simple en portrait. */
 export type PageLayout = 'single' | 'double' | 'auto'
+/** Calculé par le serveur d'après la progression des tomes de la série. */
+export type ReadingStatus = 'unread' | 'in_progress' | 'read'
+export type PublicationStatus = 'ongoing' | 'completed' | 'hiatus' | 'cancelled'
 
 /** Réglages appliqués, et ce que la série impose elle-même (`null` = défaut de la bibliothèque). */
 export interface ReadingSettings {
@@ -53,9 +56,29 @@ export interface Library {
 
 export interface SeriesSummary {
   id: number
+  library_id: number
   name: string
   volume_count: number
+  /** Tomes lus jusqu'au bout. */
+  read_count: number
+  reading_status: ReadingStatus
+  /** `null` : inconnu. */
+  publication_status: PublicationStatus | null
+  created_at: string
+  last_read_at: string | null
   cover_page_id: string | null
+  /** Tome qu'ouvre « Lire » : la suite de la lecture, sinon le premier non lu, sinon le premier. */
+  resume_volume_id: string | null
+}
+
+/** Une entrée de « Continuer la lecture » (`GET /api/continue`), une par série. */
+export interface ContinueItem {
+  series_id: number
+  series_name: string
+  library_id: number
+  /** Tome en cours (avec `progress`) ou tome suivant (sans). */
+  volume: SeriesVolume
+  updated_at: string
 }
 
 export interface SeriesVolume {
@@ -76,6 +99,7 @@ export interface SeriesDetail {
   library_id: number
   name: string
   folder: string | null
+  publication_status: PublicationStatus | null
   settings: ReadingSettings
   /** Déjà dans l'ordre de lecture de la série. */
   volumes: SeriesVolume[]

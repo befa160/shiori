@@ -143,11 +143,12 @@ impl Db {
             return Ok(false);
         }
         let series: i64 = match &parsed.folder {
-            Some(folder) => sqlx::query(
-                "INSERT INTO series (library_id, folder, name) VALUES (?, ?, ?)
-                 ON CONFLICT (library_id, folder) WHERE folder IS NOT NULL
-                 DO UPDATE SET folder = excluded.folder RETURNING id",
-            )
+            Some(folder) => sqlx::query(concat!(
+                "INSERT INTO series (library_id, folder, name, created_at) VALUES (?, ?, ?, ",
+                now!(),
+                ") ON CONFLICT (library_id, folder) WHERE folder IS NOT NULL
+                     DO UPDATE SET folder = excluded.folder RETURNING id"
+            ))
             .bind(library.id)
             .bind(folder)
             .bind(&parsed.series)
@@ -166,10 +167,11 @@ impl Db {
                 .await?;
                 match existing {
                     Some(row) => row.get("id"),
-                    None => sqlx::query(
-                        "INSERT INTO series (library_id, folder, name) VALUES (?, NULL, ?)
-                         RETURNING id",
-                    )
+                    None => sqlx::query(concat!(
+                        "INSERT INTO series (library_id, folder, name, created_at) VALUES (?, NULL, ?, ",
+                        now!(),
+                        ") RETURNING id"
+                    ))
                     .bind(library.id)
                     .bind(&parsed.series)
                     .fetch_one(&mut *tx)

@@ -175,6 +175,24 @@ impl Db {
             .collect())
     }
 
+    /// Progression des tomes rattachés à une série, dans une bibliothèque ou dans toutes.
+    pub(crate) async fn progress_in_libraries(
+        &self,
+        library: Option<i64>,
+    ) -> Result<HashMap<String, Progress>, Error> {
+        let rows = sqlx::query(progress_of!(
+            "r.volume_id IN (SELECT volume_id FROM file_locations
+             WHERE series_id IS NOT NULL AND (?1 IS NULL OR library_id = ?1))"
+        ))
+        .bind(library)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .iter()
+            .map(|r| (r.get("volume_id"), Progress::of(r)))
+            .collect())
+    }
+
     /// Enregistre la dernière page vue. Atteindre la dernière page marque le tome comme lu,
     /// et il le reste même si on revient en arrière (seul [`Db::clear_progress`] l'efface).
     pub async fn save_progress(

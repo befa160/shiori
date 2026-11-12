@@ -2,10 +2,10 @@
 //! scan et le parseur. Le lecteur n'infère rien : tout ordre vient d'ici (principe 3).
 
 use std::cmp::Ordering;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use shiori_core::{
     Issue, IssueCode, NameKind, PageId, PageStatus, ParsedName, Status, VolumeId,
     compare_entry_names, compare_in_series,
@@ -13,7 +13,7 @@ use shiori_core::{
 use sqlx::Row;
 use sqlx::sqlite::SqliteRow;
 
-use crate::{Db, Error, LibraryKind, Progress, ReadingSettings, from_db, stamp};
+use crate::{Db, Error, LibraryKind, Progress, ReadingSettings, from_db, stamp, to_db};
 
 #[derive(Debug, Serialize)]
 pub struct LibrarySummary {
@@ -28,10 +28,51 @@ pub struct LibrarySummary {
 #[derive(Debug, Serialize)]
 pub struct SeriesSummary {
     pub id: i64,
+    pub library_id: i64,
     pub name: String,
     pub volume_count: usize,
+    /// Tomes de la série dont la dernière page a été atteinte.
+    pub read_count: usize,
+    pub reading_status: ReadingStatus,
+    pub publication_status: Option<PublicationStatus>,
+    pub created_at: String,
+    /// Dernière page enregistrée dans un tome de la série.
+    pub last_read_at: Option<String>,
     /// Page 0 du premier tome de la série.
     pub cover_page_id: Option<String>,
+    /// Tome qu'ouvre « Lire » : voir [`resume`].
+    pub resume_volume_id: Option<String>,
+}
+
+/// Où en est la lecture d'une série, calculé d'après la progression de ses tomes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReadingStatus {
+    /// Aucun tome ouvert.
+    Unread,
+    InProgress,
+    /// Tous les tomes lus jusqu'au bout.
+    Read,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PublicationStatus {
+    Ongoing,
+    Completed,
+    Hiatus,
+    Cancelled,
+}
+
+/// Une entrée de « Continuer la lecture » : une par série, voir [`up_next`].
+#[derive(Debug, Serialize)]
+pub struct ContinueItem {
+    pub series_id: i64,
+    pub series_name: String,
+    pub library_id: i64,
+    pub volume: SeriesVolume,
+    /// Dernière lecture dans la série : l'ordre de la liste.
+    pub updated_at: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -40,12 +81,13 @@ pub struct SeriesDetail {
     pub library_id: i64,
     pub name: String,
     pub folder: Option<String>,
+    pub publication_status: Option<PublicationStatus>,
     pub settings: ReadingSettings,
     pub volumes: Vec<SeriesVolume>,
 }
 
 /// Un tome dans sa série. Deux copies identiques d'un fichier n'apparaissent qu'une fois.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct SeriesVolume {
     pub volume_id: String,
     pub kind: NameKind,
@@ -180,6 +222,58 @@ fn in_series_order(mut rows: Vec<Located>) -> Vec<Located> {
     rows
 }
 
+/// Tomes de chaque série, dans l'ordre de la série.
+fn by_series(rows: &[Located]) -> HashMap<i64, Vec<&Located>> {
+    let mut out: HashMap<i64, Vec<&Located>> = HashMap::new();
+    for row in rows {
+        out.entry(row.series_id).or_default().push(row);
+    }
+    out
+}
+
+fn finished(progress: &HashMap<String, Progress>, volume: &Located) -> bool {
+    progress
+        .get(&volume.volume.volume_id)
+        .is_some_and(|p| p.finished)
+}
+
+/// Suite de la lecture d'une série (Q24) : le tome ouvert en dernier s'il n'est pas arrêté sur
+/// sa dernière page (une relecture compte, même si le tome a déjà été fini), sinon le suivant
+/// dans l'ordre qui n'est ni lu ni en erreur. Renvoie aussi la date de cette
+/// dernière lecture. `None` si aucun tome n'a été ouvert, ou s'il n'y a pas de suite.
+fn up_next<'a>(
+    volumes: &[&'a Located],
+    progress: &HashMap<String, Progress>,
+) -> Option<(&'a Located, String)> {
+    let (last, p) = volumes
+        .iter()
+        .enumerate()
+        .filter_map(|(i, v)| progress.get(&v.volume.volume_id).map(|p| (i, p)))
+        .max_by(|a, b| a.1.updated_at.cmp(&b.1.updated_at))?;
+    if p.ordinal + 1 < p.page_count {
+        return Some((volumes[last], p.updated_at.clone()));
+    }
+    volumes[last + 1..]
+        .iter()
+        .find(|v| v.volume.status != Status::Error && !finished(progress, v))
+        .map(|v| (*v, p.updated_at.clone()))
+}
+
+/// Tome qu'ouvre « Lire » : la suite de la lecture, sinon le premier tome ni lu ni en erreur,
+/// sinon (tout est lu) le premier tome, pour relire.
+fn resume(volumes: &[&Located], progress: &HashMap<String, Progress>) -> Option<String> {
+    up_next(volumes, progress)
+        .map(|(v, _)| v)
+        .or_else(|| {
+            volumes
+                .iter()
+                .find(|v| v.volume.status != Status::Error && !finished(progress, v))
+                .copied()
+        })
+        .or_else(|| volumes.first().copied())
+        .map(|v| v.volume.volume_id.clone())
+}
+
 fn by_name(a: &str, b: &str) -> Ordering {
     compare_entry_names(a, a.as_bytes(), b, b.as_bytes())
 }
@@ -210,7 +304,6 @@ impl Db {
     }
 
     /// Séries d'une bibliothèque, triées par nom (tri naturel) ; `None` si elle n'existe pas.
-    // shortcut: liste complète sans pagination, suffisant pour quelques milliers de séries ; paginer si une bibliothèque réelle le demande.
     pub async fn series_of(&self, library_id: i64) -> Result<Option<Vec<SeriesSummary>>, Error> {
         if sqlx::query("SELECT 1 FROM libraries WHERE id = ?")
             .bind(library_id)
@@ -220,40 +313,142 @@ impl Db {
         {
             return Ok(None);
         }
-        let series = sqlx::query("SELECT id, name FROM series WHERE library_id = ?")
-            .bind(library_id)
-            .fetch_all(&self.pool)
-            .await?;
+        self.summaries(Some(library_id)).await.map(Some)
+    }
+
+    /// Séries de toutes les bibliothèques, triées par nom (tri naturel).
+    pub async fn all_series(&self) -> Result<Vec<SeriesSummary>, Error> {
+        self.summaries(None).await
+    }
+
+    // shortcut: liste complète sans pagination (recherche et filtres côté client), suffisant pour quelques milliers de séries ; paginer et filtrer côté serveur au-delà.
+    async fn summaries(&self, library: Option<i64>) -> Result<Vec<SeriesSummary>, Error> {
+        let series = sqlx::query(
+            "SELECT id, library_id, name, publication_status, created_at FROM series
+             WHERE ?1 IS NULL OR library_id = ?1",
+        )
+        .bind(library)
+        .fetch_all(&self.pool)
+        .await?;
         let rows = sqlx::query(located_volumes!(
-            "l.series_id IN (SELECT id FROM series WHERE library_id = ?)"
+            "l.series_id IN (SELECT id FROM series WHERE ?1 IS NULL OR library_id = ?1)"
         ))
-        .bind(library_id)
+        .bind(library)
         .fetch_all(&self.pool)
         .await?
         .iter()
         .map(located)
         .collect::<Result<Vec<_>, _>>()?;
         let rows = in_series_order(rows);
-        let mut out: Vec<SeriesSummary> = series
+        let volumes = by_series(&rows);
+        let progress = self.progress_in_libraries(library).await?;
+        let mut out = series
             .iter()
             .map(|s| {
                 let id: i64 = s.get("id");
-                let volumes: Vec<&Located> = rows.iter().filter(|r| r.series_id == id).collect();
-                SeriesSummary {
+                let vols = volumes.get(&id).map_or(&[][..], Vec::as_slice);
+                let read_count = vols.iter().filter(|v| finished(&progress, v)).count();
+                let read_at = vols
+                    .iter()
+                    .filter_map(|v| progress.get(&v.volume.volume_id))
+                    .map(|p| &p.updated_at)
+                    .max();
+                let reading_status = match read_at {
+                    None => ReadingStatus::Unread,
+                    Some(_) if read_count == vols.len() => ReadingStatus::Read,
+                    Some(_) => ReadingStatus::InProgress,
+                };
+                Ok(SeriesSummary {
                     id,
+                    library_id: s.get("library_id"),
                     name: s.get("name"),
-                    volume_count: volumes.len(),
-                    cover_page_id: volumes.first().and_then(|r| r.volume.cover_page_id.clone()),
-                }
+                    volume_count: vols.len(),
+                    read_count,
+                    reading_status,
+                    publication_status: s
+                        .get::<Option<&str>, _>("publication_status")
+                        .map(from_db)
+                        .transpose()?,
+                    created_at: s.get("created_at"),
+                    last_read_at: read_at.cloned(),
+                    cover_page_id: vols.first().and_then(|r| r.volume.cover_page_id.clone()),
+                    resume_volume_id: resume(vols, &progress),
+                })
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
+        out.sort_by(|a, b| by_name(&a.name, &b.name).then(a.id.cmp(&b.id)));
+        Ok(out)
+    }
+
+    /// « Continuer la lecture » : la suite de chaque série commencée ([`up_next`]), de la
+    /// lecture la plus récente à la plus ancienne.
+    pub async fn continue_reading(&self, limit: usize) -> Result<Vec<ContinueItem>, Error> {
+        // Séries dont au moins un tome a été ouvert.
+        macro_rules! started {
+            () => {
+                "(SELECT l2.series_id FROM file_locations l2
+                  JOIN reading_progress r ON r.volume_id = l2.volume_id)"
+            };
+        }
+        let series = sqlx::query(concat!(
+            "SELECT id, name, library_id FROM series WHERE id IN ",
+            started!()
+        ))
+        .fetch_all(&self.pool)
+        .await?;
+        let rows = sqlx::query(concat!(located_volumes!("l.series_id IN "), started!()))
+            .fetch_all(&self.pool)
+            .await?
+            .iter()
+            .map(located)
+            .collect::<Result<Vec<_>, _>>()?;
+        let rows = in_series_order(rows);
+        let volumes = by_series(&rows);
+        let progress = self.progress_in_libraries(None).await?;
+        let mut out: Vec<ContinueItem> = series
+            .iter()
+            .filter_map(|s| {
+                let id: i64 = s.get("id");
+                let (next, updated_at) = up_next(volumes.get(&id)?, &progress)?;
+                Some(ContinueItem {
+                    series_id: id,
+                    series_name: s.get("name"),
+                    library_id: s.get("library_id"),
+                    volume: SeriesVolume {
+                        progress: progress.get(&next.volume.volume_id).cloned(),
+                        ..next.volume.clone()
+                    },
+                    updated_at,
+                })
             })
             .collect();
-        out.sort_by(|a, b| by_name(&a.name, &b.name).then(a.id.cmp(&b.id)));
-        Ok(Some(out))
+        out.sort_by(|a, b| {
+            b.updated_at
+                .cmp(&a.updated_at)
+                .then(a.series_id.cmp(&b.series_id))
+        });
+        out.truncate(limit);
+        Ok(out)
+    }
+
+    /// Change le statut de publication d'une série ; `false` si elle n'existe pas.
+    pub async fn set_publication_status(
+        &self,
+        series: i64,
+        status: Option<PublicationStatus>,
+    ) -> Result<bool, Error> {
+        let done = sqlx::query("UPDATE series SET publication_status = ? WHERE id = ?")
+            .bind(status.as_ref().map(to_db))
+            .bind(series)
+            .execute(&self.pool)
+            .await?;
+        Ok(done.rows_affected() > 0)
     }
 
     pub async fn series_detail(&self, id: i64) -> Result<Option<SeriesDetail>, Error> {
         let Some(series) = sqlx::query(
-            "SELECT s.library_id, s.name, s.folder, s.reading_mode, s.page_layout, b.kind
+            "SELECT s.library_id, s.name, s.folder, s.publication_status, s.reading_mode,
+                    s.page_layout, b.kind
              FROM series s JOIN libraries b ON b.id = s.library_id WHERE s.id = ?",
         )
         .bind(id)
@@ -275,6 +470,10 @@ impl Db {
             library_id: series.get("library_id"),
             name: series.get("name"),
             folder: series.get("folder"),
+            publication_status: series
+                .get::<Option<&str>, _>("publication_status")
+                .map(from_db)
+                .transpose()?,
             settings: ReadingSettings::of(&series)?,
             volumes: in_series_order(rows)
                 .into_iter()
@@ -420,3 +619,6 @@ impl Db {
             .map(Some)
     }
 }
+
+#[cfg(test)]
+mod tests;

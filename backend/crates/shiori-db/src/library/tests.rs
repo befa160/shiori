@@ -328,3 +328,34 @@ async fn phase_one_database_is_migrated() {
     assert_eq!(row.get::<Option<i64>, _>("series_id"), None);
     assert_eq!(row.get::<Option<String>, _>("kind"), None);
 }
+
+/// Les séries d'avant la migration 0006 prennent la date de création de leur bibliothèque.
+#[tokio::test]
+async fn existing_series_get_their_library_date() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("t.db");
+    let options = sqlx::sqlite::SqliteConnectOptions::new()
+        .filename(&path)
+        .create_if_missing(true);
+    let pool = sqlx::SqlitePool::connect_with(options).await.unwrap();
+    sqlx::migrate!().run_to(5, &pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO libraries (id, name, root, created_at) VALUES (1, 'L', '/l', '2026-01-02T00:00:00.000Z');
+         INSERT INTO series (library_id, folder, name) VALUES (1, 'A', 'A');",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    pool.close().await;
+
+    let db = Db::open(&path).await.unwrap();
+    let row = sqlx::query("SELECT created_at, publication_status FROM series")
+        .fetch_one(db.pool())
+        .await
+        .unwrap();
+    assert_eq!(
+        row.get::<String, _>("created_at"),
+        "2026-01-02T00:00:00.000Z"
+    );
+    assert_eq!(row.get::<Option<String>, _>("publication_status"), None);
+}

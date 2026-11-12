@@ -22,8 +22,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use shiori_core::{Archive, PageId, PageStatus, Severity, VolumeId, open_archive as open_file};
 use shiori_db::{
-    Db, Language, LibraryError, LibraryKind, PageFile, PageLayout, PageSource, ReadingMode,
-    RunFilter, RunStatus, SaveProgress, SettingsChange,
+    Db, Language, LibraryError, LibraryKind, PageFile, PageLayout, PageSource, PublicationStatus,
+    ReadingMode, RunFilter, RunStatus, SaveProgress, SettingsChange,
 };
 use tokio::net::TcpListener;
 use tokio::sync::Semaphore;
@@ -136,7 +136,9 @@ pub fn router(app: Arc<App>, local_only: bool) -> Router {
         .route("/api/libraries", get(libraries).post(create_library))
         .route("/api/libraries/{id}", delete(delete_library))
         .route("/api/libraries/{id}/series", get(library_series))
-        .route("/api/series/{id}", get(series))
+        .route("/api/series", get(all_series))
+        .route("/api/series/{id}", get(series).patch(patch_series))
+        .route("/api/continue", get(continue_reading))
         .route("/api/series/{id}/settings", patch(series_settings))
         .route("/api/volumes/{id}", get(volume))
         .route(
@@ -360,6 +362,74 @@ async fn library_series(
         .await?
         .map(Json)
         .ok_or_else(|| ApiError::not_found("bibliothèque"))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SeriesQuery {
+    library_id: Option<i64>,
+}
+
+/// Toutes les séries, ou celles d'une bibliothèque (`?library_id=`).
+async fn all_series(
+    State(app): State<Arc<App>>,
+    query: Result<Query<SeriesQuery>, QueryRejection>,
+) -> ApiResult<Vec<shiori_db::SeriesSummary>> {
+    let Query(q) = query.map_err(invalid_query)?;
+    match q.library_id {
+        None => Ok(Json(app.db.all_series().await?)),
+        Some(id) => app
+            .db
+            .series_of(id)
+            .await?
+            .map(Json)
+            .ok_or_else(|| ApiError::not_found("bibliothèque")),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ContinueQuery {
+    limit: Option<u32>,
+}
+
+/// « Continuer la lecture » : 20 entrées par défaut, 100 au plus.
+async fn continue_reading(
+    State(app): State<Arc<App>>,
+    query: Result<Query<ContinueQuery>, QueryRejection>,
+) -> ApiResult<Vec<shiori_db::ContinueItem>> {
+    let Query(q) = query.map_err(invalid_query)?;
+    let limit = q.limit.unwrap_or(20).clamp(1, 100) as usize;
+    Ok(Json(app.db.continue_reading(limit).await?))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SeriesPatch {
+    /// Absent : inchangé ; `null` : inconnu.
+    #[serde(default, deserialize_with = "present")]
+    publication_status: Option<Option<PublicationStatus>>,
+}
+
+/// Modifie une série (statut de publication en phase 4) et renvoie son détail.
+async fn patch_series(
+    State(app): State<Arc<App>>,
+    Path(id): Path<String>,
+    body: Result<Json<SeriesPatch>, JsonRejection>,
+) -> ApiResult<shiori_db::SeriesDetail> {
+    let id = int_id(&id)?;
+    let Json(patch) =
+        body.map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, "invalid_body", e.body_text()))?;
+    if let Some(status) = patch.publication_status
+        && !app.db.set_publication_status(id, status).await?
+    {
+        return Err(ApiError::not_found("série"));
+    }
+    app.db
+        .series_detail(id)
+        .await?
+        .map(Json)
+        .ok_or_else(|| ApiError::not_found("série"))
 }
 
 async fn series(

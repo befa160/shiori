@@ -38,8 +38,8 @@ mod runs;
 mod settings;
 
 pub use browse::{
-    LibrarySummary, PageFile, PageInfo, PageSource, SeriesDetail, SeriesSummary, SeriesVolume,
-    VolumeDetail, VolumeLocation,
+    ContinueItem, LibrarySummary, PageFile, PageInfo, PageSource, PublicationStatus, ReadingStatus,
+    SeriesDetail, SeriesSummary, SeriesVolume, VolumeDetail, VolumeLocation,
 };
 pub use library::{Library, LibraryError};
 pub use reading::{
