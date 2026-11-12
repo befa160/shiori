@@ -12,11 +12,16 @@ export function renderAt(path: string) {
   return { ...render(<App router={router} queryClient={queryClient} />), router }
 }
 
-/** Remplace `fetch` : chaque URL `/api/...` reçoit la réponse donnée, une URL inconnue un 404. */
+/** Remplace `fetch` : chaque URL `/api/...` reçoit la réponse donnée, une URL inconnue un 404.
+ * Les réglages répondent « français » sauf si le test les fournit. */
 export function mockApi(answers: Record<string, () => Response | Promise<Response>>) {
+  const all: Record<string, () => Response | Promise<Response>> = {
+    '/api/settings': () => json({ language: 'fr' }),
+    ...answers,
+  }
   const fetch = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString()
-    const answer = answers[url]
+    const answer = all[url]
     return answer ? answer() : json({ code: 'not_found', message: 'introuvable' }, 404)
   })
   vi.stubGlobal('fetch', fetch)
