@@ -249,15 +249,6 @@ describe('double page', () => {
     expect(shown()).toEqual(['Page 2 sur 6', 'Page 3 sur 6'])
     await userEvent.keyboard('{Tab}')
     await userEvent.click(screen.getByRole('button', { name: 'Affichage' }))
-    await screen.findByRole('button', { name: "Décaler d'une page" })
-    // Toucher la page pour fermer le panneau ne la tourne pas.
-    fireEvent.pointerDown(main(), { pointerType: 'touch', pointerId: 9, clientX: 850, clientY: 300 })
-    fireEvent.pointerUp(main(), { pointerType: 'touch', pointerId: 9, clientX: 850, clientY: 300 })
-    expect(shown()).toEqual(['Page 2 sur 6', 'Page 3 sur 6'])
-    // Selon le moment, Radix a déjà refermé le panneau sur ce toucher extérieur : on le rouvre.
-    if (!screen.queryByRole('button', { name: "Décaler d'une page" })) {
-      await userEvent.click(screen.getByRole('button', { name: 'Affichage' }))
-    }
     await userEvent.click(await screen.findByRole('button', { name: "Décaler d'une page" }))
     // Décalé : la page 2 est seule, la 3 démarre la paire suivante.
     expect(shown()).toEqual(['Page 2 sur 6'])
@@ -291,6 +282,21 @@ describe('double page', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Affichage' }))
     await userEvent.click(await screen.findByRole('radio', { name: 'Entières' }))
     expect(shown()).toEqual(['Page 4 sur 6'])
+  })
+})
+
+describe('panneau Affichage ouvert', () => {
+  it('toucher la page pour le fermer ne la tourne pas', async () => {
+    api('ltr', [page(1), page(2), page(3)], 'single')
+    renderAt(`/read/${VOLUME}`)
+    await screen.findByRole('img', { name: 'Page 1 sur 3' })
+    await userEvent.keyboard('{Tab}')
+    await userEvent.click(screen.getByRole('button', { name: 'Affichage' }))
+    await screen.findByRole('radio', { name: 'Simple' })
+    // Côté « page suivante » : le toucher ferme seulement le panneau (Radix, à son rythme).
+    fireEvent.pointerDown(main(), { pointerType: 'touch', pointerId: 9, clientX: 850, clientY: 300 })
+    fireEvent.pointerUp(main(), { pointerType: 'touch', pointerId: 9, clientX: 850, clientY: 300 })
+    expect(img()).toHaveAccessibleName('Page 1 sur 3')
   })
 })
 
