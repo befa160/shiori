@@ -9,9 +9,19 @@ afterEach(() => vi.unstubAllGlobals())
 const library: Library = { id: 1, name: 'Mangas', root: '/m', kind: 'manga', series_count: 2, volume_count: 1 }
 const longName =
   'Une série au titre extrêmement long, choisi pour vérifier que la troncature sur deux lignes tient sur tous les écrans'
+const summary = {
+  library_id: 1,
+  read_count: 0,
+  reading_status: 'unread',
+  publication_status: null,
+  created_at: '2026-11-12T00:00:00.000Z',
+  last_read_at: null,
+  cover_page_id: null,
+  resume_volume_id: null,
+} as const
 const series: SeriesSummary[] = [
-  { id: 7, name: 'Toriko', volume_count: 1, cover_page_id: null },
-  { id: 8, name: longName, volume_count: 3, cover_page_id: null },
+  { ...summary, id: 7, name: 'Toriko', volume_count: 1 },
+  { ...summary, id: 8, name: longName, volume_count: 3 },
 ]
 const settings = { reading_mode: 'rtl', page_layout: 'auto', reading_mode_override: null, page_layout_override: null } as const
 const detail: SeriesDetail = {
@@ -19,6 +29,7 @@ const detail: SeriesDetail = {
   library_id: 1,
   name: 'Toriko',
   folder: 'Toriko',
+  publication_status: null,
   settings,
   volumes: [
     { volume_id: 'a', kind: 'volume', number: 1, number_end: null, status: 'ok', page_count: 200, cover_page_id: null, file_name: 'Toriko T01.cbz', progress: { page_id: 'p', ordinal: 199, page_count: 200, finished: true, updated_at: '' } },

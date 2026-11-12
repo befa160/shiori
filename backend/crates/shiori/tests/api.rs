@@ -485,3 +485,102 @@ async fn other_paths_are_the_web_front() {
     let kind = response.headers()["content-type"].to_str().unwrap();
     assert!(kind.starts_with("text/html"), "{kind}");
 }
+
+#[tokio::test]
+async fn library_series_continue_and_publication_status() {
+    let f = fixture().await;
+    let id = create(&f).await;
+    scan_library(&f, id).await;
+
+    let (status, all) = get(&f.app, "/api/series").await;
+    assert_eq!(status, StatusCode::OK);
+    let serie_a = all
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["name"] == "Série A")
+        .unwrap()
+        .clone();
+    assert_eq!(serie_a["library_id"], id);
+    assert_eq!(serie_a["reading_status"], "unread");
+    assert_eq!(serie_a["publication_status"], Value::Null);
+    let (_, filtered) = get(&f.app, &format!("/api/series?library_id={id}")).await;
+    assert_eq!(filtered, all);
+    let (status, _) = get(&f.app, "/api/series?library_id=999").await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, err) = get(&f.app, "/api/series?bibliotheque=1").await;
+    assert_eq!(
+        (status, err["code"].as_str()),
+        (StatusCode::BAD_REQUEST, Some("invalid_query"))
+    );
+
+    // Rien de commencé, puis le tome 1 ouvert à sa deuxième page.
+    let (_, empty) = get(&f.app, "/api/continue").await;
+    assert_eq!(empty, json!([]));
+    let volume = serie_a["resume_volume_id"].as_str().unwrap();
+    let (_, pages) = get(&f.app, &format!("/api/volumes/{volume}/pages")).await;
+    let body = json!({ "page_id": pages[1]["id"] }).to_string();
+    let (status, _) = call(
+        &f.app,
+        "PUT",
+        &format!("/api/volumes/{volume}/progress"),
+        Some(&body),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, items) = get(&f.app, "/api/continue?limit=0").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(items[0]["series_id"], serie_a["id"]);
+    assert_eq!(items[0]["volume"]["volume_id"], volume);
+    assert_eq!(items[0]["volume"]["progress"]["ordinal"], 1);
+    let (status, _) = get(&f.app, "/api/continue?limit=abc").await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    // Statut de publication : modifié, inchangé si absent, effacé par `null`.
+    let uri = format!("/api/series/{}", serie_a["id"]);
+    let (status, detail) = call(
+        &f.app,
+        "PATCH",
+        &uri,
+        Some(r#"{"publication_status":"completed"}"#),
+    )
+    .await;
+    assert_eq!(
+        (status, &detail["publication_status"]),
+        (StatusCode::OK, &json!("completed"))
+    );
+    let (_, detail) = call(&f.app, "PATCH", &uri, Some("{}")).await;
+    assert_eq!(detail["publication_status"], "completed");
+    let (_, all) = get(&f.app, "/api/series").await;
+    assert!(
+        all.as_array()
+            .unwrap()
+            .iter()
+            .any(|s| s["publication_status"] == "completed")
+    );
+    let (_, detail) = call(
+        &f.app,
+        "PATCH",
+        &uri,
+        Some(r#"{"publication_status":null}"#),
+    )
+    .await;
+    assert_eq!(detail["publication_status"], Value::Null);
+    for bad in [
+        r#"{"publication_status":"fini"}"#,
+        r#"{"statut":"completed"}"#,
+    ] {
+        let (status, err) = call(&f.app, "PATCH", &uri, Some(bad)).await;
+        assert_eq!(
+            (status, err["code"].as_str()),
+            (StatusCode::BAD_REQUEST, Some("invalid_body")),
+            "{bad}"
+        );
+    }
+    for body in ["{}", r#"{"publication_status":null}"#] {
+        let (status, _) = call(&f.app, "PATCH", "/api/series/999", Some(body)).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
+    }
+    let (status, _) = call(&f.app, "PATCH", "/api/series/abc", Some("{}")).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
