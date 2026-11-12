@@ -11,7 +11,8 @@ export default defineConfig({
   // Le binaire de debug encode une page AVIF en 2 à 3 s : on vérifie la justesse, pas la vitesse.
   timeout: 180_000,
   expect: { timeout: 30_000 },
-  retries: process.env.CI ? 1 : 0,
+  // Pas de nouvel essai : un test instable doit se voir, pas passer au second coup.
+  retries: 0,
   reporter: process.env.CI ? [['github'], ['list']] : 'list',
   use: {
     ...devices['Desktop Chrome'],

@@ -79,8 +79,13 @@ async function readThrough(page: Page, file: string, next: 'ArrowLeft' | 'ArrowR
     for (const n of await checkShown(page, file)) seen.add(n)
     const before = await announced(page)
     await page.keyboard.press(next)
-    // Dernière vue : la flèche n'avance plus (elle montre les commandes).
-    if ((await announced(page)) === before) break
+    // La page change dans une transition (React Router) : on attend l'annonce suivante. Sans
+    // changement, c'est la dernière vue (la flèche montre les commandes) ; une flèche perdue en
+    // cours de route ferait échouer le contrôle des pages vues ci-dessous.
+    const moved = await expect(page.locator('p.sr-only[aria-live]'))
+      .not.toHaveText(before ?? '', { timeout: 5_000 })
+      .then(() => true, () => false)
+    if (!moved) break
   }
   expect([...seen].sort((a, b) => a - b)).toEqual(manifest[file].map((_, i) => i + 1))
 }
@@ -106,7 +111,8 @@ test.describe('invariant de lecture : chaque page affichée est la bonne image',
     await page.goto(`/read/${all['E2E Manga T01.cbz'].volume_id}`)
     await page.locator('main img').first().waitFor()
     await page.keyboard.press('ArrowLeft')
-    // Après la couverture seule : deux pages côte à côte.
+    // Après la couverture seule : deux pages côte à côte (attendues : la page change en transition).
+    await expect(page.locator('main img')).toHaveCount(2)
     expect(await checkShown(page, 'E2E Manga T01.cbz')).toHaveLength(2)
     await page.keyboard.press('Home')
     await readThrough(page, 'E2E Manga T01.cbz', 'ArrowLeft')
@@ -143,9 +149,9 @@ test('reprend à la page lue après un rechargement, puis passe au tome suivant'
   await page.keyboard.press('ArrowLeft')
   // Attendue seulement maintenant : l'enregistrement de la page 1 (1 s après l'ouverture, pendant
   // l'encodage de la première image) ne doit pas passer pour celui de la page atteinte.
-  const saved = page.waitForResponse((r) => r.request().method() === 'PUT' && r.url().endsWith('/progress'))
+  await page.waitForResponse((r) => r.request().method() === 'PUT' && r.url().endsWith('/progress'))
+  // Lue après l'enregistrement (1 s plus tard) : l'annonce a fini de suivre les deux flèches.
   const where = await announced(page)
-  await saved
   await page.goto(`/read/${all['E2E Manga T01.cbz'].volume_id}`)
   await page.locator('main img').first().waitFor()
   expect(await announced(page)).toBe(where)
