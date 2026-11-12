@@ -3,6 +3,7 @@ import { LibrariesPage } from '@/browse/LibrariesPage'
 import { LibraryPage } from '@/browse/LibraryPage'
 import { SeriesPage } from '@/browse/SeriesPage'
 import { WithId } from '@/browse/parts'
+import { AdminPage } from '@/pages/AdminPage'
 import { Layout } from '@/pages/Layout'
 import { LoadFailed, NotFound } from '@/pages/NotFound'
 
@@ -24,6 +25,7 @@ export const routes: RouteObject[] = [
       { index: true, element: <LibrariesPage /> },
       { path: 'libraries/:id', element: <WithId>{(id) => <LibraryPage id={id} />}</WithId> },
       { path: 'series/:id', element: <WithId>{(id) => <SeriesPage id={id} />}</WithId> },
+      { path: 'admin', element: <AdminPage /> },
       { path: '*', element: <NotFound /> },
     ],
   },

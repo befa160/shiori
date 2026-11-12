@@ -9,6 +9,20 @@ export const en: Translations = {
     home: 'Shiori, home',
     language: 'Language',
     languageNotSaved: 'Language not saved, try again later',
+    skip: 'Skip to content',
+    navigation: 'Main navigation',
+    collapse: 'Collapse menu',
+    expand: 'Expand menu',
+  },
+  nav: {
+    home: 'Home',
+    libraries: 'Libraries',
+    admin: 'Administration',
+  },
+  admin: {
+    title: 'Administration',
+    language: 'Interface language',
+    languageHelp: 'Saved on the server: it applies to all your devices.',
   },
   loadFailed: {
     title: 'This screen could not be displayed',
