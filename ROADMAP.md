@@ -8,7 +8,7 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 | 0 | Outillage (Rust, structure, Ponytail, Graphify, UI/UX Pro Max, MCP shadcn + Playwright) | ✅ |
 | 1 | CLI de scan d'intégrité + schéma SQLite + CI linux/windows, puis graphe Graphify | ✅ |
 | 2 | API axum + streaming/redimensionnement des images + parseur de noms + job de scan + API d'administration des scans + CBR | ✅ |
-| 3 | Lecteur web (sens de lecture, webtoon, doubles pages) + front embarqué + progression de lecture | ❓ plan proposé |
+| 3 | Lecteur web (sens de lecture, webtoon, doubles pages) + front embarqué + progression de lecture | 🚧 plan validé |
 | 4 | Bibliothèque façon Plex + statuts/filtres + menu d'administration (scans, journaux) + DESIGN_SYSTEM.md | ⏳ |
 | 5 | Métadonnées web + édition manuelle | ⏳ |
 | 6 | Distribution : image Docker, PWA finalisée, binaires Linux/Windows en release, Dependabot, documentation (technique, installation, fonctionnelle) | ⏳ |
@@ -529,7 +529,7 @@ Arrêt propre sur Ctrl-C (`with_graceful_shutdown`) : un scan en cours est annul
 - **Q8 Largeurs** ✅ : `160, 320, 480, 640, 800, 1080, 1280, 1600, 2048`.
 - **Q10 Réseau** ✅ : pas d'authentification en phase 2, écoute sur `127.0.0.1` par défaut, ouverture au réseau par `--listen`.
 
-## Phase 3 : lecteur web (plan proposé le 2026-11-12)
+## Phase 3 : lecteur web (plan validé le 2026-11-12)
 
 ### Objectif
 
@@ -623,7 +623,7 @@ En-têtes du front : fichiers de `assets/` (noms avec hash de Vite) en `Cache-Co
 - **Route** `/read/:volumeId`, plein écran, barre d'outils masquée ; un tap au centre l'affiche. Bouton « Retour » explicite (principe PWA de CLAUDE.md).
 - **Modes** : `rtl` (manga), `ltr` (BD), `vertical` (webtoon). Mode et disposition se changent dans la barre d'outils et sont retenus pour la série (`PATCH /settings`).
 - **Disposition en mode paginé** : `single`, `double`, `auto` (double en paysage, simple en portrait). En double : la couverture (ordinal 0) seule, une page plus large que haute toujours seule, les autres par deux dans le sens de lecture. Un bouton « décaler d'une page » corrige un tome dont les doubles pages tombent mal.
-- **Doubles pages en mode simple** (Q14) : affichées en entier, ajustées à l'écran, ou coupées en deux moitiés successives (droite puis gauche en `rtl`). La coupe se fait côté client sur la même image (même URL immuable, rien de nouveau côté serveur).
+- **Doubles pages en mode simple** (Q14) : **coupées par défaut en deux moitiés successives** (droite puis gauche en `rtl`, gauche puis droite en `ltr`), pour ne pas avoir à tourner la tablette ; affichage en entier, réduit à l'écran, activable dans la barre d'outils. La coupe se fait côté client sur la même image (même URL immuable, rien de nouveau côté serveur) ; chaque moitié compte comme une vue, la progression enregistre la page.
 - **Calcul des vues** dans des fonctions pures (`views(pages, mode, layout, orientation, offset)` → suite de vues de 1 ou 2 pages) : c'est là que vit toute la logique, testée à part, table de cas comme le parseur de noms.
 - **Images** : largeur demandée = la plus petite de la liste fixe ≥ largeur affichée × `devicePixelRatio` (une page AVIF ou plus étroite que demandé : l'originale, comme le serveur le fait déjà). Format AVIF ; sur `render_failed`, repli sur l'originale. Préchargement des 2 vues suivantes et de la précédente. Place réservée par `aspect-ratio` d'après `width`/`height` du scan.
 - **Erreurs à leur place** : une page `broken` (`422 page_broken`), un fichier changé (`409 volume_changed`), un tome introuvable (`410 volume_unavailable`)… s'affichent comme une carte d'erreur à l'emplacement de la page, avec le code et un message en français. Le lecteur ne saute jamais une page et ne répète jamais la précédente.
@@ -656,15 +656,13 @@ Trois écrans simples pour atteindre le lecteur : bibliothèques, séries d'une 
 - [ ] **3.9** `test/reader-e2e` : Playwright dans la CI, invariant de lecture dans le navigateur, captures aux quatre tailles et corrections d'alignement.
 - [ ] **3.10** `chore/phase3-wrap` : essai réel sur tablette (ou sa taille), README à jour, bilan de phase, `/graphify . --update`.
 
-### Questions de la phase 3
+### Questions de la phase 3 (résolues le 2026-11-12)
 
-Bloquantes (à trancher avant le lot 3.3) :
+- **Q11 Progression** ✅ : **côté serveur**, en base (un seul utilisateur implicite tant qu'il n'y a pas de comptes), pour reprendre la même page sur la tablette et sur le PC.
+- **Q12 Mode par défaut** ✅ : **type de bibliothèque** choisi à sa création (`manga` → droite à gauche, `comics` → gauche à droite, `webtoon` → vertical) ; un réglage par série l'emporte.
+- **Q14 Doubles pages en mode simple** ✅ : **coupées en deux moitiés successives par défaut** (« c'est pénible de tourner la tablette ») ; affichage en entier activable dans la barre d'outils.
 
-- **Q11 Progression** ❓ : où l'enregistrer ? Proposition : **côté serveur**, en base (un seul utilisateur implicite tant qu'il n'y a pas de comptes), pour reprendre la même page sur la tablette et sur le PC. Autre choix : dans le navigateur seulement (`localStorage`), plus simple mais propre à chaque appareil.
-- **Q12 Mode par défaut** ❓ : quel sens de lecture quand la série n'a pas de réglage ? Proposition : un **type de bibliothèque** choisi à sa création (`manga` → droite à gauche, `comics` → gauche à droite, `webtoon` → vertical), puis un réglage par série qui l'emporte. Autre choix : un seul défaut global (droite à gauche).
-- **Q14 Doubles pages en mode simple** ❓ : par défaut, les afficher **en entier** (réduites à l'écran) ou **coupées en deux moitiés** successives ? Proposition : en entier par défaut, coupe activable dans la barre d'outils.
-
-Non bloquantes (propositions retenues sauf avis contraire) :
+Propositions retenues :
 
 - **Q13 Disposition par défaut** : `auto` (double en paysage, simple en portrait), couverture seule.
 - **Q15 Zoom** : double tap ×2 et déplacement en mode paginé, pincement natif en vertical, dans le lot 3.8.
@@ -707,3 +705,4 @@ L'ordre de lecture ne dépend jamais de l'ordre dans l'archive : le lecteur reç
 - 2026-11-11 : plan de la phase 2 validé : CBR en phase 2 avec `rars` (lecture directe des RAR non solid, cache d'extraction des solid), images AVIF + JPEG en Rust pur, un dossier par série, défauts Q7, Q8, Q10 retenus.
 - 2026-11-12 : CBR solid servi depuis un cache d'extraction en rotation (plafond partagé avec les rendus, le moins récemment lu part en premier, jamais le dernier tome lu), validé sur un vrai CBR solid WinRAR ; phase 2 terminée.
 - 2026-11-12 : plan de la phase 3 proposé (lecteur web, front embarqué, progression), en attente de validation (Q11, Q12, Q14 bloquantes).
+- 2026-11-12 : plan de la phase 3 validé : progression côté serveur (Q11), type de bibliothèque qui donne le sens de lecture par défaut (Q12), doubles pages coupées en deux moitiés par défaut en mode simple (Q14) ; défauts Q13, Q15 à Q18 retenus.
