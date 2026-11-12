@@ -10,6 +10,11 @@ export const en: Translations = {
     language: 'Language',
     languageNotSaved: 'Language not saved, try again later',
   },
+  loadFailed: {
+    title: 'This screen could not be displayed',
+    hint: 'After a Shiori update, reloading the page is enough. If the error comes back, the server may be unreachable.',
+    reload: 'Reload',
+  },
   notFound: {
     title: 'Page not found',
     home: 'Back to home',

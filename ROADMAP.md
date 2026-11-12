@@ -8,7 +8,7 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 | 0 | Outillage (Rust, structure, Ponytail, Graphify, UI/UX Pro Max, MCP shadcn + Playwright) | ✅ |
 | 1 | CLI de scan d'intégrité + schéma SQLite + CI linux/windows, puis graphe Graphify | ✅ |
 | 2 | API axum + streaming/redimensionnement des images + parseur de noms + job de scan + API d'administration des scans + CBR | ✅ |
-| 3 | Lecteur web (sens de lecture, webtoon, doubles pages) + front embarqué + progression de lecture | 🚧 plan validé |
+| 3 | Lecteur web (sens de lecture, webtoon, doubles pages) + front embarqué + progression de lecture | ✅ |
 | 4 | Bibliothèque façon Plex + statuts/filtres + menu d'administration (scans, journaux) + DESIGN_SYSTEM.md | ⏳ |
 | 5 | Métadonnées web + édition manuelle | ⏳ |
 | 6 | Distribution : image Docker, PWA finalisée, binaires Linux/Windows en release, Dependabot, documentation (technique, installation, fonctionnelle) | ⏳ |
@@ -529,7 +529,7 @@ Arrêt propre sur Ctrl-C (`with_graceful_shutdown`) : un scan en cours est annul
 - **Q8 Largeurs** ✅ : `160, 320, 480, 640, 800, 1080, 1280, 1600, 2048`.
 - **Q10 Réseau** ✅ : pas d'authentification en phase 2, écoute sur `127.0.0.1` par défaut, ouverture au réseau par `--listen`.
 
-## Phase 3 : lecteur web (plan validé le 2026-11-12)
+## Phase 3 : lecteur web (plan validé le 2026-11-12, terminée le 2026-11-12)
 
 ### Objectif
 
@@ -740,8 +740,32 @@ Trois écrans simples pour atteindre le lecteur : bibliothèques, séries d'une 
   - Review Ponytail, corrigé : le test de reprise attend l'enregistrement de la page atteinte (et non celui de la page 1, parti pendant l'encodage de la première image) ; la préparation arrête le serveur si une étape échoue et échoue tout de suite si le serveur s'arrête (port déjà pris : vérifié) ; chemin des captures correct même avec un espace ; type simplifié.
   - Instabilité vue au premier passage en CI (réussi au second essai) : le test lisait l'annonce juste après la touche, alors que React Router change la page dans une transition ; sur la machine de la CI, plus lente, il lisait encore l'ancienne et croyait le tome fini. Les tests attendent maintenant le changement (même correction pour le test en paysage et celui de reprise), et la CI ne refait plus d'essai : une instabilité doit se voir.
   - Essai : six tests verts trois fois de suite en local. Le binaire de debug encode une page AVIF en 2 à 3 s : délais longs, les tests vérifient la justesse et non la vitesse.
-- [ ] **3.10** `chore/phase3-wrap` : essai réel sur tablette (ou sa taille), README à jour, bilan de phase, `/graphify . --update`.
-  - **Allègement du front** (demandé le 2026-11-12). Le build de Vite **minifie déjà** le JavaScript et le CSS (vérifié : 53 lignes, noms raccourcis) ; restent : compression des réponses par le serveur (gzip ou brotli : 600 ko → environ 190 ko transférés en gzip ; `tower-http` avec un compresseur pur Rust, ou fichiers précompressés au build), découpage par écran (le lecteur chargé seulement à l'ouverture d'un tome) et analyse du paquet pour repérer les dépendances lourdes.
+- [x] **3.10** `chore/phase3-wrap` : essai réel sur tablette (ou sa taille), README à jour, bilan de phase, `/graphify . --update`.
+  - **Allègement du front** (demandé le 2026-11-12). Le build de Vite minifiait déjà le JavaScript et le CSS.
+    - Analyse du paquet (attribution des octets par la carte des sources) : `react-dom` 202 ko, `react-router` 92 ko, `i18next` 48 ko, `sonner`, TanStack Query et le virtualiseur environ 32 ko chacun ; pas de dépendance superflue, ce sont les briques de base.
+    - **Compression des réponses** (`tower-http`, gzip et brotli en Rust pur, sans bibliothèque C) : JS principal 587 ko → 184 ko transférés, JSON des pages réduit de plus de 4 fois ; images exclues (déjà compressées). Test d'intégration.
+    - **Lecteur chargé à la demande** (route `lazy` de React Router) : 76 ko (25 ko compressés) sortis de l'écran d'accueil (586 ko au lieu de 659). Si ce fichier manque (Shiori mis à jour pendant qu'un onglet était ouvert, serveur coupé) ou si l'écran plante, un écran traduit le dit sans présumer de la cause et propose de recharger, au lieu de l'erreur brute de React Router.
+  - **Essai tactile à la taille de la tablette** (test e2e permanent, Chromium en 800×1280 avec écran tactile) : tap sur les côtés dans le sens manga, balayage au doigt, commandes au tap central, zoom au double tap, déplacement au doigt dans la page zoomée sans la tourner, sortie du zoom. Essai sur l'appareil réel laissé à l'utilisateur.
+  - README : état, lancement (front intégré, déclaration d'une bibliothèque par l'API en attendant la phase 4), gestes du lecteur, tests du front.
+  - Review Ponytail, corrigé : le texte de l'écran de secours ne présume plus d'une mise à jour (il couvre aussi un plantage de l'écran) ; le README précise que l'`id` de la bibliothèque à scanner est celui renvoyé à sa création.
+
+### Bilan de la phase 3
+
+- Livré :
+  - **Front embarqué** dans le binaire (React 19, Vite 8, Tailwind 4, shadcn/ui), repli SPA, assets immuables, réponses compressées.
+  - **Navigation provisoire** : bibliothèques, séries, tomes avec leur progression et leurs problèmes de scan.
+  - **Interface bilingue** français / anglais, langue enregistrée sur le serveur, erreurs de l'API traduites d'après leur code stable, notifications.
+  - **Lecteur paginé** : sens manga ou BD, page à la taille de l'écran (largeur fixe du serveur), erreurs à leur place, préchargement, clavier, tap, balayage, pincement ; **double page** (auto selon l'orientation, couverture seule, décalage, doubles pages coupées en deux moitiés en portrait) ; **zoom** au double tap.
+  - **Mode webtoon** virtualisé, place réservée d'après le scan, essayé sur 12 760 bandes.
+  - **Progression** enregistrée sur le serveur et reprise ; sens et disposition retenus par série ; tome suivant.
+- Validé : webtoon réel de 2 Go (12 760 bandes), tome 67 en RAR solid ; **invariant de lecture vérifié dans le navigateur** (couleur de chaque page affichée) en portrait, paysage, RAR solid et webtoon ; captures aux quatre tailles à chaque PR.
+- Qualité : 185 tests Rust, 105 tests Vitest (99,3 % des lignes, 96,1 % des branches), 7 tests de bout en bout dans Chromium ; CI Linux / Windows / macOS et e2e verte. 12 PR (#21 à #32), chacune passée en review Ponytail ; outils UI (UI/UX Pro Max, MCP shadcn, captures Playwright) sur chaque lot d'interface.
+- Reste ouvert pour la suite :
+  - le binaire de debug encode une page AVIF en 2 à 3 s (le binaire de release est rapide) : en développement, les premières pages d'un tome arrivent lentement ;
+  - compression à la volée au niveau par défaut (brotli ≈ gzip) ; des fichiers précompressés au build gagneraient encore un peu ;
+  - le bouton « Tome suivant » mène aussi à un tome marqué en erreur s'il suit dans la série ;
+  - décalage et coupe des doubles pages ne sont pas retenus (réglages de la séance) ;
+  - essai sur la tablette réelle à faire par l'utilisateur.
 
 ### Questions de la phase 3 (résolues le 2026-11-12)
 
