@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use shiori::job::{ScanRequest, Scanner, StartError};
-use shiori_db::{Db, Library};
+use shiori_db::{Db, Library, LibraryKind};
 use shiori_testkit::{STORED, fixtures, page_color, png, write_zip};
 use sqlx::Row;
 
@@ -24,7 +24,10 @@ impl Fixture {
         fixtures::unpadded(&root.join("Série A"));
         fixtures::manga(&root.join("Série A"));
         fixtures::bad_crc(&root);
-        let library = db.create_library("Manga", &root).await.unwrap();
+        let library = db
+            .create_library("Manga", &root, LibraryKind::Manga)
+            .await
+            .unwrap();
         Self { dir, db, library }
     }
 

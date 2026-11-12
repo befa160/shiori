@@ -658,7 +658,14 @@ Trois écrans simples pour atteindre le lecteur : bibliothèques, séries d'une 
   - Sans `web/dist` (compilation du backend seul, CI) : `503` et une page qui explique `npm run build`. En debug les fichiers sont relus sur le disque à chaque requête : reconstruire le front suffit, sans recompiler.
   - **Vérifié** : binaire release construit, puis `web/dist` déplacé : le front est toujours servi (intégré), `/read/abc` donne `index.html`, l'asset haché est immuable, un vieil asset fait 404, `If-None-Match` donne 304.
   - Pas de binaire de release dans la CI aujourd'hui : construire le front avant `cargo build --release` sera une étape du job de release (phase 6, distribution).
-- [ ] **3.3** `feat/reading-progress` : migration 0004, `kind` des bibliothèques, routes de progression et de réglages, progression dans les réponses des séries et des tomes.
+- [x] **3.3** `feat/reading-progress` : migration 0004, `kind` des bibliothèques, routes de progression et de réglages, progression dans les réponses des séries et des tomes.
+  - `shiori-db::reading` : `LibraryKind` (manga → `rtl`, comics → `ltr`, webtoon → `vertical`), `ReadingMode`, `PageLayout` (défaut `auto`), `ReadingSettings` (valeurs appliquées + ce que la série impose, `null` = défaut de la bibliothèque), `Progress`.
+  - Progression : `PUT` refuse une page d'un autre tome (`422 page_not_in_volume`) ; atteindre la dernière page marque le tome lu, et il le reste si l'on revient en arrière (seul `DELETE` l'efface) ; `updated_at` servira à « Continuer la lecture » (phase 4).
+  - `PATCH /api/series/{id}/settings` : champ absent = inchangé, `null` = retour au défaut, champ inconnu refusé (`400 invalid_body`).
+  - Réglages d'un tome (`GET /api/volumes/{id}`) : ceux de sa première série par chemin ; un tome rattaché à aucune série prend le défaut d'une bibliothèque de manga.
+  - `GET /api/series/{id}` : `settings` et `progress` par tome (absent si jamais ouvert) ; `GET /api/libraries` et `POST` : `kind` (`manga` si absent). Les bibliothèques existantes deviennent `manga`.
+  - Types TypeScript du front alignés sur ces réponses.
+  - Couverture : 97,3 % des lignes, 91,3 % des branches (`reading.rs` à 100 %).
 - [ ] **3.4** `feat/browse-minimal` : les trois écrans provisoires.
 - [ ] **3.5** `feat/reader-paged` : lecteur paginé simple (`rtl`/`ltr`), choix de la largeur, préchargement, repli sur l'originale, cartes d'erreur, navigation (tap, balayage, clavier, curseur).
 - [ ] **3.6** `feat/reader-double` : disposition double et `auto`, couverture et doubles pages seules, décalage, coupe des doubles pages en mode simple.

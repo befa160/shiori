@@ -11,7 +11,7 @@ use std::path::Path;
 use shiori_core::{ParsedName, compare_in_series, parse_name};
 use sqlx::Row;
 
-use crate::{Db, Error, location_key, to_db};
+use crate::{Db, Error, LibraryKind, from_db, location_key, to_db};
 
 /// Bibliothèque : un nom et un dossier racine.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -20,6 +20,7 @@ pub struct Library {
     pub name: String,
     /// Chemin absolu, séparateurs `/`, sans `/` final (comme les clés d'emplacement).
     pub root: String,
+    pub kind: LibraryKind,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -52,7 +53,12 @@ fn root_key(root: &Path) -> String {
 }
 
 impl Db {
-    pub async fn create_library(&self, name: &str, root: &Path) -> Result<Library, LibraryError> {
+    pub async fn create_library(
+        &self,
+        name: &str,
+        root: &Path,
+        kind: LibraryKind,
+    ) -> Result<Library, LibraryError> {
         let name = name.trim();
         if name.is_empty() {
             return Err(LibraryError::EmptyName);
@@ -71,13 +77,14 @@ impl Db {
             }
         }
         let sql = concat!(
-            "INSERT INTO libraries (name, root, created_at) VALUES (?, ?, ",
+            "INSERT INTO libraries (name, root, kind, created_at) VALUES (?, ?, ?, ",
             now!(),
             ") RETURNING id"
         );
         let id = sqlx::query(sql)
             .bind(name)
             .bind(&key)
+            .bind(to_db(&kind))
             .fetch_one(&self.pool)
             .await?
             .get("id");
@@ -85,21 +92,24 @@ impl Db {
             id,
             name: name.to_owned(),
             root: key,
+            kind,
         })
     }
 
     pub async fn libraries(&self) -> Result<Vec<Library>, Error> {
-        let rows = sqlx::query("SELECT id, name, root FROM libraries ORDER BY name, id")
+        let rows = sqlx::query("SELECT id, name, root, kind FROM libraries ORDER BY name, id")
             .fetch_all(&self.pool)
             .await?;
-        Ok(rows
-            .iter()
-            .map(|r| Library {
-                id: r.get("id"),
-                name: r.get("name"),
-                root: r.get("root"),
+        rows.iter()
+            .map(|r| {
+                Ok(Library {
+                    id: r.get("id"),
+                    name: r.get("name"),
+                    root: r.get("root"),
+                    kind: from_db(r.get("kind"))?,
+                })
             })
-            .collect())
+            .collect()
     }
 
     /// Supprime une bibliothèque, ses séries et ses emplacements. Les tomes et les pages

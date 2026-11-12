@@ -33,6 +33,7 @@ macro_rules! now {
 
 mod browse;
 mod library;
+mod reading;
 mod runs;
 
 pub use browse::{
@@ -40,6 +41,9 @@ pub use browse::{
     VolumeDetail, VolumeLocation,
 };
 pub use library::{Library, LibraryError};
+pub use reading::{
+    LibraryKind, PageLayout, Progress, ReadingMode, ReadingSettings, SaveProgress, SettingsChange,
+};
 pub use runs::{LogLine, RunCounts, RunFilter, RunOrigin, RunStatus, RunSummary};
 
 pub struct Db {

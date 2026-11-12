@@ -13,13 +13,14 @@ use shiori_core::{
 use sqlx::Row;
 use sqlx::sqlite::SqliteRow;
 
-use crate::{Db, Error, from_db, stamp};
+use crate::{Db, Error, LibraryKind, Progress, ReadingSettings, from_db, stamp};
 
 #[derive(Debug, Serialize)]
 pub struct LibrarySummary {
     pub id: i64,
     pub name: String,
     pub root: String,
+    pub kind: LibraryKind,
     pub series_count: i64,
     pub volume_count: i64,
 }
@@ -39,6 +40,7 @@ pub struct SeriesDetail {
     pub library_id: i64,
     pub name: String,
     pub folder: Option<String>,
+    pub settings: ReadingSettings,
     pub volumes: Vec<SeriesVolume>,
 }
 
@@ -53,6 +55,9 @@ pub struct SeriesVolume {
     pub page_count: i64,
     pub cover_page_id: Option<String>,
     pub file_name: String,
+    /// Rempli seulement dans le détail d'une série.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub progress: Option<Progress>,
 }
 
 #[derive(Debug, Serialize)]
@@ -65,6 +70,9 @@ pub struct VolumeDetail {
     pub scanned_at: String,
     pub locations: Vec<VolumeLocation>,
     pub issues: Vec<Issue>,
+    /// Réglages de sa série (la première par chemin), défaut d'une bibliothèque de manga sinon.
+    pub settings: ReadingSettings,
+    pub progress: Option<Progress>,
 }
 
 #[derive(Debug, Serialize)]
@@ -154,6 +162,7 @@ fn located(row: &SqliteRow) -> Result<Located, Error> {
             page_count: row.get("page_count"),
             cover_page_id: row.get("cover"),
             file_name,
+            progress: None,
         },
         path,
     })
@@ -178,7 +187,7 @@ fn by_name(a: &str, b: &str) -> Ordering {
 impl Db {
     pub async fn library_summaries(&self) -> Result<Vec<LibrarySummary>, Error> {
         let rows = sqlx::query(
-            "SELECT b.id, b.name, b.root,
+            "SELECT b.id, b.name, b.root, b.kind,
                     (SELECT COUNT(*) FROM series s WHERE s.library_id = b.id) AS series_count,
                     (SELECT COUNT(DISTINCT l.volume_id) FROM file_locations l
                      WHERE l.library_id = b.id) AS volume_count
@@ -186,16 +195,18 @@ impl Db {
         )
         .fetch_all(&self.pool)
         .await?;
-        Ok(rows
-            .iter()
-            .map(|r| LibrarySummary {
-                id: r.get("id"),
-                name: r.get("name"),
-                root: r.get("root"),
-                series_count: r.get("series_count"),
-                volume_count: r.get("volume_count"),
+        rows.iter()
+            .map(|r| {
+                Ok(LibrarySummary {
+                    id: r.get("id"),
+                    name: r.get("name"),
+                    root: r.get("root"),
+                    kind: from_db(r.get("kind"))?,
+                    series_count: r.get("series_count"),
+                    volume_count: r.get("volume_count"),
+                })
             })
-            .collect())
+            .collect()
     }
 
     /// Séries d'une bibliothèque, triées par nom (tri naturel) ; `None` si elle n'existe pas.
@@ -241,13 +252,17 @@ impl Db {
     }
 
     pub async fn series_detail(&self, id: i64) -> Result<Option<SeriesDetail>, Error> {
-        let Some(series) = sqlx::query("SELECT library_id, name, folder FROM series WHERE id = ?")
-            .bind(id)
-            .fetch_optional(&self.pool)
-            .await?
+        let Some(series) = sqlx::query(
+            "SELECT s.library_id, s.name, s.folder, s.reading_mode, s.page_layout, b.kind
+             FROM series s JOIN libraries b ON b.id = s.library_id WHERE s.id = ?",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?
         else {
             return Ok(None);
         };
+        let mut progress = self.progress_in_series(id).await?;
         let rows = sqlx::query(located_volumes!("l.series_id = ?"))
             .bind(id)
             .fetch_all(&self.pool)
@@ -260,15 +275,19 @@ impl Db {
             library_id: series.get("library_id"),
             name: series.get("name"),
             folder: series.get("folder"),
+            settings: ReadingSettings::of(&series)?,
             volumes: in_series_order(rows)
                 .into_iter()
-                .map(|r| r.volume)
+                .map(|r| SeriesVolume {
+                    progress: progress.remove(&r.volume.volume_id),
+                    ..r.volume
+                })
                 .collect(),
         }))
     }
 
-    pub async fn volume_detail(&self, id: &VolumeId) -> Result<Option<VolumeDetail>, Error> {
-        let id = id.to_string();
+    pub async fn volume_detail(&self, volume: &VolumeId) -> Result<Option<VolumeDetail>, Error> {
+        let id = volume.to_string();
         let Some(v) = sqlx::query(
             "SELECT size, format, status, page_count, scanned_at FROM volumes WHERE id = ?",
         )
@@ -309,6 +328,8 @@ impl Db {
             })
         })
         .collect::<Result<_, Error>>()?;
+        let settings = self.volume_settings(&id).await?;
+        let progress = self.progress(volume).await?;
         Ok(Some(VolumeDetail {
             id,
             size: v.get("size"),
@@ -318,6 +339,8 @@ impl Db {
             scanned_at: v.get("scanned_at"),
             locations,
             issues,
+            settings,
+            progress,
         }))
     }
 
