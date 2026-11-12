@@ -35,6 +35,7 @@ shiori-db = { path = "crates/shiori-db" }
 shiori-core = { path = "crates/shiori-core" }
 blake3 = { version = "1.8", default-features = false, features = ["std", "pure"] }
 thiserror = "2.0"
+rars = { version = "0.12", default-features = false }
 zip = { version = "9.5", default-features = false, features = ["deflate-flate2-zlib-rs", "deflate64", "lzma", "xz", "ppmd"] }
 tempfile = "3.27"
 tower = { version = "0.5", features = ["util"] }

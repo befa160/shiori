@@ -10,6 +10,7 @@ fn scanned(status: Status, skipped: bool, codes: &[IssueCode]) -> Scanned {
         report: FileReport {
             path: "x.cbz".into(),
             volume_id: None,
+            format: "cbz",
             size: 0,
             status,
             pages: Vec::new(),
@@ -91,11 +92,18 @@ fn diagnostics_group_codes_and_hide_infos() {
 }
 
 #[test]
-fn only_cbz_files_are_collected_sorted_and_deduplicated() {
+fn only_comic_files_are_collected_sorted_and_deduplicated() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     fs::create_dir_all(root.join("b/sous")).unwrap();
-    for f in ["b/sous/2.cbz", "a.CBZ", "b/1.cbz", "notes.txt", "c.cbr"] {
+    for f in [
+        "b/sous/2.cbz",
+        "a.CBZ",
+        "b/1.cbz",
+        "notes.txt",
+        "c.CbR",
+        "d.rar",
+    ] {
         fs::write(root.join(f), b"x").unwrap();
     }
     let explicit = root.join("notes.txt");
@@ -105,6 +113,7 @@ fn only_cbz_files_are_collected_sorted_and_deduplicated() {
         "a.CBZ".to_string(),
         "b/1.cbz".into(),
         "b/sous/2.cbz".into(),
+        "c.CbR".into(),
         explicit.display().to_string().replace('\\', "/"),
     ];
     assert_eq!(shown, expected);

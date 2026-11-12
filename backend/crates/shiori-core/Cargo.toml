@@ -17,6 +17,7 @@ imagesize.workspace = true
 regex.workspace = true
 serde.workspace = true
 thiserror.workspace = true
+rars.workspace = true
 zip.workspace = true
 
 [dev-dependencies]

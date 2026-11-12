@@ -9,7 +9,10 @@ pub mod integrity;
 pub mod name;
 pub mod order;
 
-pub use archive::{Archive, ArchiveError, CbzArchive, Duplicate, Entry, EntryKind, MAX_ENTRY_SIZE};
+pub use archive::{
+    Archive, ArchiveError, CbzArchive, Duplicate, Entry, EntryKind, MAX_ENTRY_SIZE, RarArchive,
+    is_rar, open as open_archive,
+};
 pub use id::{PageId, ParseIdError, VolumeId};
 pub use integrity::{
     FileReport, Issue, IssueCode, Page, PageStatus, SCANNER_VERSION, ScanOptions, Severity, Status,
