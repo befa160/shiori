@@ -70,6 +70,8 @@ Avant chaque commit : clippy sans avertissement, `cargo fmt` propre, tests verts
 
 ## Direction UI/UX (hors lecteur)
 
+Détail des règles (couleurs, contrastes, composants, états) : `DESIGN_SYSTEM.md`.
+
 Le lecteur est plein écran et immersif (barre d'outils masquée, tap au centre pour l'afficher) et il est exclu des règles ci-dessous.
 
 - Thème sombre natif par défaut : fond `#121212`, cartes/panneaux `#1E1E1E`, survol `#2A2A2A`. Accent ambre `#E5A00D` (amber-500) réservé à l'action principale, aux états actifs et aux barres de progression.
