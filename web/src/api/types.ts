@@ -20,6 +20,9 @@ export interface ReadingSettings {
   page_layout_override: PageLayout | null
 }
 
+/** Réglages qu'une série impose ; champ absent = inchangé. */
+export type SettingsPatch = Partial<Pick<ReadingSettings, 'reading_mode' | 'page_layout'>>
+
 export interface Progress {
   page_id: string
   ordinal: number

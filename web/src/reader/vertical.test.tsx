@@ -32,6 +32,7 @@ beforeEach(() => {
   mockApi({
     [`/api/volumes/${VOLUME}`]: () => json(volume),
     [`/api/volumes/${VOLUME}/pages`]: () => json(strips),
+    [`/api/volumes/${VOLUME}/progress`]: () => json({}),
   })
   scrollTo = vi.fn()
   vi.stubGlobal('scrollTo', scrollTo)
@@ -102,12 +103,37 @@ describe('mode webtoon', () => {
     fireEvent.click(screen.getByRole('main'))
     expect(toolbar).not.toHaveClass('invisible')
     expect(within(toolbar).getByRole('link', { name: 'Retour' })).toHaveAttribute('href', '/')
-    expect(within(toolbar).queryByRole('button', { name: 'Affichage' })).toBeNull()
     const slider = within(toolbar).getByRole('slider', { name: 'Page' })
     slider.focus()
     await userEvent.keyboard('{End}')
     await waitFor(() => expect(scrollTo).toHaveBeenCalledWith({ top: 98 * 1280 + 1200 }))
     await userEvent.keyboard('{Escape}')
     expect(toolbar).toHaveClass('invisible')
+  })
+
+  it('reprend à la bande lue, et marque le tome terminé quand le bas de la dernière bande est à l’écran', async () => {
+    const progress = { page_id: 's50', ordinal: 49, page_count: 100, finished: false, updated_at: '' }
+    mockApi({
+      [`/api/volumes/${VOLUME}`]: () => json({ ...volume, progress }),
+      [`/api/volumes/${VOLUME}/pages`]: () => json(strips),
+      [`/api/volumes/${VOLUME}/progress`]: () => json(progress),
+    })
+    const spy = vi.mocked(globalThis.fetch)
+    renderAt(`/read/${VOLUME}`)
+    await screen.findByRole('main')
+    await waitFor(() => expect(scrollTo).toHaveBeenCalledWith({ top: 48 * 1280 + 1200 }))
+    // Tout en bas : la première bande visible est la 100e moins une, mais le tome est fini.
+    const bottom = 99 * 1280 + 1200 - 768
+    await act(async () => scrollWindow(bottom))
+    await waitFor(
+      () => expect(spy.mock.calls.filter(([, init]) => init?.method === 'PUT').at(-1)?.[1]?.body).toBe('{"page_id":"s100"}'),
+      { timeout: 2000 },
+    )
+  })
+
+  it('en fin de tome, un tome sans série propose le retour', async () => {
+    renderAt(`/read/${VOLUME}`)
+    const end = await screen.findByRole('navigation', { name: 'Fin du tome' })
+    expect(within(end).getByRole('link', { name: 'Retour' })).toHaveAttribute('href', '/')
   })
 })

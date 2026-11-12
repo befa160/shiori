@@ -27,6 +27,7 @@ export function PageView({
   view,
   half,
   strip = false,
+  zoomed = false,
 }: {
   page: PageInfo
   total: number
@@ -34,6 +35,8 @@ export function PageView({
   half?: Half
   /** Bande de webtoon : toute la largeur de la colonne, sans plafond de hauteur à l'écran. */
   strip?: boolean
+  /** Zoomée : deux fois la place de l'écran, sans plafond (on s'y déplace en défilant). */
+  zoomed?: boolean
 }) {
   const { t } = useTranslation()
   const [original, setOriginal] = useState(false)
@@ -45,6 +48,8 @@ export function PageView({
     width,
     aspectRatio: shape.width && shape.height ? `${shape.width} / ${shape.height}` : undefined,
   }
+  // Plafonnée à l'écran, sauf une bande (aussi haute qu'elle l'est) ou une page zoomée.
+  const capped = !strip && !zoomed
   const page_ = t('reader.pageOf', { current: page.ordinal + 1, total })
   const label = half ? `${page_} (${t(`reader.halves.${half}`)})` : page_
   if (error) {
@@ -54,8 +59,8 @@ export function PageView({
         aria-label={`${label} : ${error}`}
         style={{ ...box, aspectRatio: box.aspectRatio ?? '2 / 3' }}
         className={cn(
-          'flex max-w-full items-center justify-center rounded-md border border-destructive/40 bg-card p-6 text-center',
-          !strip && 'max-h-dvh',
+          'flex items-center justify-center rounded-md border border-destructive/40 bg-card p-6 text-center',
+          capped && 'max-h-dvh max-w-full',
         )}
       >
         <p className="text-destructive">{error}</p>
@@ -76,7 +81,7 @@ export function PageView({
   }
   if (half) {
     return (
-      <div style={box} className="max-h-dvh max-w-full overflow-hidden">
+      <div style={box} className={cn('overflow-hidden', capped ? 'max-h-dvh max-w-full' : 'shrink-0')}>
         <img
           src={url}
           alt={label}
@@ -95,7 +100,7 @@ export function PageView({
       alt={label}
       style={box}
       draggable={false}
-      className={cn('max-w-full object-contain select-none', !strip && 'max-h-dvh')}
+      className={cn('object-contain select-none', capped ? 'max-h-dvh max-w-full' : zoomed ? 'shrink-0' : 'max-w-full')}
       onError={onError}
     />
   )

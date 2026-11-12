@@ -1,17 +1,18 @@
 import { useWindowVirtualizer } from '@tanstack/react-virtual'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useSearchParams } from 'react-router'
-import type { PageInfo } from '@/api/types'
-import { PageSlider, Toolbar } from './chrome'
+import { Link, useSearchParams } from 'react-router'
+import { Button } from '@/components/ui/button'
+import { DisplayOptions, PageSlider, Toolbar } from './chrome'
 import { MAX_COLUMN, stripHeight } from './controls'
-import { useChromeKeys, useViewport } from './hooks'
+import { useChromeKeys, useSaveProgress, useViewport } from './hooks'
 import { PageView } from './PageView'
+import type { ReaderProps } from './Reader'
 
 /** Mode webtoon : défilement vertical continu du document. Seules les bandes proches de l'écran
  * existent dans la page (12 760 bandes pour le webtoon réel) ; la place de chacune est réservée
  * d'après le scan, donc rien ne saute. Clavier : le défilement natif du navigateur. */
-export function VerticalPages({ pages, title, back }: { pages: PageInfo[]; title: string; back: string }) {
+export function VerticalPages({ volumeId, pages, title, back, resume, next, onMode }: ReaderProps) {
   const { t, i18n } = useTranslation()
   const number = new Intl.NumberFormat(i18n.language)
   const view = useViewport()
@@ -45,7 +46,7 @@ export function VerticalPages({ pages, title, back }: { pages: PageInfo[]; title
     const first = shownColumn.current === null
     shownColumn.current = column
     virtualizer.measure()
-    const index = pages.findIndex((p) => p.id === params.get('page'))
+    const index = pages.findIndex((p) => p.id === (params.get('page') ?? resume))
     if (index > 0 || !first) jump(Math.max(0, index))
   })
 
@@ -58,6 +59,9 @@ export function VerticalPages({ pages, title, back }: { pages: PageInfo[]; title
     const timer = window.setTimeout(() => setParams({ page: id }, { replace: true }), 300)
     return () => window.clearTimeout(timer)
   }, [current, pages, params, setParams])
+  // Bas de la dernière bande à l'écran : le tome est terminé, même si une autre bande commence plus haut.
+  const atEnd = offset + view.height >= tops[pages.length] - 1
+  useSaveProgress(volumeId, pages[atEnd ? pages.length - 1 : current]?.id)
 
   return (
     <>
@@ -77,12 +81,18 @@ export function VerticalPages({ pages, title, back }: { pages: PageInfo[]; title
           </div>
         ))}
       </main>
+      <nav aria-label={t('reader.endOfVolume')} className="flex flex-col items-center gap-3 px-4 pt-10 pb-[max(2.5rem,env(safe-area-inset-bottom))]">
+        <p className="text-muted-foreground">{t('reader.endOfVolume')}</p>
+        <Button asChild variant={next ? 'default' : 'secondary'}>
+          <Link to={next ? `/read/${next}` : back}>{t(next ? 'reader.nextVolume' : 'reader.back')}</Link>
+        </Button>
+      </nav>
       {/* La bande retenue dans l'adresse (écrite à l'arrêt du défilement), pas la bande visible
           à chaque instant : sinon un lecteur d'écran annoncerait chaque bande traversée. */}
       <p className="sr-only" aria-live="polite">
         {t('reader.pageOf', { current: Math.max(0, pages.findIndex((p) => p.id === params.get('page'))) + 1, total: pages.length })}
       </p>
-      <Toolbar chrome={chrome} title={title} back={back}>
+      <Toolbar chrome={chrome} title={title} back={back} display={<DisplayOptions mode="vertical" onMode={onMode} />}>
         <PageSlider
           dir="ltr"
           total={pages.length}
