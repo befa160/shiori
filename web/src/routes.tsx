@@ -4,9 +4,12 @@ import { LibraryPage } from '@/browse/LibraryPage'
 import { SeriesPage } from '@/browse/SeriesPage'
 import { WithId } from '@/browse/parts'
 import { Layout } from '@/pages/Layout'
+import { ReaderRoute } from '@/reader/Reader'
 import { NotFound } from '@/pages/NotFound'
 
 export const routes: RouteObject[] = [
+  // Plein écran, hors du cadre commun.
+  { path: '/read/:volumeId', element: <ReaderRoute /> },
   {
     path: '/',
     element: <Layout />,

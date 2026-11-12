@@ -44,6 +44,17 @@ export const fr = {
     statusError: 'Erreur',
     statusWarning: 'Avertissement',
   },
+  reader: {
+    back: 'Retour',
+    next: 'Page suivante',
+    previous: 'Page précédente',
+    page: 'Page',
+    pageOf: 'Page {{current}} sur {{total}}',
+    controls: 'Commandes du lecteur',
+    empty: "Ce tome n'a aucune page lisible.",
+    notFound: 'Tome introuvable',
+    pageFailed: "Cette page n'a pas pu être affichée",
+  },
   kinds: {
     manga: 'Manga',
     comics: 'BD / comics',

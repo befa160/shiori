@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router'
 import { useSeries } from '@/api/queries'
 import type { SeriesVolume } from '@/api/types'
 import { Badge } from '@/components/ui/badge'
@@ -33,13 +34,17 @@ export function SeriesPage({ id }: { id: number }) {
   )
 }
 
-// shortcut: ligne non cliquable tant que le lecteur n'existe pas ; elle deviendra un lien vers /read/:volumeId au lot 3.5.
+/** Un tome, entièrement cliquable : ouvre le lecteur. */
 function VolumeRow({ volume }: { volume: SeriesVolume }) {
   const { t, i18n } = useTranslation()
   const label = volumeLabel(volume, t, i18n.language)
   const progress = volume.progress
   return (
-    <li className="relative overflow-hidden rounded-md bg-card px-4 py-3">
+    <li>
+      <Link
+        to={`/read/${volume.volume_id}`}
+        className="relative block overflow-hidden rounded-md bg-card px-4 py-3 transition-colors hover:bg-accent active:bg-muted"
+      >
       <div className="flex min-h-8 items-start gap-3">
         <div className="min-w-0 flex-1">
           <RowTitle>{label}</RowTitle>
@@ -67,6 +72,7 @@ function VolumeRow({ volume }: { volume: SeriesVolume }) {
           className="absolute inset-x-0 bottom-0 h-1 rounded-none"
         />
       )}
+      </Link>
     </li>
   )
 }
