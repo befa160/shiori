@@ -784,6 +784,80 @@ Propositions retenues :
 - **Q21 Qui traduit** ✅ : l'interface, d'après les codes stables de l'API ; serveur et CLI restent en français (le message du serveur sert de secours). Pas de catalogue côté Rust.
 - **Q18 Breakpoint tablette 8" en portrait** (CLAUDE.md) : sans objet en phase 3 (le lecteur en est exclu, la navigation provisoire est une simple liste) ; à valider en phase 4.
 
+## Phase 4 : bibliothèque, navigation et administration (plan validé le 2026-11-12)
+
+### Objectif
+
+Remplacer la navigation provisoire par une vraie bibliothèque façon Plex (grille de couvertures, couverture de repli, « Continuer la lecture », recherche, filtres et tris), poser la navigation définitive (sidebar à partir de `lg`, barre d'onglets en bas en dessous) et piloter bibliothèques et scans depuis l'interface, sans terminal ni appel direct à l'API. `DESIGN_SYSTEM.md` fixe les règles visuelles que ces écrans appliquent.
+
+Hors périmètre : métadonnées web et auteur (phase 5 ; la couverture de repli n'affiche que le titre en attendant), statistiques (Q26, reportées), authentification et rôles (« Plus tard »), scans planifiés.
+
+### Existant réutilisé
+
+- API : bibliothèques (liste, création, suppression), séries d'une bibliothèque avec couverture, détail d'une série avec la progression par tome, toute l'administration des scans (lancer, en cours, annuler, historique, détail, journaux paginés). Miniatures JPEG déjà servies (`?w=320&f=jpeg`, largeurs fixes).
+- Front : cadre commun, i18n, client typé, composants shadcn Badge, Button, Popover, Progress, Select, Skeleton, Slider, Sonner, ToggleGroup.
+
+### Base : migration `0006_library.sql`
+
+```sql
+-- Statut de publication, réglé à la main en phase 4, rempli par les métadonnées en phase 5 (Q23).
+ALTER TABLE series ADD COLUMN publication_status TEXT
+  CHECK (publication_status IN ('ongoing','completed','hiatus','cancelled'));  -- NULL = inconnu
+-- Tri « Récemment ajoutés » (Q27). Écrit explicitement par le scan à la création de la série ;
+-- les séries existantes prennent la date de création de leur bibliothèque.
+ALTER TABLE series ADD COLUMN created_at TEXT;
+UPDATE series SET created_at = (SELECT created_at FROM libraries WHERE libraries.id = series.library_id);
+```
+
+### Routes ajoutées ou modifiées
+
+| Méthode | Route | Rôle |
+|---|---|---|
+| GET | `/api/series` | toutes les séries (filtre `library_id`) : couverture, `volume_count`, `read_count`, `reading_status` (`unread` / `in_progress` / `read`, calculé), `publication_status`, `created_at`, `last_read_at`, `resume_volume_id` (tome qu'ouvre « Lire ») |
+| GET | `/api/libraries/{id}/series` | même résumé enrichi (requête partagée) |
+| GET | `/api/continue?limit=20` | tomes commencés non terminés, plus le tome suivant d'une série dont le dernier tome lu est terminé (tomes en erreur sautés), du plus récent au plus ancien (Q24) |
+| PATCH | `/api/series/{id}` | `{ publication_status }` (`null` = inconnu) ; la phase 5 l'étendra aux métadonnées |
+| — | `GET /api/admin/scans/{id}/logs` | chaque ligne gagne `series_id` et `volume_id`, retrouvés par le chemin (jointure, sans migration) |
+
+Recherche et filtres **dans le navigateur** sur la liste complète (une requête, résultat immédiat à la frappe), insensibles à la casse et aux accents ; `shortcut:` dans le code : passer côté serveur au-delà d'environ 5 000 séries.
+
+### Navigation
+
+- **À partir de `lg` (1024 px)** (Q18) : sidebar fixe, rétractable en icônes (Sidebar shadcn, état gardé dans `localStorage`) : recherche globale, Accueil, Bibliothèques (chacune dessous), Séries, Administration ; langue en pied. Pas d'entrée Statistiques tant que la page n'existe pas (Q26).
+- **En dessous** : barre d'onglets fixe en bas, au-dessus de la zone sûre : Accueil, Séries, Recherche, Administration. La tablette 8" a les onglets en portrait (800 px, toute la largeur pour la grille) et la sidebar en paysage (1280 px).
+- **Routes** : `/` (Continuer la lecture + une étagère par bibliothèque), `/libraries/:id` (grille), `/series?q=&read=&status=&library=&sort=` (grille filtrée, sert aussi d'écran de recherche, filtres dans l'adresse), `/series/:id`, `/admin/libraries`, `/admin/scans`, `/admin/scans/:id`. Bouton « Retour » explicite sur les pages de détail.
+- Tris : nom, dernière lecture, récemment ajoutés.
+
+### Tests
+
+- **Rust** : migration 0006 (séries existantes datées), statuts de lecture (aucun tome ouvert, en cours, tous lus), ordre de « Continuer » et tome suivant (tome en erreur sauté), `PATCH` valide et invalide, jointure des journaux (fichier disparu : `null`). Couverture ≥ 80 % lignes et branches.
+- **Vitest** : filtres et recherche (fonctions pures, accents), couverture de repli sur image absente ou en erreur, navigation (sidebar / onglets), formulaires d'administration (erreurs traduites), suivi du scan en cours. Seuils 80 %.
+- **Bout en bout** : créer une bibliothèque et la scanner par l'interface, grille, recherche, filtre, série, lecteur ; captures aux quatre tailles en artefact.
+
+### Lots (une branche + une PR chacun)
+
+Pour chaque lot d'interface : skill UI/UX Pro Max avant de coder et en contrôle final, composants par le MCP shadcn (import `cn` vérifié, liste de contrôle du MCP), captures Playwright en 390×844, 800×1280, 1280×800 et 1440×900 sur le binaire release puis corrections, review Ponytail avant la PR.
+
+- [x] **4.0** `docs/phase4-plan` : ce plan.
+- [ ] **4.1** `docs/design-system` : `DESIGN_SYSTEM.md` (skill design-system) : couleurs du thème existant, typographie, espacements, breakpoints, contrastes mesurés, cibles de 44 px, focus ambre, mouvements réduits ; carte de couverture, couverture de repli, barre de progression, états vide / chargement / erreur ; règles shadcn.
+- [ ] **4.2** `feat/app-shell` : sidebar et barre d'onglets, routes en place, langue déplacée dans la sidebar et l'administration, tests et e2e mis à jour.
+- [ ] **4.3** `feat/library-api` : migration 0006, `GET /api/series`, résumé enrichi, `GET /api/continue`, `PATCH /api/series/{id}`, `created_at` écrit par le scan.
+- [ ] **4.4** `feat/library-grid` : `CoverCard` (`aspect-[2/3]`, miniatures JPEG à la demande avec `srcset` 160/320/480, barre `h-1`, survol : zoom léger, liseré, bouton « Lire »), couverture de repli (dégradé sombre + titre) si absente ou en erreur, accueil avec le carrousel « Continuer la lecture » (défilement natif accroché, sans barre visible) et les étagères, page bibliothèque en grille ; données de test à titres très longs et couvertures manquantes.
+- [ ] **4.5** `feat/library-filters` : recherche, filtres statut de lecture / statut de publication / bibliothèque, tris (nom, dernière lecture, récemment ajoutés), le tout dans l'adresse ; champ relié à la sidebar et à l'onglet.
+- [ ] **4.6** `feat/series-detail` : page série refaite : couverture, statut de publication modifiable, progression de la série, bouton principal « Commencer » / « Reprendre tome N », tomes en grille de couvertures avec badges, marquer lu / non lu, problèmes de scan d'un tome avec leurs codes traduits (catalogues des codes de diagnostic, absents aujourd'hui), ancre par tome.
+- [ ] **4.7** `feat/admin-libraries` : liste, création (Dialog : nom, chemin en champ texte validé par le serveur (Q25), type ; `invalid_root` et doublon traduits), suppression (AlertDialog : fichiers et progression conservés), « Scanner » par bibliothèque.
+- [ ] **4.8** `feat/admin-scans` : passe en cours (interrogée chaque seconde tant qu'elle tourne, progression, fichier courant, annuler), options `deep` / `rehash` expliquées, historique filtrable (statut, bibliothèque), détail et journaux paginés (filtre de niveau, codes traduits, lien vers le tome en erreur), jointure des journaux côté API, listes de séries rafraîchies en fin de scan.
+- [ ] **4.9** `chore/phase4-wrap` : e2e du parcours complet par l'interface, bilan de phase, README, `graphify update`, scratchpad vidé.
+
+### Questions de la phase 4 (résolues le 2026-11-12)
+
+- **Q18 / Q22 Breakpoint tablette 8" en portrait** ✅ : `lg` (1024 px) ; onglets en bas en portrait, sidebar en paysage.
+- **Q23 Statut de publication** ✅ : colonne réglée à la main sur la page série, remplie par les métadonnées en phase 5.
+- **Q24 « Continuer la lecture »** ✅ : tomes en cours + tome suivant d'une série dont on vient de finir un tome, tomes en erreur sautés.
+- **Q25 Chemin d'une bibliothèque** ✅ : champ texte validé par le serveur ; pas d'explorateur de dossiers (il exposerait le disque sans authentification).
+- **Q26 Statistiques** ✅ : reportées, pas d’entrée dans la sidebar en attendant.
+- **Q27 Tri « Récemment ajoutés »** ✅ : oui, `series.created_at` dans la migration 0006.
+
 ## Fonctionnalités ajoutées en cours de route
 
 ### Menu d'administration des scans (demandé le 2026-11-11)
@@ -791,7 +865,7 @@ Propositions retenues :
 Objectif : piloter les scans depuis l'application et consulter leurs journaux, sans terminal.
 
 - **Phase 2 (API, lots 2.6 et 2.7)** : lancer un scan (une bibliothèque, un dossier, un tome ; options `deep` et `rehash`), voir le scan en cours (progression, fichier courant), l'annuler ; historique des passes (`scan_runs` : début, fin, options, durée, compteurs ok / avertissement / erreur / inchangés) ; journal détaillé d'une passe (fichiers scannés, problèmes, erreurs fatales). À prévoir : une table de journal par passe (horodatage, niveau, fichier, message) et une durée de conservation configurable.
-- **Phase 4 (UI)** : page « Administration » → « Scans » : bouton « Scanner maintenant », passe en cours avec progression, historique filtrable, détail d'une passe avec ses journaux et un lien vers chaque tome en erreur. Accès réservé aux administrateurs quand les rôles arriveront (phase « Plus tard »).
+- **Phase 4 (UI)** : page « Administration » → « Scans » : bouton « Scanner maintenant », passe en cours avec progression, historique filtrable, détail d'une passe avec ses journaux et un lien vers chaque tome en erreur. Accès réservé aux administrateurs quand les rôles arriveront (phase « Plus tard »). Lots 4.7 et 4.8.
 
 ### Documentation (demandée le 2026-11-11)
 
@@ -821,3 +895,4 @@ L'ordre de lecture ne dépend jamais de l'ordre dans l'archive : le lecteur reç
 - 2026-11-12 : plan de la phase 3 proposé (lecteur web, front embarqué, progression), en attente de validation (Q11, Q12, Q14 bloquantes).
 - 2026-11-12 : plan de la phase 3 validé : progression côté serveur (Q11), type de bibliothèque qui donne le sens de lecture par défaut (Q12), doubles pages coupées en deux moitiés par défaut en mode simple (Q14) ; défauts Q13, Q15 à Q18 retenus.
 - 2026-11-12 : interface bilingue français / anglais (lot 3.4b) ; langue enregistrée côté serveur, traduction par l'interface d'après les codes stables de l'API.
+- 2026-11-12 : plan de la phase 4 validé : breakpoint `lg` (Q18), statut de publication manuel (Q23), « Continuer la lecture » avec tome suivant (Q24), chemin en champ texte (Q25), statistiques reportées (Q26), tri « Récemment ajoutés » (Q27).
