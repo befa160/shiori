@@ -645,7 +645,12 @@ Trois écrans simples pour atteindre le lecteur : bibliothèques, séries d'une 
 
 ### Lots (une branche + une PR chacun)
 
-- [ ] **3.1** `feat/web-foundation` : retrait du gabarit Vite, Tailwind 4, shadcn/ui, thème sombre de CLAUDE.md, React Router, TanStack Query, client typé de l'API, Vitest avec seuils de couverture dans la CI.
+- [x] **3.1** `feat/web-foundation` : retrait du gabarit Vite, Tailwind 4, shadcn/ui, thème sombre de CLAUDE.md, React Router, TanStack Query, client typé de l'API, Vitest avec seuils de couverture dans la CI.
+  - shadcn/ui posé à la main (`components.json`, `cn()` avec `clsx` et `tailwind-merge`) : `shadcn init` reste bloqué sur une question interactive malgré `-y`. Les composants viendront avec `shadcn add` quand un écran en aura besoin.
+  - Thème : variables au format shadcn (`#121212`, `#1E1E1E`, `#2A2A2A`, ambre `#E5A00D` exact, différent de l'`amber-500` de Tailwind), utilitaires `pt-safe`/`pb-safe`/`pl-safe`/`pr-safe`, `viewport-fit=cover` (sans lui les zones sûres valent 0).
+  - Client de l'API : erreurs `ApiError { status, code, message }` avec le code stable du serveur, `network` si le serveur est injoignable ; une erreur 4xx n'est jamais réessayée par TanStack Query. `pageImageUrl` ne connaît que la liste fixe des largeurs.
+  - `npm run dev` relaie `/api` vers `shiori serve` sur `127.0.0.1:7878`. Vérifié dans Chromium contre le vrai serveur.
+  - Job CI `web` : `npm run coverage` (seuils de 80 % lignes et branches) avant le build. 15 tests, couverture 100 %.
 - [ ] **3.2** `feat/embed-web` : `rust-embed`, repli SPA, en-têtes de cache, binaire qui compile sans `web/dist` ; la CI construit le front avant le binaire de release.
 - [ ] **3.3** `feat/reading-progress` : migration 0004, `kind` des bibliothèques, routes de progression et de réglages, progression dans les réponses des séries et des tomes.
 - [ ] **3.4** `feat/browse-minimal` : les trois écrans provisoires.
