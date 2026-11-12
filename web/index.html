@@ -2,7 +2,12 @@
 <html lang="fr" class="dark">
   <head>
     <meta charset="UTF-8" />
+    <!-- Logos (lot 4.2b) : ICO pour les navigateurs qui ignorent le SVG, SVG qui suit le thème de
+         l'OS, icône d'écran d'accueil iOS ; le manifeste donne les icônes Android (PWA, phase 6). -->
+    <link rel="icon" href="/favicon.ico" sizes="32x32 48x48" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <!-- viewport-fit=cover : sans lui, env(safe-area-inset-*) vaut toujours 0. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#121212" />

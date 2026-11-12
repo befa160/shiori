@@ -1,4 +1,10 @@
-# Shiori
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="web/public/shiori-mark-light.svg" />
+    <img src="web/public/shiori-mark.svg" alt="" width="40" height="40" align="absmiddle" />
+  </picture>
+  Shiori
+</h1>
 
 [![CI](https://github.com/befa160/shiori/actions/workflows/ci.yml/badge.svg)](https://github.com/befa160/shiori/actions/workflows/ci.yml)
 [![Licence MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
