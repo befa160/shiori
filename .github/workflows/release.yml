@@ -1,0 +1,125 @@
+name: Release
+
+# Binaires publiés sur un tag `v*` (Q37). Une PR qui modifie ce fichier construit toutes les
+# cibles sans rien publier, pour essayer la release avant de poser un tag.
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    # Les dépendances Rust aussi : une crate qui ne compile plus en musl se voit dans sa PR.
+    paths: [.github/workflows/release.yml, backend/Cargo.lock]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Le front n'est construit qu'une fois, puis intégré à chaque binaire (rust-embed).
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: web/.node-version
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: web-dist
+          path: web/dist
+
+  build:
+    needs: web
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # musl : binaires statiques, qui tournent sur toute distribution et dans l'image
+          # Docker distroless. aarch64 sur un runner ARM natif, sans compilation croisée.
+          - { target: x86_64-unknown-linux-musl, os: ubuntu-latest }
+          - { target: aarch64-unknown-linux-musl, os: ubuntu-24.04-arm }
+          - { target: x86_64-pc-windows-msvc, os: windows-latest }
+          - { target: aarch64-apple-darwin, os: macos-latest }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: web-dist
+          path: web/dist
+      # `allow_missing` laisserait compiler un binaire sans interface : on refuse ici.
+      - run: test -f web/dist/index.html
+      - name: musl
+        if: contains(matrix.target, 'musl')
+        run: |
+          sudo apt-get update && sudo apt-get install -y musl-tools
+          # SQLite et ring compilent du C : avec le compilateur musl, pas celui de la glibc.
+          echo "CC_${TARGET//-/_}=musl-gcc" >> "$GITHUB_ENV"
+        env:
+          TARGET: ${{ matrix.target }}
+      - name: Build
+        working-directory: backend
+        run: |
+          rustup target add "$TARGET"
+          cargo build --release --locked -p shiori --target "$TARGET"
+        env:
+          TARGET: ${{ matrix.target }}
+      - name: Check and package
+        run: |
+          exe=shiori; [[ $TARGET == *windows* ]] && exe=shiori.exe
+          bin="backend/target/$TARGET/release/$exe"
+          version=$("$bin" --version | cut -d' ' -f2)
+          echo "$bin $version"
+          if [[ $TARGET == *musl ]]; then file "$bin" | grep -q 'static'; fi
+          # Un tag v0.1.0-rc.1 publie le code de la version 0.1.0.
+          if [[ $GITHUB_REF == refs/tags/v* ]]; then
+            tag=${GITHUB_REF_NAME#v}
+            test "${tag%%-*}" = "$version"
+          fi
+          name="shiori-$version-$TARGET"
+          mkdir -p "dist/$name"
+          cp "$bin" LICENSE README.md "dist/$name/"
+          cd dist
+          if [[ $TARGET == *windows* ]]; then 7z a "$name.zip" "$name" >/dev/null; else tar czf "$name.tar.gz" "$name"; fi
+          rm -r "$name"
+        env:
+          TARGET: ${{ matrix.target }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.target }}
+          path: dist/*
+
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          pattern: '*-*-*' # les binaires des cibles, pas web-dist
+          merge-multiple: true
+      - name: Release
+        working-directory: dist
+        run: |
+          sha256sum shiori-* > SHA256SUMS
+          cat SHA256SUMS
+          # Un tag avec suffixe (v0.1.0-rc.1) donne une préversion.
+          pre=(); [[ $GITHUB_REF_NAME == *-* ]] && pre=(--prerelease)
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --generate-notes "${pre[@]}" shiori-* SHA256SUMS
+        env:
+          GH_TOKEN: ${{ github.token }}
