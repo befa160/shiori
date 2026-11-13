@@ -6,7 +6,8 @@ on:
   push:
     tags: ['v*']
   pull_request:
-    paths: [.github/workflows/release.yml]
+    # Les dépendances Rust aussi : une crate qui ne compile plus en musl se voit dans sa PR.
+    paths: [.github/workflows/release.yml, backend/Cargo.lock]
 
 permissions:
   contents: read
