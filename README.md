@@ -1,6 +1,6 @@
 <h1>
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="web/public/shiori-mark-light.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="web/public/shiori-mark-light.svg" />
     <img src="web/public/shiori-mark.svg" alt="" width="40" height="40" align="absmiddle" />
   </picture>
   Shiori

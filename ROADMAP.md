@@ -936,6 +936,12 @@ Pour chaque lot d'interface : skill UI/UX Pro Max avant de coder et en contrôle
   - Review Ponytail, corrigé : `page_turn: null` était ignoré sans erreur.
   - 153 tests Vitest, 98,6 % des lignes, 93,7 % des branches ; tests Rust (défaut global, réglage de série, `PUT` partiel).
 
+- [x] **4.12** `feat/logo-v2` (ajouté le 2026-11-13) : deuxième version des logos fournie par l'auteur (cases de manga et marque-page ambre).
+  - Les huit fichiers de `web/public/` remplacés. Le nommage s'inverse : `shiori-mark.svg` est désormais la version pour fond sombre (crème et ambre), `shiori-mark-light.svg` celle pour fond clair (noir et ambre foncé) ; la sidebar et le README suivent. Le favicon SVG suit le thème de l'OS.
+  - DESIGN_SYSTEM.md : section « Logo » à jour ; ses couleurs restent réservées au logo.
+  - Un mode clair de l'interface (couleurs, contrastes, captures doublées, choix enregistré) est un lot à part, à planifier.
+  - Captures aux quatre tailles ; types servis vérifiés.
+
 ### Bilan de la phase 4
 
 - Livré :
