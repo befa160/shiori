@@ -93,7 +93,8 @@ describe('tomes d’une série', () => {
     expect(within(items[2]).getByText('Erreur')).toBeInTheDocument()
     expect(within(items[2]).getByText('12 pages')).toBeInTheDocument()
     expect(within(items[0]).getByRole('link')).toHaveAttribute('href', '/read/a')
-    await userEvent.click(screen.getByRole('link', { name: 'Séries' }))
+    // Sans la liste des bibliothèques (non fournie ici), le retour s'appelle « Bibliothèque ».
+    await userEvent.click(within(screen.getByRole('main')).getByRole('link', { name: 'Bibliothèque' }))
     expect(router.state.location.pathname).toBe('/libraries/1')
   })
 
@@ -107,7 +108,7 @@ describe('tomes d’une série', () => {
     mockApi({ '/api/series/9': () => json({ code: 'not_found', message: 'série introuvable' }, 404) })
     renderAt('/series/9')
     expect(await screen.findByRole('alert')).toHaveTextContent('Série introuvable')
-    expect(screen.getByRole('link', { name: 'Séries' })).toHaveAttribute('href', '/')
+    expect(within(screen.getByRole('main')).getByRole('link', { name: 'Accueil' })).toHaveAttribute('href', '/')
   })
 })
 

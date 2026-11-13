@@ -3,6 +3,7 @@ import { LibraryPage } from '@/browse/LibraryPage'
 import { SeriesPage } from '@/browse/SeriesPage'
 import { WithId } from '@/browse/parts'
 import { HomePage } from '@/library/HomePage'
+import { SeriesBrowse } from '@/library/SeriesBrowse'
 import { AdminPage } from '@/pages/AdminPage'
 import { Layout } from '@/pages/Layout'
 import { LoadFailed, NotFound } from '@/pages/NotFound'
@@ -24,6 +25,9 @@ export const routes: RouteObject[] = [
     children: [
       { index: true, element: <HomePage /> },
       { path: 'libraries/:id', element: <WithId>{(id) => <LibraryPage id={id} />}</WithId> },
+      { path: 'series', element: <SeriesBrowse /> },
+      // Même écran, champ de recherche au focus ; `key` : passer de l'un à l'autre le remonte.
+      { path: 'search', element: <SeriesBrowse key="search" search /> },
       { path: 'series/:id', element: <WithId>{(id) => <SeriesPage id={id} />}</WithId> },
       { path: 'admin', element: <AdminPage /> },
       { path: '*', element: <NotFound /> },

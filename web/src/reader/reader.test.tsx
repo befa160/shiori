@@ -1,8 +1,12 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PageInfo, SeriesDetail, VolumeDetail } from '@/api/types'
 import { json, mockApi, renderAt } from '@/test/render'
+
+// Le lecteur est une route `lazy` : chargé à froid (transformé, instrumenté pour la couverture),
+// il dépassait parfois le délai d'attente du premier test sur une machine chargée.
+beforeAll(() => import('@/reader/Reader'))
 
 const VOLUME = 'a'.repeat(64)
 type Mode = 'rtl' | 'ltr' | 'vertical'
