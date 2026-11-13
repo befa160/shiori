@@ -959,7 +959,8 @@ Pour chaque lot d'interface : skill UI/UX Pro Max avant de coder et en contrôle
   - dans le lecteur sur mobile, une notification monte de 56 px de trop (`--tabbar-height` globale) ;
   - le journal d'une passe en cours ne se met pas à jour en continu (il se rafraîchit à la fin) ;
   - les messages du serveur sans code (lignes « scanné » du journal) restent en français (Q21) ;
-  - essai sur la tablette réelle à faire par l'utilisateur.
+  - essai sur la tablette réelle à faire par l'utilisateur ;
+  - test e2e instable vu une fois en CI (PR du lot 4.12, qui ne touche pas au lecteur ; vert au second essai et en local) : « reprend à la page lue… puis passe au tome suivant », le bouton « Tome suivant » n'est jamais apparu après la flèche en fin de tome. Cause non trouvée ; à surveiller, et à instrumenter s'il revient.
 
 ### Questions de la phase 4 (résolues le 2026-11-12)
 
