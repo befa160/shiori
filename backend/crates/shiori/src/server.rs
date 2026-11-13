@@ -56,6 +56,16 @@ pub struct ServeArgs {
     /// Durée de conservation des passes de scan et de leurs journaux, en jours.
     #[arg(long, value_name = "JOURS", default_value_t = 30)]
     pub scan_log_days: u32,
+    /// Nom d'hôte accepté en plus de localhost, tel qu'écrit dans la barre d'adresse
+    /// (`shiori.lan`, `192.168.1.10`), répétable ; en écoute réseau, en donner un active la
+    /// parade au DNS rebinding (image Docker : `localhost`).
+    #[arg(
+        long = "allowed-host",
+        value_name = "NOM",
+        env = "SHIORI_ALLOWED_HOSTS",
+        value_delimiter = ','
+    )]
+    pub allowed_hosts: Vec<String>,
 }
 
 /// État partagé par les requêtes.
@@ -132,16 +142,26 @@ pub async fn run(
         args.scan_log_days,
         web_sources(),
     );
-    serve(listener, Arc::new(app), shutdown).await
+    serve(listener, Arc::new(app), args.allowed_hosts, shutdown).await
 }
 
 pub async fn serve(
     listener: TcpListener,
     app: Arc<App>,
+    allowed_hosts: Vec<String>,
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> Result<()> {
-    let local_only = listener.local_addr()?.ip().is_loopback();
-    axum::serve(listener, router(app.clone(), local_only))
+    // `SHIORI_ALLOWED_HOSTS=` vide ou `a, b` : ni nom vide (il laisserait passer une requête
+    // sans `Host`), ni espace.
+    let allowed_hosts: Vec<String> = allowed_hosts
+        .iter()
+        .map(|h| h.trim().to_string())
+        .filter(|h| !h.is_empty())
+        .collect();
+    // Écoute locale : toujours protégée ; écoute réseau : seulement si des noms sont donnés.
+    let local = listener.local_addr()?.ip().is_loopback();
+    let hosts = (local || !allowed_hosts.is_empty()).then_some(allowed_hosts);
+    axum::serve(listener, router(app.clone(), hosts))
         .with_graceful_shutdown(shutdown)
         .await?;
     // Le scan en cours est annulé et sa passe close `cancelled`, jamais laissée `running`.
@@ -150,8 +170,9 @@ pub async fn serve(
     Ok(())
 }
 
-/// `local_only` : n'accepte que les requêtes adressées à `localhost` (voir [`local_host_only`]).
-pub fn router(app: Arc<App>, local_only: bool) -> Router {
+/// `hosts` : n'accepte que les requêtes adressées à `localhost` ou à l'un de ces noms (voir
+/// [`allowed_host_only`]) ; `None` : aucun contrôle.
+pub fn router(app: Arc<App>, hosts: Option<Vec<String>>) -> Router {
     let router = Router::new()
         .route("/api/health", get(health))
         .route("/api/settings", get(settings).put(save_settings))
@@ -198,17 +219,24 @@ pub fn router(app: Arc<App>, local_only: bool) -> Router {
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())
         .with_state(app);
-    match local_only {
-        true => router.layer(middleware::from_fn(local_host_only)),
-        false => router,
+    match hosts {
+        Some(hosts) => {
+            let hosts: Arc<[String]> = hosts.iter().map(|h| h.to_ascii_lowercase()).collect();
+            router.layer(middleware::from_fn_with_state(hosts, allowed_host_only))
+        }
+        None => router,
     }
 }
 
 /// Parade au DNS rebinding : sans elle, une page web malveillante peut faire pointer son
-/// propre domaine vers 127.0.0.1 et piloter l'API depuis le navigateur. En écoute locale, le
-/// `Host` doit donc être local. En écoute réseau (`0.0.0.0`), aucune protection tant qu'il
-/// n'y a pas d'authentification.
-async fn local_host_only(request: Request, next: Next) -> Response {
+/// propre domaine vers 127.0.0.1 et piloter l'API depuis le navigateur. Le `Host` doit donc
+/// être local ou l'un des noms autorisés (`--allowed-host`). En écoute réseau sans nom
+/// autorisé, aucune protection tant qu'il n'y a pas d'authentification.
+async fn allowed_host_only(
+    State(hosts): State<Arc<[String]>>,
+    request: Request,
+    next: Next,
+) -> Response {
     let host = request
         .headers()
         .get(header::HOST)
@@ -217,13 +245,14 @@ async fn local_host_only(request: Request, next: Next) -> Response {
     let name = host
         .rsplit_once(':')
         .filter(|(_, port)| !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit()))
-        .map_or(host, |(name, _)| name);
-    match name {
-        "localhost" | "127.0.0.1" | "[::1]" => next.run(request).await,
-        _ => ApiError::new(
+        .map_or(host, |(name, _)| name)
+        .to_ascii_lowercase();
+    match matches!(name.as_str(), "localhost" | "127.0.0.1" | "[::1]") || hosts.contains(&name) {
+        true => next.run(request).await,
+        false => ApiError::new(
             StatusCode::FORBIDDEN,
             "invalid_host",
-            "en écoute locale, l'API ne répond qu'à localhost",
+            "nom d'hôte non autorisé (localhost, ou un nom donné à --allowed-host ou SHIORI_ALLOWED_HOSTS)",
         )
         .into_response(),
     }

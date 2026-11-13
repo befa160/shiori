@@ -59,7 +59,7 @@ async fn fixture() -> Fixture {
     let db = Arc::new(Db::open(&dir.path().join("t.db")).await.unwrap());
     let images = Images::open(dir.path().join("cache"), u64::MAX).unwrap();
     let state = Arc::new(App::new(db.clone(), images));
-    let app = server::router(state.clone(), false);
+    let app = server::router(state.clone(), None);
     Fixture {
         _dir: dir,
         root,
@@ -379,7 +379,7 @@ async fn database_failures_are_internal_errors() {
 #[tokio::test]
 async fn local_server_rejects_foreign_hosts() {
     let f = fixture().await;
-    let app = server::router(f.state.clone(), true);
+    let app = server::router(f.state.clone(), Some(Vec::new()));
     let status = |host: &'static str| {
         let app = app.clone();
         async move {
@@ -421,25 +421,86 @@ async fn local_server_rejects_foreign_hosts() {
     );
 }
 
+#[tokio::test]
+async fn allowed_hosts_are_accepted_whatever_their_case() {
+    let f = fixture().await;
+    let hosts = vec!["Shiori.LAN".to_string(), "192.168.1.10".to_string()];
+    let app = server::router(f.state.clone(), Some(hosts));
+    for (host, expected) in [
+        ("shiori.lan:7878", StatusCode::OK),
+        ("SHIORI.lan", StatusCode::OK),
+        ("192.168.1.10:7878", StatusCode::OK),
+        ("LOCALHOST:7878", StatusCode::OK),
+        ("evil.example", StatusCode::FORBIDDEN),
+        ("shiori.lan.evil.example", StatusCode::FORBIDDEN),
+    ] {
+        let request = Request::get("/api/health").header("host", host);
+        let response = app.clone().oneshot(request.body(Body::empty()).unwrap());
+        assert_eq!(response.await.unwrap().status(), expected, "{host}");
+    }
+}
+
+/// Requête HTTP brute sur une vraie socket, réponse complète.
+async fn raw_get(addr: std::net::SocketAddr, host: &str) -> String {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut stream = tokio::net::TcpStream::connect(addr).await.unwrap();
+    let request = format!("GET /api/health HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n");
+    stream.write_all(request.as_bytes()).await.unwrap();
+    let mut response = String::new();
+    stream.read_to_string(&mut response).await.unwrap();
+    response
+}
+
+/// En écoute réseau (comme dans le conteneur), le `Host` n'est contrôlé que si des noms sont
+/// autorisés.
+#[tokio::test]
+async fn network_listen_checks_hosts_only_when_some_are_given() {
+    let f = fixture().await;
+    for (hosts, host, expected) in [
+        (Vec::new(), "evil.example", "HTTP/1.1 200 OK"),
+        // `SHIORI_ALLOWED_HOSTS=` vide : comme rien du tout.
+        (vec![String::new()], "evil.example", "HTTP/1.1 200 OK"),
+        (
+            vec![" shiori.lan".to_string()],
+            "evil.example",
+            "HTTP/1.1 403 Forbidden",
+        ),
+        (
+            vec![" shiori.lan".to_string()],
+            "shiori.lan",
+            "HTTP/1.1 200 OK",
+        ),
+    ] {
+        let listener = tokio::net::TcpListener::bind("0.0.0.0:0").await.unwrap();
+        let addr = ([127, 0, 0, 1], listener.local_addr().unwrap().port()).into();
+        let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
+        let task = tokio::spawn(server::serve(listener, f.state.clone(), hosts, async {
+            let _ = stopped.await;
+        }));
+        let response = raw_get(addr, host).await;
+        assert!(response.starts_with(expected), "{response}");
+        stop.send(()).unwrap();
+        task.await.unwrap().unwrap();
+    }
+}
+
 /// Le vrai serveur TCP répond, puis s'arrête proprement sur demande.
 #[tokio::test]
 async fn serves_over_tcp_and_shuts_down() {
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let f = fixture().await;
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
-    let task = tokio::spawn(server::serve(listener, f.state.clone(), async {
-        let _ = stopped.await;
-    }));
+    let task = tokio::spawn(server::serve(
+        listener,
+        f.state.clone(),
+        Vec::new(),
+        async {
+            let _ = stopped.await;
+        },
+    ));
 
-    let mut stream = tokio::net::TcpStream::connect(addr).await.unwrap();
-    stream
-        .write_all(b"GET /api/health HTTP/1.1\r\nHost: localhost:7878\r\nConnection: close\r\n\r\n")
-        .await
-        .unwrap();
-    let mut response = String::new();
-    stream.read_to_string(&mut response).await.unwrap();
+    let response = raw_get(addr, "localhost:7878").await;
     assert!(response.starts_with("HTTP/1.1 200 OK"), "{response}");
     assert!(response.contains(r#""status":"ok""#), "{response}");
 
@@ -457,6 +518,7 @@ async fn run_opens_the_database_and_reports_bind_errors() {
         cache_max_mib: 16,
         jobs: None,
         scan_log_days: 30,
+        allowed_hosts: Vec::new(),
     };
     // Arrêt immédiat : la base est créée (avec son dossier) puis le serveur s'arrête.
     server::run(args("127.0.0.1:0"), false, async {})

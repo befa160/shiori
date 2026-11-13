@@ -35,7 +35,7 @@ impl Fixture {
         let dir = tempfile::tempdir().unwrap();
         let db = Arc::new(Db::open(&dir.path().join("t.db")).await.unwrap());
         let images = Images::open(dir.path().join("cache"), u64::MAX).unwrap();
-        let app = server::router(Arc::new(App::new(db.clone(), images)), false);
+        let app = server::router(Arc::new(App::new(db.clone(), images)), None);
         Self { dir, db, app }
     }
 

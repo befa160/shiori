@@ -1,0 +1,21 @@
+# Exemple pour lancer Shiori avec Docker Compose : `mkdir -p data cache && docker compose up -d`
+# (créés par Docker, ces dossiers appartiendraient à root et Shiori ne pourrait pas y écrire),
+# puis http://localhost:7878. L'API n'a pas d'authentification : ne l'ouvrez pas au-delà d'un
+# réseau de confiance (voir la documentation d'installation, reverse proxy avec mot de passe).
+services:
+  shiori:
+    image: ghcr.io/befa160/shiori:latest
+    restart: unless-stopped
+    # Propriétaire de vos dossiers ci-dessous (`id -u`:`id -g`) ; l'image tourne en 65532 sinon.
+    user: "1000:1000"
+    ports:
+      # Seulement depuis cette machine ; « 7878:7878 » pour le réseau local.
+      - "127.0.0.1:7878:7878"
+    environment:
+      # Noms par lesquels vous ouvrez Shiori, séparés par des virgules (localhost est toujours
+      # accepté), par exemple « localhost,shiori.lan,192.168.1.10 ».
+      SHIORI_ALLOWED_HOSTS: localhost
+    volumes:
+      - ./data:/data # base SQLite (progression, métadonnées, couvertures) : à sauvegarder
+      - ./cache:/cache # pages redimensionnées, se reconstruit tout seul
+      - /chemin/vers/mangas:/bibliotheques/mangas:ro # vos fichiers, jamais modifiés
