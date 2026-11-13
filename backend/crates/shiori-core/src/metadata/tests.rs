@@ -15,7 +15,7 @@ const COMIC_INFO: &str = r#"<?xml version="1.0" encoding="utf-8"?>
   <Colorist></Colorist>
   <Publisher>Glénat</Publisher>
   <Genre>Aventure, Action, aventure</Genre>
-  <Web>https://a.example https://b.example</Web>
+  <Web>https://a.example javascript:alert(1) HTTP://b.example</Web>
   <LanguageISO>fr</LanguageISO>
   <Manga>YesAndRightToLeft</Manga>
   <AgeRating>Unknown</AgeRating>
@@ -53,7 +53,7 @@ fn comic_info_is_normalized() {
             age_rating: None,
             status: None,
             right_to_left: Some(true),
-            links: vec!["https://a.example".into(), "https://b.example".into()],
+            links: vec!["https://a.example".into(), "HTTP://b.example".into()],
         }
     );
 }
@@ -165,4 +165,18 @@ fn only_root_files_are_metadata() {
 fn rows_saved_before_a_new_field_still_load() {
     let meta: LocalMetadata = serde_json::from_str(r#"{"series": "x"}"#).unwrap();
     assert_eq!(meta.series.as_deref(), Some("x"));
+}
+
+#[test]
+fn a_title_written_in_web_is_not_a_link() {
+    // Vu dans un vrai tome (Shangri-la Frontier T12) : un titre romaji dans `<Web>`.
+    let xml = "<ComicInfo><Web>Shangri-La Frontier: Kusoge Hunter</Web></ComicInfo>";
+    let meta = parse(MetadataSource::Comicinfo, xml.as_bytes()).unwrap();
+    assert!(meta.links.is_empty());
+    let meta = parse(
+        MetadataSource::IndexJson,
+        br#"{"public_url": "javascript:x"}"#,
+    )
+    .unwrap();
+    assert!(meta.links.is_empty());
 }
