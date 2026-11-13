@@ -1,0 +1,12 @@
+{"data":{"Page":{"media":[
+ {"id":30013,"title":{"romaji":"ONE PIECE","english":"One Piece","native":"ONE PIECE"},
+  "synonyms":["ワンピース","  "],"startDate":{"year":1997},"status":"RELEASING",
+  "description":"Un garçon au chapeau de paille &amp; son équipage.\n<br><br>\n(Source: exemple)",
+  "genres":["Action","Adventure"],
+  "tags":[{"name":"Pirates","isMediaSpoiler":false},{"name":"Fin révélée","isMediaSpoiler":true}],
+  "siteUrl":"https://anilist.co/manga/30013","coverImage":{"large":"https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx30013.jpg"},
+  "staff":{"edges":[{"role":"Story & Art","node":{"name":{"full":"Eiichirou Oda"}}},{"role":"Assistant (former)","node":{"name":{"full":"Un assistant"}}}]}},
+ {"id":95552,"title":{"romaji":"Wan Piece","english":null,"native":null},"synonyms":[],"startDate":{"year":null},
+  "status":"NOT_YET_RELEASED","description":null,"genres":[],"tags":[],"siteUrl":"https://anilist.co/manga/95552",
+  "coverImage":null,"staff":{"edges":[{"role":"Story","node":{"name":{"full":"Auteur A"}}},{"role":"Art","node":{"name":{"full":"Dessinateur B"}}},{"role":"Original Creator","node":{"name":{"full":"Romancier C"}}},{"role":"Translator","node":{"name":{"full":"Traducteur D"}}}]}}
+]}}}
