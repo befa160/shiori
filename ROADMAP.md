@@ -11,7 +11,7 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 | 3 | Lecteur web (sens de lecture, webtoon, doubles pages) + front embarqué + progression de lecture | ✅ |
 | 4 | Bibliothèque façon Plex + statuts/filtres + menu d'administration (scans, journaux) + DESIGN_SYSTEM.md | ✅ |
 | 5 | Métadonnées web + édition manuelle | ✅ |
-| 6 | Distribution : image Docker, PWA finalisée, binaires Linux/Windows en release, Dependabot, documentation (technique, installation, fonctionnelle), mode clair de l'interface | ⏳ |
+| 6 | Distribution : image Docker, PWA finalisée, binaires Linux/Windows en release, Dependabot, documentation (technique, installation, fonctionnelle), thèmes de l'interface (sombre, clair, OLED, sépia) | 🚧 |
 
 ## Méthode de travail
 
@@ -1078,36 +1078,54 @@ Restent des séries distinctes : déplacement partiel, fusion dans une série ex
 - **Q33 Réseau et vie privée** ✅ : désactivé par défaut, activé dans l'administration avec une explication de ce qui est envoyé ; agent générique ; débit sous les limites publiées ; hors ligne = état visible, jamais bloquant ; miniatures relayées. Conditions relues le 2026-11-13 (lot 5.5a) : AniList 90 requêtes/min, **30 en ce moment** (confirmé par `X-RateLimit-Limit`), 1 min de blocage au-delà avec `Retry-After`, ni collecte massive ni usage comme stockage, gratuit sous 150 $/mois de revenus ; MangaDex environ 5 requêtes/s par IP, agent honnête obligatoire, pas de lien direct vers ses images, **créditer MangaDex** (lot 5.7), pas de publicité.
 - **Q34 Titre affiché** ✅ (précisé le 2026-11-13) : titre édité, sinon celui des fichiers (`index.json`, puis `ComicInfo.xml`), sinon celui des métadonnées web, sinon le nom du dossier. La langue ne sert qu'à choisir parmi les titres d'une source web : celui de la langue de l'interface s'il existe, sinon romaji. Les autres titres (nom du dossier compris) restent cherchables comme titres alternatifs.
 
-## Phase 6 : distribution, documentation et mode clair (à planifier)
+## Phase 6 : distribution, documentation et thèmes (plan validé le 2026-11-13)
 
-Notes de passation du 2026-11-13, pour la session qui préparera le plan détaillé (à valider avant de coder, comme pour chaque phase).
+### Objectif
 
-### Objectif (tableau des phases)
+Rendre Shiori installable et maintenable par quelqu'un d'autre que son développeur : Dependabot, binaires Linux / Windows publiés à chaque version, image Docker, thèmes de l'interface (sombre, clair, OLED, sépia), PWA utilisable hors ligne, documentation (technique, installation, fonctionnelle), puis la version `v0.1.0`.
 
-Rendre Shiori installable et maintenable par quelqu'un d'autre que son développeur : image Docker, PWA finalisée, binaires Linux / Windows publiés à chaque version, Dependabot, documentation (technique, installation, fonctionnelle) et mode clair de l'interface.
+### Existant vérifié (2026-11-13)
 
-### Ce qui existe déjà et s'y raccorde
+- **Un seul binaire** : `shiori serve` embarque le front en release (`rust-embed`) ; base dans le dossier de données de l'OS (`SHIORI_DATA_DIR` ou `--db`), cache dans celui de l'OS (`SHIORI_CACHE_DIR` ou `--cache-dir`). Code pur Rust : SQLite embarqué (`sqlite-bundled`), TLS par ureq 3 + rustls avec certificats intégrés (aucune dépendance aux certificats de l'image). `--version` existe, version 0.1.0.
+- **Arrêt** : `serve` ne s'arrête proprement que sur Ctrl-C ; `docker stop` envoie SIGTERM puis tue au bout de 10 s, même pendant un scan.
+- **Écoute** : en écoute locale, seul un `Host` local est accepté (parade au DNS rebinding) ; en écoute réseau (`0.0.0.0`, obligatoire dans un conteneur), ni authentification ni cette parade.
+- **CI** : jobs `backend` (linux, windows, macos), `coverage`, `web`, `e2e` ; pas de release ni de Dependabot.
+- **Couleurs** : toutes passent par les 53 jetons de `web/src/index.css` (une seule série de valeurs, le sombre) ; une douzaine de couleurs en dur, presque toutes dans le lecteur ; `theme.test.ts` vérifie déjà que chaque jeton utilisé est défini.
+- **PWA** : `manifest.webmanifest` minimal, zones sûres posées, pas de service worker ; pages servies immuables (`Cache-Control: immutable`, ETag).
 
-- **Un seul binaire** : `shiori serve` embarque le front en release (`rust-embed`, `npm run build` avant `cargo build --release`) ; base dans le dossier de données de l'OS (`SHIORI_DATA_DIR` ou `--db`), cache dans celui de l'OS (`SHIORI_CACHE_DIR` ou `--cache-dir`, plafond `--cache-max-mib`), journaux des scans `--scan-log-days`. Code pur Rust, sans commande externe (principe 9) : une compilation statique (musl) est plausible, à vérifier (SQLite embarqué via `sqlite-bundled`, `ring` pour TLS).
-- **Écoute** : `--listen 127.0.0.1:7878` par défaut ; en écoute locale, seul un `Host` local est accepté (parade au DNS rebinding) ; **aucune authentification** (« Plus tard ») : écouter sur `0.0.0.0` n'est sûr que sur un réseau de confiance, ce qui pèse directement sur l'image Docker.
-- **CI** (`.github/workflows/ci.yml`) : jobs `backend` (linux, windows, macos), `coverage` (nightly figé `NIGHTLY`, `cargo-llvm-cov` figé), `web`, `e2e` ; **pas de job de release** ni de Dependabot. Le job macOS attend parfois longtemps un runner.
-- **PWA** : `web/public/manifest.webmanifest` minimal (nom, icônes dont maskable, `standalone`, fond `#121212`), zones sûres et plein écran posés (phases 3 et 4) ; **pas de service worker**. Les pages servies sont immuables (`Cache-Control: immutable`, ETag), ce qui facilite une mise en cache hors ligne.
-- **Couleurs** : jetons CSS dans `web/src/index.css` (thème sombre seul), règles et contrastes mesurés dans DESIGN_SYSTEM.md ; le logo a déjà sa variante claire (`shiori-mark-light.svg`, favicon adaptatif). La langue est enregistrée côté serveur (`/api/settings`) : le choix du thème pourrait suivre le même chemin.
-- **Documentation** : README (présentation, architecture, développement), ROADMAP.md (décisions et bilans de chaque phase), DESIGN_SYSTEM.md, `docs/cbr.md`, le graphe Graphify (`graphify-out/`, à mettre à jour avec `/graphify . --update` après de gros changements de docs). Demande d'origine : section « Documentation (demandée le 2026-11-11) » ci-dessous.
+### Décisions (Q35 à Q41, validées le 2026-11-13)
 
-### Questions à trancher au début de la phase
+- **Q35 Écoute dans le conteneur** ✅ : option `--allowed-host` (variable `SHIORI_ALLOWED_HOSTS`, répétable) qui garde la parade au DNS rebinding même en écoute réseau ; le `compose.yaml` d'exemple publie `127.0.0.1:7878` ; la documentation explique le reverse proxy avec authentification (Caddy). L'authentification reste « Plus tard ».
+- **Q36 Image Docker** ✅ : `distroless/static:nonroot` + binaire musl, amd64 et arm64, sur ghcr.io ; volumes `/data`, `/cache`, bibliothèques en lecture seule ; `user:` dans compose plutôt que `PUID`/`PGID` (pas de shell dans l'image).
+- **Q37 Binaires** ✅ : Linux x86_64 et aarch64 (musl, statiques), Windows x86_64 ; macOS seulement s'il passe sans effort. Sur tag `v*`, `SHA256SUMS`, notes générées par GitHub (pas de CHANGELOG tenu à la main). Premier tag `v0.1.0` en fin de phase.
+- **Q38 PWA hors ligne** ✅ : coquille de l'interface + pages déjà lues gardées en cache (immuables, donc sans risque) ; tomes téléchargés explicitement : plus tard. Service worker fait main (pas de `vite-plugin-pwa`), invitation à installer discrète.
+- **Q39 Dependabot** ✅ : hebdomadaire, une PR groupée par écosystème pour mineures et correctifs, majeures à part, pas de fusion automatique ; nightly de couverture et `cargo-llvm-cov` restent figés et montés à la main.
+- **Q40 Thèmes** ✅ : un système de thèmes plutôt qu'un seul mode clair. Un thème = un bloc `[data-theme="…"]` dans `index.css` qui redéfinit les jetons ; livrés : **sombre** (défaut actuel), **clair** (d'après la palette neutre claire de shadcn), **OLED** (noir pur), **sépia**. Réglage `theme` dans `/api/settings` : `system` (sombre ou clair selon `prefers-color-scheme`) ou un thème imposé, sélecteur dans l'administration à côté de la langue. Accent ambre dans tous les thèmes ; le lecteur reste sombre. Contrastes WCAG AA des couples importants mesurés par `theme.test.ts` pour chaque thème (un thème illisible casse le build). Thèmes créés par l'utilisateur : non.
+- **Q41 Documentation** ✅ : dans `docs/` ; installation en français et en anglais, technique et fonctionnelle en français ; le README y renvoie.
 
-- **Docker** : image de base (scratch ou distroless avec binaire statique musl, ou Debian slim) ; architectures (amd64 seule, ou aussi arm64 pour NAS et Raspberry Pi) ; volumes (`/data` pour la base et les couvertures, `/cache`, bibliothèques montées en lecture seule) ; utilisateur non root, `PUID` / `PGID` ; registre (GitHub Container Registry) ; **écoute dans le conteneur sans authentification** : avertissement et reverse proxy documentés, ou authentification minimale avant de publier une image.
-- **Binaires** : cibles (Linux x86_64 et aarch64, Windows x86_64, macOS ?), déclenchement (tag `v*`), sommes de contrôle, version (0.1.0 aujourd'hui, semver), notes de version ou changelog.
-- **PWA hors ligne** : jusqu'où (coquille de l'interface seulement, ou tomes téléchargés pour lire sans réseau, un sujet bien plus gros) ; service worker fait main ou `vite-plugin-pwa` (dépendance) ; invitation à installer.
-- **Dependabot** : fréquence, regroupement des mises à jour, fusion automatique ou non (règle « dernières versions stables » ; le nightly de couverture et `cargo-llvm-cov` restent figés et montés à la main).
-- **Documentation** : où (fichiers `docs/` dans le dépôt, ou site), langues (français seul, ou aussi anglais), public de chaque document (technique, installation simple, fonctionnelle).
-- **Mode clair** : suivre le système (`prefers-color-scheme`), choix manuel enregistré côté serveur comme la langue, ou les deux ; le lecteur reste-t-il toujours sombre ; contrastes à remesurer et à reporter dans DESIGN_SYSTEM.md.
-- **Ordre des lots** : par exemple Dependabot et release d'abord (petits, débloquent la suite), puis Docker, mode clair, PWA, documentation en dernier (elle décrit l'état final).
+### Lots (une branche + une PR chacun)
 
-### Reste ouvert des phases précédentes
+- ⏳ **6.1 `ci/dependabot`** : `.github/dependabot.yml` (cargo, npm, actions) selon Q39.
+- ⏳ **6.2 `ci/release`** : `release.yml` sur tag `v*` : build du front une fois, matrice des cibles (aarch64 musl sur runner `ubuntu-24.04-arm`, sans compilation croisée), archives, `SHA256SUMS`, `gh release create --generate-notes`. Essai sur `v0.1.0-rc.1`.
+- ⏳ **6.3 `feat/docker`** : arrêt sur SIGTERM (Unix) ; `--allowed-host` (Q35) ; `Dockerfile` à partir des binaires du lot 6.2, `compose.yaml`, image multi-architecture poussée depuis `release.yml`. Tests : hôte autorisé / refusé, arrêt sur SIGTERM, `docker run` réel.
+- ⏳ **6.4 `feat/web-themes`** : jetons des quatre thèmes, couleurs en dur hors lecteur remplacées par des jetons, réglage `theme` (Rust + API), sélecteur avec aperçu, `theme-color` suivant le thème, lecteur forcé en sombre, contrastes testés, DESIGN_SYSTEM.md mis à jour. Captures Playwright aux quatre tailles dans chaque thème.
+- ⏳ **6.5 `feat/web-pwa`** : service worker (coquille + images de pages déjà lues ; jamais le reste de `/api`), invitation à installer, état hors ligne. Test e2e : réseau coupé, une page déjà vue se relit.
+- ⏳ **6.6 `fix/phase6-leftovers`** : journal d'un scan en cours rafraîchi, titres de tome venus de ComicInfo affichés, purge des couvertures abandonnées.
+- ⏳ **6.7 `docs/final`** : `docs/installation.fr.md`, `docs/installation.en.md`, `docs/technique.md`, `docs/fonctionnel.md` (codes de diagnostic, rangement conseillé), rédigés à partir du graphe Graphify, puis `/graphify . --update`. Relecture : suivre l'installation à la lettre avec l'image et le binaire publiés.
+- ⏳ **6.8 `chore/phase6-review`** : bilan de la phase 6, tag `v0.1.0`, release et image vérifiées de bout en bout.
 
-Voir « Bilan de la phase 5 » (« Reste ouvert ») : édition d'un tome dans l'interface, MangaUpdates et Comic Vine, `shortcut:` notés, vérification de `:root:has()` sur un vrai Safari iOS, essai sur la tablette réelle, journal d'un scan en cours non rafraîchi, registre shadcn et le paquet `cn`.
+### Dépendances
+
+Aucune nouvelle prévue (service worker fait main, `tokio::signal::unix` déjà disponible) ; dernière version vérifiée au lot si le besoin apparaît.
+
+### Risques
+
+- Compilation musl aarch64 de `ring` et `ravif` non encore essayée (lot 6.2).
+- L'image Docker reste sans authentification : Q35 réduit le risque sans l'éliminer, la documentation doit le dire clairement.
+
+### Reste ouvert des phases précédentes (hors phase 6)
+
+Édition d'un tome dans l'interface, MangaUpdates et Comic Vine, actualisation périodique des fiches, autres `shortcut:` notés au bilan de la phase 5, `:root:has()` sur un vrai Safari iOS, essai sur la tablette réelle, registre shadcn et le paquet `cn`.
 
 ## Fonctionnalités ajoutées en cours de route
 
@@ -1154,3 +1172,4 @@ L'ordre de lecture ne dépend jamais de l'ordre dans l'archive : le lecteur reç
 - 2026-11-13 : fiches pour adultes exclues par défaut des recherches web, une case de l'administration les permet.
 - 2026-11-13 : phase 5 terminée (métadonnées des fichiers et du web, édition manuelle avec verrouillage par champ, séries qui survivent au renommage, identification façon Plex, couvertures des sources).
 - 2026-11-13 : plan de la phase 6 préparé dans une nouvelle session (notes de passation dans « Phase 6 »).
+- 2026-11-13 : plan de la phase 6 validé (Q35 à Q41) : Dependabot, release sur tag, image Docker distroless avec `--allowed-host`, système de thèmes (sombre, clair, OLED, sépia) au lieu du seul mode clair, PWA hors ligne limitée aux pages déjà lues, documentation dans `docs/`.
