@@ -68,7 +68,11 @@ export interface Library {
 export interface SeriesSummary {
   id: number
   library_id: number
+  /** Titre affiché : édité, sinon celui des fichiers, sinon le nom tiré du dossier. */
   name: string
+  /** Pour la recherche : autres titres et noms des auteurs. */
+  alt_titles: string[]
+  authors: string[]
   volume_count: number
   /** Tomes lus jusqu'au bout. */
   read_count: number
@@ -80,6 +84,7 @@ export interface SeriesSummary {
   publication_status: PublicationStatus | null
   created_at: string
   last_read_at: string | null
+  /** Page choisie comme couverture, sinon page 0 du premier tome. */
   cover_page_id: string | null
   /** Tome qu'ouvre « Lire » : la suite de la lecture, sinon le premier non lu, sinon le premier. */
   resume_volume_id: string | null
@@ -108,11 +113,45 @@ export interface SeriesVolume {
   progress?: Progress
 }
 
+/** Ni scénario ni dessin : rôle inconnu. */
+export interface Author {
+  name: string
+  story: boolean
+  art: boolean
+}
+
+/** Métadonnées fusionnées d'une série (fichiers, puis éditions à la main). */
+export interface SeriesMetadata {
+  title: string | null
+  alt_titles: string[]
+  summary: string | null
+  authors: Author[]
+  genres: string[]
+  tags: string[]
+  year: number | null
+  publisher: string | null
+  age_rating: string | null
+  publication_status: PublicationStatus | null
+  links: string[]
+  cover_page_id: string | null
+  /** Sens de lecture proposé par les fichiers : une suggestion, jamais imposée. */
+  right_to_left: boolean | null
+}
+
+/** Champs éditables ; `right_to_left` vient seulement des fichiers. */
+export type SeriesField = Exclude<keyof SeriesMetadata, 'right_to_left'>
+
+/** Champ donné = édité et verrouillé (`null` compris) ; `unlock` le rend aux sources. */
+export type SeriesPatch = Partial<Omit<SeriesMetadata, 'right_to_left'>> & { unlock?: SeriesField[] }
+
 export interface SeriesDetail {
   id: number
   library_id: number
   name: string
   folder: string | null
+  metadata: SeriesMetadata
+  /** Champs édités à la main, que les sources ne remplacent plus. */
+  locked: SeriesField[]
   publication_status: PublicationStatus | null
   settings: ReadingSettings
   /** Tome qu'ouvre « Lire » (même règle que dans `SeriesSummary`). */

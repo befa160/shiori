@@ -48,6 +48,11 @@
   }
 }
 
+/* Le lecteur, plein écran, n'a pas de barre d'onglets : ses notifications ne s'écartent de rien. */
+:root:has([data-reader]) {
+  --tabbar-height: 0px;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

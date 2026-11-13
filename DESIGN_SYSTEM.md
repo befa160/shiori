@@ -151,7 +151,7 @@ Auteur ou compteur        text-sm text-muted-foreground line-clamp-1
 Quand la série n'a pas de couverture **ou** que l'image échoue (`onError`), même cadre `aspect-[2/3]` :
 
 - fond en dégradé vertical de `hsl(<teinte> 35% 16%)` vers `#121212`, teinte tirée d'un hash du titre (stable : la même série a toujours la même couleur, deux séries voisines se distinguent) ;
-- titre en `text-foreground font-semibold`, centré, `line-clamp-4`, `break-words`, dans une marge `p-3` ; auteur dessous en `text-muted-foreground` quand il existera (phase 5) ;
+- titre en `text-foreground font-semibold`, centré, `line-clamp-4`, `break-words`, dans une marge `p-3` ; auteur dessous en `text-sm text-muted-foreground`, `line-clamp-2` (lot 5.4) ;
 - contraste vérifié pour toute teinte : texte secondaire ≥ 4,75:1 sur la partie la plus claire du dégradé (16 % de luminosité au plus ; au-delà, il passe sous 4,5:1) ;
 - `aria-hidden` : le titre est déjà donné par la carte.
 
@@ -176,6 +176,12 @@ Quand la série n'a pas de couverture **ou** que l'image échoue (`onError`), m�
 - Listes déroulantes de filtre : `Select`, en ambre quand elles restreignent la liste (état actif), libellé tronqué par des points de suspension sur une colonne étroite.
 - Cases à cocher : `Checkbox` de 20 px, libellé cliquable sur une ligne de 44 px, aide reliée par `aria-describedby`.
 - Champ piloté par un état local, jamais directement par l'adresse : React Router change l'adresse dans une transition, et un champ piloté par une transition prend du retard sur un appareil lent.
+- Champ verrouillé (édité à la main, lot 5.4) : à droite du libellé, cadenas ambre + « Modifié à la main » en `text-muted-foreground`, puis un bouton fantôme « Rétablir » de 44 px dont le libellé accessible nomme le champ (« Rendre « Résumé » aux fichiers ») ; seuls les champs changés partent à l'enregistrement. Texte multiligne : `Textarea` shadcn, dans un formulaire `min-w-0` (un long texte n'élargit pas la fenêtre).
+
+### Métadonnées d'une série (lot 5.4)
+
+- Sous le titre et les actions, dans `max-w-prose` : auteurs en `text-muted-foreground`, repères (année · éditeur · statut · public) en `text-sm text-muted-foreground`, résumé replié sur 4 lignes au-delà de 240 caractères (« Lire la suite », `aria-expanded`), genres et tags en puces `rounded-full bg-card px-3 py-1 text-sm` (tronquées seulement si elles dépassent la ligne), autres titres, liens.
+- Liens : adresses `http(s)` seulement, nom de domaine + icône de lien externe, `target="_blank" rel="noreferrer noopener"`, zone de 44 px de haut.
 
 ### Notifications
 

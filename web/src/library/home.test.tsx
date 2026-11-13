@@ -22,6 +22,8 @@ const summary = {
   last_read_at: null,
   cover_page_id: null,
   resume_volume_id: null,
+  alt_titles: [] as string[],
+  authors: [] as string[],
 } as const
 const series: SeriesSummary[] = [
   { ...summary, id: 7, name: 'Ancienne', created_at: '2026-01-01T00:00:00.000Z' },

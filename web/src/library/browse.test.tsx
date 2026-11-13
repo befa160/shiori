@@ -22,6 +22,8 @@ const base = {
   last_read_at: null,
   cover_page_id: null,
   resume_volume_id: null,
+  alt_titles: [] as string[],
+  authors: [] as string[],
 } as const
 const series: SeriesSummary[] = [
   { ...base, id: 1, name: 'Akira', reading_status: 'read', read_count: 1, publication_status: 'completed' },
@@ -45,6 +47,20 @@ describe('séries : recherche, filtres et tri', () => {
     expect(router.state.location.search).toBe('?q=ete')
     // Taper ne remplit pas l'historique.
     expect(router.state.historyAction).toBe('REPLACE')
+  })
+
+  it('montre l’auteur sous le titre, et sur la couverture de repli', async () => {
+    mockApi({
+      '/api/libraries': () => json(libraries),
+      '/api/series': () => json([{ ...series[0], authors: ['Katsuhiro Ōtomo', 'Autre'] }, series[1]]),
+    })
+    renderAt('/series')
+    const akira = (await screen.findByRole('link', { name: /^Akira/ })).closest('li') as HTMLElement
+    expect(within(akira).getByText('Katsuhiro Ōtomo, Autre', { selector: 'p' })).toBeInTheDocument()
+    expect(within(within(akira).getByTestId('fallback-cover')).getByText('Katsuhiro Ōtomo, Autre')).toBeInTheDocument()
+    // Sans auteur, le nombre de tomes.
+    const ete = screen.getByRole('link', { name: /^Été en pente/ }).closest('li') as HTMLElement
+    expect(within(ete).getByText('1 tome')).toBeInTheDocument()
   })
 
   it('filtre et trie depuis les listes, et efface les filtres en gardant le tri', async () => {

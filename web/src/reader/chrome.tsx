@@ -1,6 +1,6 @@
 // Composants que les deux modes du lecteur (paginé, vertical) partagent : barre de commandes et
 // curseur de pages. Leurs crochets (taille de l'écran, touches) sont dans `hooks.ts`.
-import { ChevronLeft, Columns2 } from 'lucide-react'
+import { ChevronLeft, Columns2, ImageIcon } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
@@ -99,10 +99,13 @@ export function PageSlider({
 export function DisplayOptions({
   mode,
   onMode,
+  onCover,
   children,
 }: {
   mode: ReadingMode
   onMode: (mode: ReadingMode) => void
+  /** « Utiliser cette page comme couverture » ; absent hors d'une série. */
+  onCover?: () => void
   children?: ReactNode
 }) {
   const { t } = useTranslation()
@@ -122,6 +125,12 @@ export function DisplayOptions({
           onChange={onMode}
         />
         {children}
+        {onCover && (
+          <Button variant="secondary" className="h-auto min-h-11 w-full whitespace-normal" onClick={onCover}>
+            <ImageIcon aria-hidden />
+            {t('reader.setCover')}
+          </Button>
+        )}
       </PopoverContent>
     </Popover>
   )

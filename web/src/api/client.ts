@@ -6,11 +6,11 @@ import type {
   LogLine,
   PageInfo,
   Progress,
-  PublicationStatus,
   ReadingSettings,
   RunSummary,
   ScanProgress,
   SeriesDetail,
+  SeriesPatch,
   SeriesSummary,
   Settings,
   SettingsPatch,
@@ -79,7 +79,7 @@ export const api = {
   scanLogs: (id: number, query: URLSearchParams, init?: RequestInit) =>
     must<LogLine[]>(`/admin/scans/${id}/logs?${query}`, init),
   clearProgress: (volumeId: string) => request<null>(`/volumes/${volumeId}/progress`, { method: 'DELETE' }),
-  patchSeries: (seriesId: number, patch: { publication_status: PublicationStatus | null }) =>
+  patchSeries: (seriesId: number, patch: SeriesPatch) =>
     must<SeriesDetail>(`/series/${seriesId}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   saveSeriesSettings: (seriesId: number, patch: SettingsPatch) =>
     must<ReadingSettings>(`/series/${seriesId}/settings`, { method: 'PATCH', body: JSON.stringify(patch) }),

@@ -8,6 +8,7 @@ import { api } from '@/api/client'
 import { usePages, useSeries, useVolume } from '@/api/queries'
 import type { PageInfo, PageTurn, ReadingMode, SettingsPatch } from '@/api/types'
 import { volumeLabel } from '@/browse/labels'
+import { usePatchSeries } from '@/browse/series'
 import { QueryState } from '@/browse/parts'
 import { Button } from '@/components/ui/button'
 import { Toggle } from '@/components/ui/toggle'
@@ -48,6 +49,8 @@ export interface ReaderProps {
   /** Tome suivant de la série, dans son ordre de lecture. */
   next: string | undefined
   onMode: (mode: ReadingMode) => void
+  /** Fait d'une page la couverture de la série ; absent si le tome n'est dans aucune série. */
+  onCover?: (pageId: string) => void
 }
 
 /** Lecteur plein écran, hors du cadre commun : il applique lui-même la langue enregistrée. */
@@ -64,6 +67,18 @@ function Reader({ volumeId }: { volumeId: string }) {
   const next = position >= 0 ? series.data?.volumes[position + 1]?.volume_id : undefined
   const title = [series.data?.name, entry && volumeLabel(entry, t, i18next.language)].filter(Boolean).join(' · ')
   const back = seriesId === null ? '/' : `/series/${seriesId}`
+  const cover = usePatchSeries(seriesId ?? 0)
+  const onCover =
+    seriesId === null
+      ? undefined
+      : (pageId: string) =>
+          cover.mutate(
+            { cover_page_id: pageId },
+            {
+              onSuccess: () => toast.success(t('reader.coverSet')),
+              onError: (error) => toast.error(t('reader.coverNotSet'), { description: errorText(error, t) }),
+            },
+          )
   // Choix de la séance par-dessus les réglages du serveur : un échec d'enregistrement ne les
   // annule pas quand le tome est redemandé au serveur.
   const [chosen, setChosen] = useState<SettingsPatch>({})
@@ -90,7 +105,8 @@ function Reader({ volumeId }: { volumeId: string }) {
   const mode = settings?.reading_mode
   return (
     // Paginé : l'écran fixe ; vertical : le document défile (défilement et clavier natifs).
-    <div className={cn('bg-black text-foreground', mode === 'vertical' ? 'min-h-dvh' : 'fixed inset-0')}>
+    // `data-reader` : hors du cadre, pas de barre d'onglets ; les notifications descendent d'autant.
+    <div data-reader className={cn('bg-black text-foreground', mode === 'vertical' ? 'min-h-dvh' : 'fixed inset-0')}>
       <title>{`${title || t('reader.page')} · Shiori`}</title>
       <QueryState
         query={pages}
@@ -108,7 +124,7 @@ function Reader({ volumeId }: { volumeId: string }) {
         {(list) => {
           // Sans le tome (réglages, progression), on ne sait ni dans quel sens ni où ouvrir.
           if (volume.isPending) return null
-          const common = { volumeId, pages: list, title, back, resume, next, onMode: (m: ReadingMode) => change({ reading_mode: m }) }
+          const common = { volumeId, pages: list, title, back, resume, next, onMode: (m: ReadingMode) => change({ reading_mode: m }), onCover }
           return mode === 'vertical' ? (
             <VerticalPages {...common} />
           ) : (
@@ -139,6 +155,7 @@ function Pages({
   pageTurn,
   onPageTurn,
   onMode,
+  onCover,
   title,
   back,
   resume,
@@ -320,7 +337,7 @@ function Pages({
           )
         }
         display={
-          <DisplayOptions mode={direction} onMode={onMode}>
+          <DisplayOptions mode={direction} onMode={onMode} onCover={onCover && (() => onCover(first.id))}>
             <Choice
               legend={t('reader.pageTurn')}
               value={pageTurn}

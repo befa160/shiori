@@ -1,25 +1,22 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { EllipsisVertical, Play } from 'lucide-react'
+import { EllipsisVertical, Pencil, Play } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation } from 'react-router'
 import { toast } from 'sonner'
 import { api } from '@/api/client'
 import { useLibraries, useSeries, useVolume } from '@/api/queries'
-import type { PublicationStatus, SeriesDetail, SeriesVolume } from '@/api/types'
+import type { SeriesDetail, SeriesVolume } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Progress } from '@/components/ui/progress'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { errorText, issueText } from '@/i18n/errors'
 import { Cover, CoverCard, CoverGrid } from '@/library/covers'
-import { STATUS_FILTERS } from '@/library/filters'
 import { volumeLabel } from './labels'
 import { BackLink, QueryState } from './parts'
-
-// Listes qui montrent la progression ou le statut d'une série : redemandées après un changement.
-const LISTS = [['series'], ['libraries'], ['continue']]
+import { LISTS } from './series'
+import { EditSeriesDialog, SeriesAbout } from './SeriesMetadata'
 
 export function SeriesPage({ id }: { id: number }) {
   const { t } = useTranslation()
@@ -80,11 +77,13 @@ function SeriesHeader({ series }: { series: SeriesDetail }) {
   // Avancement en pages, calculé par le serveur (même règle que la liste des séries).
   const ratio = series.pages_read / Math.max(series.page_count, 1)
   const resume = series.volumes.find((v) => v.volume_id === series.resume_volume_id)
-  const cover = series.volumes[0]?.cover_page_id ?? null
+  const cover = series.metadata.cover_page_id ?? series.volumes[0]?.cover_page_id ?? null
+  const authors = series.metadata.authors.map((a) => a.name).join(', ')
+  const [editing, setEditing] = useState(false)
   return (
     <div className="flex flex-col gap-6 sm:flex-row">
       <div className="relative aspect-[2/3] w-36 shrink-0 overflow-hidden rounded-md bg-card sm:w-48">
-        <Cover key={cover} pageId={cover} title={series.name} eager />
+        <Cover key={cover} pageId={cover} title={series.name} author={authors} eager />
       </div>
       <div className="min-w-0 flex-1 space-y-4">
         <h1 title={series.name} className="line-clamp-3 text-2xl font-semibold break-words">
@@ -99,15 +98,24 @@ function SeriesHeader({ series }: { series: SeriesDetail }) {
             <Progress aria-label={t('library.percentRead', { percent: ratio })} value={ratio * 100} className="h-1" />
           </div>
         )}
-        {resume && (
-          <Button asChild size="lg">
-            <Link to={`/read/${resume.volume_id}`}>
-              <Play aria-hidden className="fill-current" />
-              {t(resumeAction(resume, read === total), { label: volumeLabel(resume, t, i18n.language) })}
-            </Link>
+        <div className="flex flex-wrap gap-2">
+          {resume && (
+            <Button asChild size="lg">
+              <Link to={`/read/${resume.volume_id}`}>
+                <Play aria-hidden className="fill-current" />
+                {t(resumeAction(resume, read === total), { label: volumeLabel(resume, t, i18n.language) })}
+              </Link>
+            </Button>
+          )}
+          <Button size="lg" variant="secondary" onClick={() => setEditing(true)}>
+            <Pencil aria-hidden />
+            {t('series.edit')}
           </Button>
-        )}
-        <PublicationSelect series={series} />
+        </div>
+        <SeriesAbout series={series} />
+        <Dialog open={editing} onOpenChange={setEditing}>
+          {editing && <EditSeriesDialog series={series} onDone={() => setEditing(false)} />}
+        </Dialog>
       </div>
     </div>
   )
@@ -118,43 +126,6 @@ function resumeAction(volume: SeriesVolume, allRead: boolean) {
   const p = volume.progress
   if (p && p.ordinal + 1 < p.page_count) return 'series.resume'
   return allRead ? 'series.reread' : 'series.read'
-}
-
-const UNKNOWN = 'unknown'
-
-/** Statut de publication, réglé à la main en attendant les métadonnées (Q23). */
-function PublicationSelect({ series }: { series: SeriesDetail }) {
-  const { t } = useTranslation()
-  const queryClient = useQueryClient()
-  const save = useMutation({
-    mutationFn: (status: PublicationStatus | null) => api.patchSeries(series.id, { publication_status: status }),
-    onSuccess: (detail) => {
-      queryClient.setQueryData(['series', series.id], detail)
-      for (const queryKey of LISTS) void queryClient.invalidateQueries({ queryKey, exact: queryKey[0] === 'series' })
-    },
-    // La liste revient à la valeur du serveur : un échec se voit, et se dit.
-    onError: (error) => toast.error(t('series.statusNotSaved'), { description: errorText(error, t) }),
-  })
-  const value = save.isPending ? (save.variables ?? UNKNOWN) : (series.publication_status ?? UNKNOWN)
-  return (
-    <div className="space-y-1">
-      <p id="series-publication" className="text-sm text-muted-foreground">
-        {t('series.publication')}
-      </p>
-      <Select value={value} onValueChange={(v) => save.mutate(v === UNKNOWN ? null : (v as PublicationStatus))}>
-        <SelectTrigger aria-labelledby="series-publication" className="w-56">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent position="popper" align="start">
-          {STATUS_FILTERS.map((v) => (
-            <SelectItem key={v} value={v}>
-              {t(`browse.status.${v}`)}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  )
 }
 
 function VolumeCard({ volume, eager }: { volume: SeriesVolume; eager: boolean }) {
