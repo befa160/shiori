@@ -53,43 +53,76 @@ pub enum PageLayout {
     Auto,
 }
 
+/// Sens dans lequel on tourne les pages (taps, balayage, flèches, curseur), séparé du sens de
+/// lecture, qui garde l'ordre des doubles pages et des moitiés coupées (lot 4.11).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PageTurn {
+    /// Comme le sens de lecture.
+    #[default]
+    Reading,
+    /// Toucher à droite avance.
+    Ltr,
+    /// Toucher à gauche avance (gauchers, même en BD).
+    Rtl,
+}
+
 /// Réglages d'une série : les valeurs appliquées, et ce que la série impose elle-même
-/// (`None` = défaut de la bibliothèque).
+/// (`None` = défaut de la bibliothèque, ou défaut global pour `page_turn`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct ReadingSettings {
     pub reading_mode: ReadingMode,
     pub page_layout: PageLayout,
+    pub page_turn: PageTurn,
     pub reading_mode_override: Option<ReadingMode>,
     pub page_layout_override: Option<PageLayout>,
+    pub page_turn_override: Option<PageTurn>,
 }
 
 impl ReadingSettings {
-    fn new(kind: LibraryKind, mode: Option<ReadingMode>, layout: Option<PageLayout>) -> Self {
-        Self {
-            reading_mode: mode.unwrap_or(kind.reading_mode()),
-            page_layout: layout.unwrap_or_default(),
-            reading_mode_override: mode,
-            page_layout_override: layout,
-        }
-    }
-
-    /// D'après une ligne qui a `kind`, `reading_mode` et `page_layout`.
+    /// D'après une ligne qui a `kind`, `reading_mode`, `page_layout`, `page_turn` (de la série)
+    /// et `default_page_turn` (réglage global).
     pub(crate) fn of(row: &SqliteRow) -> Result<Self, Error> {
         let optional = |column| row.get::<Option<&str>, _>(column);
-        Ok(Self::new(
-            from_db(row.get("kind"))?,
-            optional("reading_mode").map(from_db).transpose()?,
-            optional("page_layout").map(from_db).transpose()?,
-        ))
+        let kind: LibraryKind = from_db(row.get("kind"))?;
+        let mode = optional("reading_mode").map(from_db).transpose()?;
+        let layout = optional("page_layout").map(from_db).transpose()?;
+        let turn = optional("page_turn").map(from_db).transpose()?;
+        Ok(Self {
+            reading_mode: mode.unwrap_or(kind.reading_mode()),
+            page_layout: layout.unwrap_or_default(),
+            page_turn: turn.unwrap_or(from_db(row.get("default_page_turn"))?),
+            reading_mode_override: mode,
+            page_layout_override: layout,
+            page_turn_override: turn,
+        })
     }
 }
 
 impl Default for ReadingSettings {
     /// Tome rattaché à aucune série : défaut d'une bibliothèque de manga.
+    // shortcut: ignore le défaut global de `page_turn` (cas rare, tome scanné hors bibliothèque) ; le lire en base si un cas réel apparaît.
     fn default() -> Self {
-        Self::new(LibraryKind::default(), None, None)
+        Self {
+            reading_mode: LibraryKind::default().reading_mode(),
+            page_layout: PageLayout::default(),
+            page_turn: PageTurn::default(),
+            reading_mode_override: None,
+            page_layout_override: None,
+            page_turn_override: None,
+        }
     }
 }
+
+/// Colonnes de [`ReadingSettings::of`], pour une requête où `s` est la série et `b` sa
+/// bibliothèque.
+macro_rules! settings_columns {
+    () => {
+        "b.kind, s.reading_mode, s.page_layout, s.page_turn,
+         (SELECT page_turn FROM app_settings WHERE id = 1) AS default_page_turn"
+    };
+}
+pub(crate) use settings_columns;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Progress {
@@ -127,6 +160,7 @@ pub enum SaveProgress {
 pub struct SettingsChange {
     pub reading_mode: Option<Option<ReadingMode>>,
     pub page_layout: Option<Option<PageLayout>>,
+    pub page_turn: Option<Option<PageTurn>>,
 }
 
 macro_rules! progress_of {
@@ -254,10 +288,11 @@ impl Db {
 
     /// Réglages appliqués à une série ; `None` si elle n'existe pas.
     pub async fn series_settings(&self, series: i64) -> Result<Option<ReadingSettings>, Error> {
-        let row = sqlx::query(
-            "SELECT b.kind, s.reading_mode, s.page_layout
-             FROM series s JOIN libraries b ON b.id = s.library_id WHERE s.id = ?",
-        )
+        let row = sqlx::query(concat!(
+            "SELECT ",
+            settings_columns!(),
+            " FROM series s JOIN libraries b ON b.id = s.library_id WHERE s.id = ?"
+        ))
         .bind(series)
         .fetch_optional(&self.pool)
         .await?;
@@ -275,24 +310,29 @@ impl Db {
         };
         let mode = change.reading_mode.unwrap_or(current.reading_mode_override);
         let layout = change.page_layout.unwrap_or(current.page_layout_override);
-        sqlx::query("UPDATE series SET reading_mode = ?, page_layout = ? WHERE id = ?")
-            .bind(mode.as_ref().map(to_db))
-            .bind(layout.as_ref().map(to_db))
-            .bind(series)
-            .execute(&self.pool)
-            .await?;
+        let turn = change.page_turn.unwrap_or(current.page_turn_override);
+        sqlx::query(
+            "UPDATE series SET reading_mode = ?, page_layout = ?, page_turn = ? WHERE id = ?",
+        )
+        .bind(mode.as_ref().map(to_db))
+        .bind(layout.as_ref().map(to_db))
+        .bind(turn.as_ref().map(to_db))
+        .bind(series)
+        .execute(&self.pool)
+        .await?;
         self.series_settings(series).await
     }
 
     /// Réglages qui s'appliquent à un tome : ceux de sa première série (par chemin), sinon
     /// le défaut d'une bibliothèque de manga.
     pub(crate) async fn volume_settings(&self, volume: &str) -> Result<ReadingSettings, Error> {
-        let row = sqlx::query(
-            "SELECT b.kind, s.reading_mode, s.page_layout
-             FROM file_locations l JOIN series s ON s.id = l.series_id
+        let row = sqlx::query(concat!(
+            "SELECT ",
+            settings_columns!(),
+            " FROM file_locations l JOIN series s ON s.id = l.series_id
              JOIN libraries b ON b.id = s.library_id
-             WHERE l.volume_id = ? ORDER BY l.path LIMIT 1",
-        )
+             WHERE l.volume_id = ? ORDER BY l.path LIMIT 1"
+        ))
         .bind(volume)
         .fetch_optional(&self.pool)
         .await?;

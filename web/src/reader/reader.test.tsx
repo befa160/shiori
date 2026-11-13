@@ -12,8 +12,9 @@ const VOLUME = 'a'.repeat(64)
 type Mode = 'rtl' | 'ltr' | 'vertical'
 type Layout = 'single' | 'double' | 'auto'
 // Page simple par défaut : jsdom simule un écran paysage, où `auto` passerait en double.
-const settings = (reading_mode: Mode, page_layout: Layout = 'single') =>
-  ({ reading_mode, page_layout, reading_mode_override: null, page_layout_override: null }) as const
+type Turn = 'reading' | 'ltr' | 'rtl'
+const settings = (reading_mode: Mode, page_layout: Layout = 'single', page_turn: Turn = 'reading') =>
+  ({ reading_mode, page_layout, page_turn, reading_mode_override: null, page_layout_override: null, page_turn_override: null }) as const
 const page = (n: number, status: 'ok' | 'broken' = 'ok', wide = false): PageInfo => ({
   id: `p${n}`,
   ordinal: n - 1,
@@ -390,6 +391,41 @@ describe('progression, réglages de la série, tome suivant', () => {
     unmount()
     expect(sent(fetch, 'PUT').at(-1)).toEqual([url, { page_id: 'p1' }])
     expect(sent(fetch, 'PUT')).toHaveLength(3)
+  })
+
+  it('en manga, tourne les pages de gauche à droite si le réglage le demande, sans changer l’ordre des pages', async () => {
+    const fetch = serve(
+      { settings: settings('rtl', 'double', 'ltr') },
+      {
+        [`/api/volumes/${VOLUME}/pages`]: () => json([page(1), page(2), page(3)]),
+        '/api/series/7/settings': () => json(settings('rtl', 'double', 'rtl')),
+      },
+    )
+    renderAt(`/read/${VOLUME}`)
+    await screen.findByRole('img', { name: 'Page 1 sur 3' })
+    // Flèche droite et tap à droite avancent ; la double page reste lue de droite à gauche.
+    await userEvent.keyboard('{ArrowRight}')
+    const pair = await screen.findAllByRole('img', { name: /^Page [23] sur 3/ })
+    // Paire affichée de droite à gauche (page 2 à droite) : sens de lecture inchangé.
+    expect(pair).toHaveLength(2)
+    expect(pair[0].closest('.flex-row-reverse')).not.toBeNull()
+    fireEvent.pointerDown(main(), { clientX: 50, clientY: 300 })
+    fireEvent.pointerUp(main(), { clientX: 50, clientY: 300 })
+    expect(await screen.findByRole('img', { name: 'Page 1 sur 3' })).toBeInTheDocument()
+    fireEvent.pointerDown(main(), { clientX: 850, clientY: 300 })
+    fireEvent.pointerUp(main(), { clientX: 850, clientY: 300 })
+    expect(await screen.findAllByRole('img', { name: /^Page [23] sur 3/ })).toHaveLength(2)
+    // Le curseur et les boutons suivent aussi : « Page suivante » à droite, curseur de gauche à droite.
+    await showControls()
+    const toolbar = screen.getByRole('toolbar')
+    const buttons = within(toolbar).getAllByRole('button', { name: /^Page (suivante|précédente)$/ })
+    expect(buttons.map((b) => b.getAttribute('aria-label'))).toEqual(['Page précédente', 'Page suivante'])
+    expect(within(toolbar).getByRole('slider').closest('[dir]')).toHaveAttribute('dir', 'ltr')
+    // Le panneau Affichage le change pour la série.
+    await userEvent.click(screen.getByRole('button', { name: 'Affichage' }))
+    expect(await screen.findByRole('radio', { name: 'Toucher à droite avance' })).toHaveAttribute('aria-checked', 'true')
+    await userEvent.click(screen.getByRole('radio', { name: 'Toucher à gauche avance' }))
+    expect(sent(fetch, 'PATCH')).toEqual([['/api/series/7/settings', { page_turn: 'rtl' }]])
   })
 
   it('le sens de lecture et la disposition choisis sont retenus pour la série', async () => {

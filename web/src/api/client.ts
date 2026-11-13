@@ -56,7 +56,7 @@ async function must<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   health: (init?: RequestInit) => must<Health>('/health', init),
   settings: (init?: RequestInit) => must<Settings>('/settings', init),
-  saveSettings: (settings: Settings) =>
+  saveSettings: (settings: Partial<Settings>) =>
     must<Settings>('/settings', { method: 'PUT', body: JSON.stringify(settings) }),
   libraries: (init?: RequestInit) => must<Library[]>('/libraries', init),
   librarySeries: (id: number, init?: RequestInit) => must<SeriesSummary[]>(`/libraries/${id}/series`, init),

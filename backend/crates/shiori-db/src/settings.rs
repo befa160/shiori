@@ -4,7 +4,7 @@
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 
-use crate::{Db, Error, from_db, to_db};
+use crate::{Db, Error, PageTurn, from_db, to_db};
 
 /// Langue de l'interface.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -18,11 +18,13 @@ pub enum Language {
 pub struct Settings {
     /// `None` : personne n'a choisi, l'interface suit la langue du navigateur.
     pub language: Option<Language>,
+    /// Sens par défaut pour tourner les pages ; une série peut avoir le sien.
+    pub page_turn: PageTurn,
 }
 
 impl Db {
     pub async fn settings(&self) -> Result<Settings, Error> {
-        let row = sqlx::query("SELECT language FROM app_settings WHERE id = 1")
+        let row = sqlx::query("SELECT language, page_turn FROM app_settings WHERE id = 1")
             .fetch_one(&self.pool)
             .await?;
         Ok(Settings {
@@ -30,7 +32,16 @@ impl Db {
                 .get::<Option<&str>, _>("language")
                 .map(from_db)
                 .transpose()?,
+            page_turn: from_db(row.get("page_turn"))?,
         })
+    }
+
+    pub async fn set_page_turn(&self, page_turn: PageTurn) -> Result<Settings, Error> {
+        sqlx::query("UPDATE app_settings SET page_turn = ? WHERE id = 1")
+            .bind(to_db(&page_turn))
+            .execute(&self.pool)
+            .await?;
+        self.settings().await
     }
 
     pub async fn set_language(&self, language: Option<Language>) -> Result<Settings, Error> {

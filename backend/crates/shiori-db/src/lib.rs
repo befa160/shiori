@@ -43,7 +43,8 @@ pub use browse::{
 };
 pub use library::{Library, LibraryError};
 pub use reading::{
-    LibraryKind, PageLayout, Progress, ReadingMode, ReadingSettings, SaveProgress, SettingsChange,
+    LibraryKind, PageLayout, PageTurn, Progress, ReadingMode, ReadingSettings, SaveProgress,
+    SettingsChange,
 };
 pub use runs::{LogLine, RunCounts, RunFilter, RunOrigin, RunStatus, RunSummary};
 pub use settings::{Language, Settings};

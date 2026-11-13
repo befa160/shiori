@@ -22,8 +22,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use shiori_core::{Archive, PageId, PageStatus, Severity, VolumeId, open_archive as open_file};
 use shiori_db::{
-    Db, Language, LibraryError, LibraryKind, PageFile, PageLayout, PageSource, PublicationStatus,
-    ReadingMode, RunFilter, RunStatus, SaveProgress, SettingsChange,
+    Db, Language, LibraryError, LibraryKind, PageFile, PageLayout, PageSource, PageTurn,
+    PublicationStatus, ReadingMode, RunFilter, RunStatus, SaveProgress, SettingsChange,
 };
 use tokio::net::TcpListener;
 use tokio::sync::Semaphore;
@@ -286,10 +286,12 @@ async fn settings(State(app): State<Arc<App>>) -> ApiResult<shiori_db::Settings>
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct NewSettings {
-    /// Obligatoire : `null` (revenir à la langue du navigateur) doit être écrit, un corps vide
-    /// ne remet rien à zéro.
-    #[serde(deserialize_with = "present")]
+    /// Absent : inchangée ; `null` : revenir à la langue du navigateur.
+    #[serde(default, deserialize_with = "present")]
     language: Option<Option<Language>>,
+    /// Absent : inchangé ; jamais `null` (ce réglage a toujours une valeur).
+    #[serde(default, deserialize_with = "present")]
+    page_turn: Option<Option<PageTurn>>,
 }
 
 async fn save_settings(
@@ -298,7 +300,28 @@ async fn save_settings(
 ) -> ApiResult<shiori_db::Settings> {
     let Json(new) =
         body.map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, "invalid_body", e.body_text()))?;
-    Ok(Json(app.db.set_language(new.language.flatten()).await?))
+    if new.page_turn == Some(None) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "invalid_body",
+            "page_turn ne peut pas être null",
+        ));
+    }
+    // Un corps vide est une erreur, jamais une remise à zéro silencieuse.
+    if new.language.is_none() && new.page_turn.is_none() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "invalid_body",
+            "aucun réglage à enregistrer",
+        ));
+    }
+    if let Some(language) = new.language {
+        app.db.set_language(language).await?;
+    }
+    if let Some(Some(turn)) = new.page_turn {
+        app.db.set_page_turn(turn).await?;
+    }
+    Ok(Json(app.db.settings().await?))
 }
 
 async fn libraries(State(app): State<Arc<App>>) -> ApiResult<Vec<shiori_db::LibrarySummary>> {
@@ -516,6 +539,8 @@ struct SettingsPatch {
     reading_mode: Option<Option<ReadingMode>>,
     #[serde(default, deserialize_with = "present")]
     page_layout: Option<Option<PageLayout>>,
+    #[serde(default, deserialize_with = "present")]
+    page_turn: Option<Option<PageTurn>>,
 }
 
 /// Distingue un champ présent à `null` (`Some(None)`) d'un champ absent (`None`, par défaut).
@@ -538,6 +563,7 @@ async fn series_settings(
     let change = SettingsChange {
         reading_mode: patch.reading_mode,
         page_layout: patch.page_layout,
+        page_turn: patch.page_turn,
     };
     app.db
         .change_series_settings(id, change)

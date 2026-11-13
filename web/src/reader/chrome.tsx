@@ -133,18 +133,28 @@ export function Choice<T extends string>({
   value,
   options,
   onChange,
+  vertical = false,
 }: {
   legend: string
   value: T
   options: [T, string][]
   onChange: (value: T) => void
+  /** Choix les uns sous les autres, pour des libellés trop longs pour tenir sur une ligne. */
+  vertical?: boolean
 }) {
   return (
     <fieldset className="space-y-2">
       <legend className="text-sm text-muted-foreground">{legend}</legend>
-      <ToggleGroup type="single" value={value} onValueChange={(v) => v && onChange(v as T)} className="w-full">
+      <ToggleGroup
+        type="single"
+        value={value}
+        onValueChange={(v) => v && onChange(v as T)}
+        orientation={vertical ? 'vertical' : 'horizontal'}
+        className={cn('w-full', vertical && 'flex-col *:w-full *:rounded-md!')}
+      >
         {options.map(([v, label]) => (
-          <ToggleGroupItem key={v} value={v} className="flex-1">
+          // En colonne, `flex-1` écraserait chaque choix : hauteur fixe de 44 px.
+          <ToggleGroupItem key={v} value={v} className={vertical ? 'h-11 flex-none' : 'flex-1'}>
             {label}
           </ToggleGroupItem>
         ))}

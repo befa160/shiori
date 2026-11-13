@@ -233,7 +233,7 @@ describe('lien vers un tome', () => {
           folder: 'A',
           publication_status: null,
           resume_volume_id: 'v1',
-          settings: { reading_mode: 'rtl', page_layout: 'auto', reading_mode_override: null, page_layout_override: null },
+          settings: { reading_mode: 'rtl', page_layout: 'auto', page_turn: 'reading', reading_mode_override: null, page_layout_override: null, page_turn_override: null },
           volumes: [
             { ...volume, volume_id: 'v0', number: 0 },
             { ...volume, volume_id: 'v1' },

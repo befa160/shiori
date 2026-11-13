@@ -185,6 +185,41 @@ async fn progress_errors_have_stable_codes() {
 }
 
 #[tokio::test]
+async fn page_turn_follows_the_global_default_unless_the_series_sets_it() {
+    let f = fixture(Some("manga")).await;
+    let uri = format!("/api/series/{}/settings", f.series);
+    let settings = |f: &Fixture| {
+        let series = format!("/api/series/{}", f.series);
+        let app = f.app.clone();
+        async move { call(&app, "GET", &series, None).await.1["settings"].clone() }
+    };
+    assert_eq!(settings(&f).await["page_turn"], "reading");
+    call(
+        &f.app,
+        "PUT",
+        "/api/settings",
+        Some(json!({ "page_turn": "ltr" })),
+    )
+    .await;
+    let s = settings(&f).await;
+    assert_eq!(
+        (s["page_turn"].as_str(), &s["page_turn_override"]),
+        (Some("ltr"), &Value::Null)
+    );
+    let (_, s) = call(&f.app, "PATCH", &uri, Some(json!({ "page_turn": "rtl" }))).await;
+    assert_eq!(
+        (s["page_turn"].as_str(), s["page_turn_override"].as_str()),
+        (Some("rtl"), Some("rtl"))
+    );
+    // Le sens de lecture n'a pas bougé, et `null` rend le défaut global.
+    assert_eq!(s["reading_mode"], "rtl");
+    let (_, s) = call(&f.app, "PATCH", &uri, Some(json!({ "page_turn": null }))).await;
+    assert_eq!(s["page_turn"], "ltr");
+    let (_, volume) = call(&f.app, "GET", &format!("/api/volumes/{}", f.volume), None).await;
+    assert_eq!(volume["settings"], s);
+}
+
+#[tokio::test]
 async fn series_settings_patch() {
     let f = fixture(Some("comics")).await;
     let series_uri = format!("/api/series/{}", f.series);
@@ -192,8 +227,9 @@ async fn series_settings_patch() {
     let (_, series) = call(&f.app, "GET", &series_uri, None).await;
     assert_eq!(
         series["settings"],
-        json!({ "reading_mode": "ltr", "page_layout": "auto",
-                "reading_mode_override": null, "page_layout_override": null })
+        json!({ "reading_mode": "ltr", "page_layout": "auto", "page_turn": "reading",
+                "reading_mode_override": null, "page_layout_override": null,
+                "page_turn_override": null })
     );
 
     let (status, s) = call(
@@ -286,7 +322,10 @@ async fn language_setting_round_trip() {
     let f = fixture(None).await;
     assert_eq!(
         call(&f.app, "GET", "/api/settings", None).await,
-        (StatusCode::OK, json!({ "language": null }))
+        (
+            StatusCode::OK,
+            json!({ "language": null, "page_turn": "reading" })
+        )
     );
     let (status, saved) = call(
         &f.app,
@@ -297,11 +336,14 @@ async fn language_setting_round_trip() {
     .await;
     assert_eq!(
         (status, saved),
-        (StatusCode::OK, json!({ "language": "en" }))
+        (
+            StatusCode::OK,
+            json!({ "language": "en", "page_turn": "reading" })
+        )
     );
     assert_eq!(
         call(&f.app, "GET", "/api/settings", None).await.1,
-        json!({ "language": "en" })
+        json!({ "language": "en", "page_turn": "reading" })
     );
     let (_, reset) = call(
         &f.app,
@@ -310,9 +352,21 @@ async fn language_setting_round_trip() {
         Some(json!({ "language": null })),
     )
     .await;
-    assert_eq!(reset, json!({ "language": null }));
+    assert_eq!(reset, json!({ "language": null, "page_turn": "reading" }));
+    // Un champ absent reste inchangé.
+    let (_, turned) = call(
+        &f.app,
+        "PUT",
+        "/api/settings",
+        Some(json!({ "page_turn": "ltr" })),
+    )
+    .await;
+    assert_eq!(turned, json!({ "language": null, "page_turn": "ltr" }));
     for body in [
         json!({ "language": "de" }),
+        json!({ "page_turn": null }),
+        json!({ "language": "fr", "page_turn": null }),
+        json!({ "page_turn": "haut" }),
         json!({ "langue": "fr" }),
         json!({}),
     ] {
