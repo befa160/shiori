@@ -262,6 +262,7 @@ export const fr = {
     archive_order_differs: "L'ordre des pages dans l'archive diffère de l'ordre de lecture",
     ignored_entry: 'Fichier annexe ignoré',
     solid_archive: 'Archive RAR solide : la première page est plus lente à ouvrir',
+    metadata_invalid: 'Fichier de métadonnées (ComicInfo.xml, index.json) illisible, ignoré',
   },
   // Erreurs de l'API, par code stable (le message du serveur, en français, sert de secours).
   errors: {

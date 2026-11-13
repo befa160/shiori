@@ -23,6 +23,7 @@ fn scanned(status: Status, skipped: bool, codes: &[IssueCode]) -> Scanned {
                     message: String::new(),
                 })
                 .collect(),
+            metadata: Vec::new(),
         },
         skipped,
     }

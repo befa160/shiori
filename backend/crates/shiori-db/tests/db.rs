@@ -106,6 +106,9 @@ async fn rehash_rescans_but_keeps_rows_in_place() {
     let again = db.scan(run, &path, NORMAL, true).await.unwrap();
     assert!(!again.skipped);
     assert_eq!(pages_dump(&db).await, before, "mêmes lignes, mêmes rowid");
+    // Le ComicInfo.xml de la fixture : remplacé au rescan, jamais dupliqué.
+    let meta = "SELECT COUNT(*) FROM volume_metadata WHERE source = 'comicinfo' AND data LIKE '%\"title\":\"Test\"%'";
+    assert_eq!(count(&db, meta).await, 1);
 }
 
 #[tokio::test]

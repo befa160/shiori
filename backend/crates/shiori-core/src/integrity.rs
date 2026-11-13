@@ -15,6 +15,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use crate::archive::{self, ArchiveError, Entry, EntryKind};
 use crate::id::{PageId, VolumeId};
+use crate::metadata::{self, LocalMetadata, MAX_METADATA_SIZE, MetadataSource};
 use crate::order::compare_entry_names;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -49,6 +50,7 @@ pub enum IssueCode {
     ArchiveOrderDiffers,
     IgnoredEntry,
     SolidArchive,
+    MetadataInvalid,
 }
 
 impl IssueCode {
@@ -72,7 +74,8 @@ impl IssueCode {
             | UnsupportedImage
             | NonImageEntry
             | Subdirectories
-            | ArchiveOrderDiffers => Severity::Warning,
+            | ArchiveOrderDiffers
+            | MetadataInvalid => Severity::Warning,
             IgnoredEntry | SolidArchive => Severity::Info,
         }
     }
@@ -132,6 +135,8 @@ pub struct FileReport {
     pub status: Status,
     pub pages: Vec<Page>,
     pub issues: Vec<Issue>,
+    /// Métadonnées des fichiers `ComicInfo.xml` et `index.json` à la racine de l'archive.
+    pub metadata: Vec<(MetadataSource, LocalMetadata)>,
 }
 
 fn lossy_path<S: Serializer>(path: &Path, s: S) -> Result<S::Ok, S::Error> {
@@ -140,7 +145,8 @@ fn lossy_path<S: Serializer>(path: &Path, s: S) -> Result<S::Ok, S::Error> {
 
 /// Version des règles de scan. À incrémenter quand un changement de ces règles
 /// (ordre, classification, codes) doit déclencher le rescan des tomes déjà connus.
-pub const SCANNER_VERSION: i64 = 1;
+/// 2 : lecture de `ComicInfo.xml` et `index.json` (phase 5).
+pub const SCANNER_VERSION: i64 = 2;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ScanOptions {
@@ -158,6 +164,7 @@ impl FileReport {
             status: Status::Ok,
             pages: Vec::new(),
             issues: Vec::new(),
+            metadata: Vec::new(),
         }
     }
 
@@ -288,13 +295,41 @@ fn scan_unguarded(path: &Path, options: ScanOptions) -> FileReport {
         .iter()
         .map(|e| (e.name_raw.as_slice(), e.index))
         .collect();
+    let mut metadata: BTreeMap<usize, (MetadataSource, String)> = BTreeMap::new();
     let mut candidates: BTreeMap<usize, (Page, bool)> = entries
         .iter()
         .filter(|e| last[e.name_raw.as_slice()] == e.index)
-        .filter_map(|e| Some((e.index, classify(&volume, e, &mut report)?)))
+        .filter_map(|e| {
+            let source = MetadataSource::of_entry(&e.name).filter(|_| e.kind == EntryKind::File);
+            let Some(source) = source else {
+                return Some((e.index, classify(&volume, e, &mut report)?));
+            };
+            if metadata.values().any(|(s, _)| *s == source) {
+                // `ComicInfo.xml` et `comicinfo.xml` : le premier seul compte.
+                let msg = "second fichier de métadonnées du même type, ignoré";
+                report.issue(IssueCode::IgnoredEntry, Some(&e.name), msg);
+            } else if e.size > MAX_METADATA_SIZE {
+                let msg = "fichier de métadonnées trop gros, ignoré";
+                report.issue(IssueCode::MetadataInvalid, Some(&e.name), msg);
+            } else {
+                metadata.insert(e.index, (source, e.name.clone()));
+            }
+            None
+        })
         .collect();
-    let indices: Vec<usize> = candidates.keys().copied().collect();
+    let mut indices: Vec<usize> = candidates.keys().chain(metadata.keys()).copied().collect();
+    indices.sort_unstable();
     archive.read_each(&indices, &mut |index, bytes| {
+        if let Some((source, name)) = metadata.remove(&index) {
+            match bytes
+                .map_err(|e| e.to_string())
+                .and_then(|b| metadata::parse(source, &b))
+            {
+                Ok(meta) => report.metadata.push((source, meta)),
+                Err(msg) => report.issue(IssueCode::MetadataInvalid, Some(&name), msg),
+            }
+            return;
+        }
         let Some((page, looks_like_image)) = candidates.remove(&index) else {
             return;
         };
@@ -311,6 +346,7 @@ fn scan_unguarded(path: &Path, options: ScanOptions) -> FileReport {
     // correspondent pas forcément au `volume_id`. On ne les garde pas.
     if fs::metadata(path).map(|m| stamp(&m)).ok() != stamp_before {
         report.pages.clear();
+        report.metadata.clear();
         report.issue(
             IssueCode::FileChangedDuringScan,
             None,
