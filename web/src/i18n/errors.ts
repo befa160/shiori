@@ -17,3 +17,11 @@ export function issueText(issue: Pick<Issue, 'message'> & { code: string }, t: T
   const key = `issues.${issue.code}`
   return i18n.exists(key) ? t(key as 'issues.no_pages') : issue.message
 }
+
+const SOURCE_ERRORS = ['offline', 'rate_limited', 'not_found', 'http_error', 'bad_response'] as const
+
+/** Dernier échec d'une source web, d'après son code stable ; un code inconnu reste tel quel. */
+export function sourceErrorText(code: string, t: TFunction): string {
+  const known = SOURCE_ERRORS.find((c) => c === code)
+  return known ? t(`admin.lastError.${known}`) : code
+}

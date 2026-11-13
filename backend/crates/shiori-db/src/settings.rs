@@ -25,6 +25,8 @@ pub struct Settings {
     pub metadata_online: bool,
     /// Ordre choisi des sources ; `None` : d'après la langue (voir [`Settings::source_order`]).
     pub metadata_sources: Option<Vec<SourceId>>,
+    /// Fiches pour adultes permises dans les recherches (exclues par défaut).
+    pub metadata_adult: bool,
 }
 
 impl Settings {
@@ -52,10 +54,11 @@ impl Settings {
 impl Db {
     pub async fn settings(&self) -> Result<Settings, Error> {
         let row = sqlx::query(
-            "SELECT language, page_turn, metadata_online, metadata_sources FROM app_settings WHERE id = 1",
+            "SELECT language, page_turn, metadata_online, metadata_sources, metadata_adult
+             FROM app_settings WHERE id = 1",
         )
-            .fetch_one(&self.pool)
-            .await?;
+        .fetch_one(&self.pool)
+        .await?;
         Ok(Settings {
             language: row
                 .get::<Option<&str>, _>("language")
@@ -63,12 +66,21 @@ impl Db {
                 .transpose()?,
             page_turn: from_db(row.get("page_turn"))?,
             metadata_online: row.get("metadata_online"),
+            metadata_adult: row.get("metadata_adult"),
             metadata_sources: row
                 .get::<Option<&str>, _>("metadata_sources")
                 .map(serde_json::from_str)
                 .transpose()
                 .map_err(|e| Error::Decode(Box::new(e)))?,
         })
+    }
+
+    pub async fn set_metadata_adult(&self, adult: bool) -> Result<Settings, Error> {
+        sqlx::query("UPDATE app_settings SET metadata_adult = ? WHERE id = 1")
+            .bind(adult)
+            .execute(&self.pool)
+            .await?;
+        self.settings().await
     }
 
     pub async fn set_metadata_online(&self, online: bool) -> Result<Settings, Error> {

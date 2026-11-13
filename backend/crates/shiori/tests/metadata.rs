@@ -47,8 +47,12 @@ impl Source for Fake {
         self.id
     }
 
-    fn search(&self, query: &str) -> Answer<Vec<WebMetadata>> {
-        self.calls.lock().unwrap().push(format!("search {query}"));
+    fn search(&self, query: &str, adult: bool) -> Answer<Vec<WebMetadata>> {
+        let note = if adult { " (adultes)" } else { "" };
+        self.calls
+            .lock()
+            .unwrap()
+            .push(format!("search {query}{note}"));
         std::thread::sleep(self.delay);
         self.searches
             .lock()
@@ -410,6 +414,36 @@ async fn errors_are_explicit_and_a_rate_limit_stops_the_identification() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     let (status, err) = call(&f.app, "GET", &search("x"), None).await;
     assert_eq!((status, err), (StatusCode::OK, json!([])));
+    // Fiches pour adultes : exclues par défaut, permises par la case de l'administration.
+    let (_, settings) = call(&f.app, "GET", "/api/settings", None).await;
+    assert_eq!(settings["metadata_adult"], false);
+    let (status, _) = call(
+        &f.app,
+        "PUT",
+        "/api/settings",
+        Some(json!({ "metadata_adult": null })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    call(
+        &f.app,
+        "PUT",
+        "/api/settings",
+        Some(json!({ "metadata_adult": true })),
+    )
+    .await;
+    call(&f.app, "GET", &search("y"), None).await;
+    assert_eq!(
+        f.anilist.calls().last().map(String::as_str),
+        Some("search y (adultes)")
+    );
+    call(
+        &f.app,
+        "PUT",
+        "/api/settings",
+        Some(json!({ "metadata_adult": false })),
+    )
+    .await;
 
     // Identification : la source demande d'attendre dès la première série ; rien n'est noté.
     f.anilist

@@ -53,10 +53,44 @@ export interface Settings {
   metadata_online: boolean
   /** Ordre choisi des sources ; `null` : d'après la langue de l'interface. */
   metadata_sources: SourceId[] | null
+  /** Fiches pour adultes permises dans les recherches (exclues par défaut). */
+  metadata_adult: boolean
 }
 
 /** Sources de métadonnées web. */
 export type SourceId = 'anilist' | 'mangadex'
+
+/** Un texte et sa langue (`en`, `fr`, `ja`, `ja-ro`…). */
+export interface LangText {
+  lang: string | null
+  text: string
+}
+
+/** Fiche d'une série chez une source (candidat ou résultat de recherche). */
+export interface WebMetadata {
+  id: string
+  /** Titre principal d'abord. */
+  titles: LangText[]
+  summaries: LangText[]
+  authors: Author[]
+  genres: string[]
+  tags: string[]
+  year: number | null
+  status: string | null
+  links: string[]
+}
+
+/** État d'une source pour une série. */
+export interface SourceState {
+  source: SourceId
+  /** Fiche liée ; `null` : pas liée. */
+  external_id: string | null
+  matched_by: 'auto' | 'user' | null
+  checked_at: string
+  last_error: string | null
+  /** Fiches possibles, à confirmer ; vide : rien trouvé ou liée. */
+  candidates: WebMetadata[]
+}
 
 /** Une source qui demande l'attention : fiches à confirmer, ou dernier essai raté. */
 export interface SourceIssue {
@@ -163,6 +197,8 @@ export interface SeriesMetadata {
   links: string[]
   cover_page_id: string | null
   cover_image_id: string | null
+  /** Source qui passe en premier pour cette série ; `null` : l'ordre réglé. */
+  main_source: SourceId | null
   /** Sens de lecture proposé par les fichiers : une suggestion, jamais imposée. */
   right_to_left: boolean | null
 }
@@ -181,6 +217,8 @@ export interface SeriesDetail {
   metadata: SeriesMetadata
   /** Champs édités à la main, que les sources ne remplacent plus. */
   locked: SeriesField[]
+  /** Sources web de la série : liées, à confirmer ou en échec. */
+  sources: SourceState[]
   publication_status: PublicationStatus | null
   settings: ReadingSettings
   /** Tome qu'ouvre « Lire » (même règle que dans `SeriesSummary`). */

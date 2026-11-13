@@ -2,7 +2,7 @@ import { ExternalLink, Lock } from 'lucide-react'
 import { type ReactNode, useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import type { Author, PublicationStatus, SeriesDetail, SeriesField, SeriesMetadata, SeriesPatch } from '@/api/types'
+import type { Author, PublicationStatus, SeriesDetail, SeriesField, SeriesMetadata, SeriesPatch, SourceId } from '@/api/types'
 import { usePatchSeries, webLinks } from './series'
 import { Button } from '@/components/ui/button'
 import { DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -80,7 +80,7 @@ export function SeriesAbout({ series }: { series: SeriesDetail }) {
 }
 
 /** Champs du formulaire, chacun en texte ; une liste par ligne, sauf genres et tags (virgules). */
-type Form = Record<Exclude<SeriesField, 'cover_page_id' | 'cover_image_id'>, string>
+type Form = Record<Exclude<SeriesField, 'cover_page_id' | 'cover_image_id' | 'main_source'>, string>
 const UNKNOWN = 'unknown'
 const lines = (text: string) => text.split('\n').map((s) => s.trim()).filter(Boolean)
 const commas = (text: string) => text.split(',').map((s) => s.trim()).filter(Boolean)
@@ -135,6 +135,11 @@ export function EditSeriesDialog({ series, onDone }: { series: SeriesDetail; onD
   const [initial, setInitial] = useState(() => formOf(series.metadata))
   const [form, setForm] = useState(initial)
   const [error, setError] = useState<string | null>(null)
+  // Source principale : seulement parmi les sources liées ; `auto` : l'ordre réglé.
+  const linked = series.sources.filter((s) => s.external_id !== null).map((s) => s.source)
+  const stored = series.metadata.main_source
+  const initialMain = stored !== null && linked.includes(stored) ? stored : 'auto'
+  const [main, setMain] = useState<SourceId | 'auto'>(initialMain)
   const yearError = valueOf('year', form.year, []) === undefined
   const set = (field: keyof Form) => (value: string) => setForm((f) => ({ ...f, [field]: value }))
 
@@ -157,6 +162,10 @@ export function EditSeriesDialog({ series, onDone }: { series: SeriesDetail; onD
     const patch: Record<string, unknown> = {}
     for (const field of Object.keys(form) as (keyof Form)[]) {
       if (form[field] !== initial[field]) patch[field] = valueOf(field, form[field], series.metadata.authors)
+    }
+    if (main !== initialMain) {
+      if (main === 'auto') patch.unlock = ['main_source']
+      else patch.main_source = main
     }
     if (Object.keys(patch).length === 0) return onDone()
     setError(null)
@@ -260,6 +269,29 @@ export function EditSeriesDialog({ series, onDone }: { series: SeriesDetail; onD
           ))}
         </div>
         {field('links', area('links', 2), t('series.linksHelp'))}
+        {linked.length > 0 && (
+          <div className="space-y-1.5">
+            <label htmlFor={`${id}-main`} className="flex min-h-11 items-center text-sm font-medium">
+              {t('series.fields.main_source')}
+            </label>
+            <Select value={main} onValueChange={(v) => setMain(v as SourceId | 'auto')}>
+              <SelectTrigger id={`${id}-main`} aria-describedby={`${id}-main-help`} className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent position="popper" align="start">
+                <SelectItem value="auto">{t('series.mainSourceAuto')}</SelectItem>
+                {linked.map((source) => (
+                  <SelectItem key={source} value={source}>
+                    {t(`admin.sourceNames.${source}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p id={`${id}-main-help`} className="text-sm text-muted-foreground">
+              {t('series.mainSourceHelp')}
+            </p>
+          </div>
+        )}
         {error && (
           <p role="alert" className="text-sm text-destructive">
             {t('series.notSaved')} · {error}

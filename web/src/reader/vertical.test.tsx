@@ -117,7 +117,7 @@ describe('mode webtoon', () => {
 
   it('fait de la bande en haut de l’écran la couverture de la série', async () => {
     const inSeries = { ...volume, locations: [{ ...volume.locations[0], series_id: 7 }] }
-    const series = { id: 7, library_id: 1, name: 'Leviathan', folder: 'Leviathan', publication_status: null, metadata: NO_METADATA, locked: [], settings: volume.settings, resume_volume_id: null, page_count: 100, pages_read: 0, volumes: [] }
+    const series = { id: 7, library_id: 1, name: 'Leviathan', folder: 'Leviathan', publication_status: null, metadata: NO_METADATA, locked: [], sources: [], settings: volume.settings, resume_volume_id: null, page_count: 100, pages_read: 0, volumes: [] }
     const fetch = mockApi({
       [`/api/volumes/${VOLUME}`]: () => json(inSeries),
       [`/api/volumes/${VOLUME}/pages`]: () => json(strips),

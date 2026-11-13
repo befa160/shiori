@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowDown, ArrowUp, Loader2 } from 'lucide-react'
 import { useEffect, useId, useRef } from 'react'
-import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { toast } from 'sonner'
@@ -11,7 +10,7 @@ import { QueryState } from '@/browse/parts'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Progress } from '@/components/ui/progress'
-import { errorText } from '@/i18n/errors'
+import { errorText, sourceErrorText } from '@/i18n/errors'
 
 const CREDITS: [string, string][] = [
   ['AniList', 'https://anilist.co'],
@@ -60,7 +59,11 @@ export function AdminMetadata() {
     },
     onError: (error) => toast.error(t('admin.identifyNotStarted'), { description: errorText(error, t) }),
   })
-  const online = save.isPending && save.variables.metadata_online !== undefined ? save.variables.metadata_online : settings.data?.metadata_online
+  // Valeur en cours d'enregistrement, sinon celle du serveur.
+  const pending = <K extends 'metadata_online' | 'metadata_adult'>(key: K) =>
+    save.isPending && save.variables[key] !== undefined ? save.variables[key] : settings.data?.[key]
+  const online = pending('metadata_online')
+  const adult = pending('metadata_adult')
   const n = new Intl.NumberFormat(i18n.language)
   const name = (source: SourceId) => t(`admin.sourceNames.${source}`)
   return (
@@ -82,6 +85,25 @@ export function AdminMetadata() {
           <label htmlFor={`${id}-online`} className="flex min-h-11 items-center text-sm font-medium">
             {t('admin.metadataOnline')}
           </label>
+        </div>
+      )}
+      {adult !== undefined && (
+        <div className="flex items-start gap-3">
+          <Checkbox
+            id={`${id}-adult`}
+            checked={adult}
+            onCheckedChange={(v) => save.mutate({ metadata_adult: v === true })}
+            aria-describedby={`${id}-adult-help`}
+            className="mt-3"
+          />
+          <div>
+            <label htmlFor={`${id}-adult`} className="flex min-h-11 items-center text-sm font-medium">
+              {t('admin.metadataAdult')}
+            </label>
+            <p id={`${id}-adult-help`} className="-mt-2 text-sm text-muted-foreground">
+              {t('admin.metadataAdultHelp')}
+            </p>
+          </div>
         </div>
       )}
       <QueryState query={overview} isEmpty={() => false} empty={null}>
@@ -172,14 +194,6 @@ export function AdminMetadata() {
   )
 }
 
-const LAST_ERRORS = ['offline', 'rate_limited', 'not_found', 'http_error', 'bad_response'] as const
-
-/** Dernier échec d'une source, d'après son code stable ; un code inconnu reste tel quel. */
-function lastError(code: string, t: TFunction) {
-  const known = LAST_ERRORS.find((c) => c === code)
-  return known ? t(`admin.lastError.${known}`) : code
-}
-
 function stoppedKey(code: string) {
   return code === 'rate_limited' || code === 'offline' ? (`admin.identifyStopped.${code}` as const) : 'admin.identifyStopped.internal'
 }
@@ -201,7 +215,7 @@ function Issues({ issues, name }: { issues: SourceIssue[]; name: (s: SourceId) =
                 <span className="text-sm text-muted-foreground">
                   {name(issue.source)} ·{' '}
                   {issue.last_error
-                    ? lastError(issue.last_error, t)
+                    ? sourceErrorText(issue.last_error, t)
                     : issue.candidates > 0
                       ? t('admin.candidates', { count: issue.candidates })
                       : t('admin.notFoundAnywhere')}

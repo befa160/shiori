@@ -400,6 +400,7 @@ fn web_fills_what_the_files_do_not_say() {
         "one-piece",
         &[mangadex.clone(), anilist.clone()],
         "fr",
+        false,
     );
     // Pas de titre français : le romaji de la première source ; le résumé en français.
     assert_eq!(meta.title.as_deref(), Some("One Piece"));
@@ -420,6 +421,7 @@ fn web_fills_what_the_files_do_not_say() {
         "x",
         &[anilist, mangadex.clone()],
         "en",
+        false,
     );
     assert_eq!(
         (meta.title.as_deref(), meta.summary.as_deref()),
@@ -432,7 +434,7 @@ fn web_fills_what_the_files_do_not_say() {
         year: Some(2000),
         ..SeriesMetadata::default()
     };
-    let meta = with_web(local, "x", &[mangadex], "fr");
+    let meta = with_web(local, "x", &[mangadex], "fr", false);
     assert_eq!(
         (meta.title.as_deref(), meta.summary.as_deref(), meta.year),
         (Some("Mon titre"), Some("Le mien."), Some(2000))
@@ -440,7 +442,7 @@ fn web_fills_what_the_files_do_not_say() {
     assert!(meta.alt_titles.contains(&"One Piece".to_owned()));
     // Sans fiche, rien ne change ; sans romaji ni langue voulue, le premier titre et le premier résumé.
     assert_eq!(
-        with_web(SeriesMetadata::default(), "x", &[], "fr"),
+        with_web(SeriesMetadata::default(), "x", &[], "fr", false),
         SeriesMetadata::default()
     );
     let odd = with_web(
@@ -448,9 +450,60 @@ fn web_fills_what_the_files_do_not_say() {
         "x",
         &[web("y", &[(None, "Titre")], &[("es", "Resumen.")])],
         "fr",
+        false,
     );
     assert_eq!(
         (odd.title.as_deref(), odd.summary.as_deref()),
         (Some("Titre"), Some("Resumen."))
+    );
+}
+
+#[test]
+fn a_main_source_gives_title_and_summary_before_the_language() {
+    let anilist = web(
+        "1",
+        &[(Some("en"), "One Piece"), (None, "Wan Pīsu")],
+        &[("en", "A boy (AniList).")],
+    );
+    let mangadex = web(
+        "x",
+        &[(Some("fr"), "One Piece (fr)")],
+        &[("fr", "Un garçon.")],
+    );
+    let meta = with_web(
+        SeriesMetadata::default(),
+        "x",
+        &[anilist.clone(), mangadex.clone()],
+        "fr",
+        true,
+    );
+    assert_eq!(
+        (meta.title.as_deref(), meta.summary.as_deref()),
+        (Some("One Piece"), Some("A boy (AniList)."))
+    );
+    // Sans source principale, la langue de l'interface l'emporte.
+    let meta = with_web(
+        SeriesMetadata::default(),
+        "x",
+        &[anilist, mangadex.clone()],
+        "fr",
+        false,
+    );
+    assert_eq!(
+        (meta.title.as_deref(), meta.summary.as_deref()),
+        (Some("One Piece (fr)"), Some("Un garçon."))
+    );
+    // La source principale sans résumé : les autres fiches en repli.
+    let silent = web("2", &[(Some("en"), "Silent")], &[]);
+    let meta = with_web(
+        SeriesMetadata::default(),
+        "x",
+        &[silent, mangadex],
+        "fr",
+        true,
+    );
+    assert_eq!(
+        (meta.title.as_deref(), meta.summary.as_deref()),
+        (Some("Silent"), Some("Un garçon."))
     );
 }

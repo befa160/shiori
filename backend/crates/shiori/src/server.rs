@@ -328,6 +328,9 @@ struct NewSettings {
     /// Absent : inchangé ; jamais `null`.
     #[serde(default, deserialize_with = "present")]
     metadata_online: Option<Option<bool>>,
+    /// Absent : inchangé ; jamais `null`.
+    #[serde(default, deserialize_with = "present")]
+    metadata_adult: Option<Option<bool>>,
     /// Absent : inchangé ; `null` : ordre d'après la langue ; sinon sources sans doublon.
     #[serde(default, deserialize_with = "present")]
     metadata_sources: Option<Option<Vec<SourceId>>>,
@@ -342,8 +345,10 @@ async fn save_settings(
     if new.page_turn == Some(None) {
         return Err(bad("page_turn ne peut pas être null"));
     }
-    if new.metadata_online == Some(None) {
-        return Err(bad("metadata_online ne peut pas être null"));
+    if new.metadata_online == Some(None) || new.metadata_adult == Some(None) {
+        return Err(bad(
+            "metadata_online et metadata_adult ne peuvent pas être null",
+        ));
     }
     if let Some(Some(sources)) = &new.metadata_sources
         && (sources.is_empty() || (1..sources.len()).any(|i| sources[..i].contains(&sources[i])))
@@ -356,6 +361,7 @@ async fn save_settings(
     if new.language.is_none()
         && new.page_turn.is_none()
         && new.metadata_online.is_none()
+        && new.metadata_adult.is_none()
         && new.metadata_sources.is_none()
     {
         return Err(ApiError::new(
@@ -372,6 +378,9 @@ async fn save_settings(
     }
     if let Some(Some(online)) = new.metadata_online {
         app.db.set_metadata_online(online).await?;
+    }
+    if let Some(Some(adult)) = new.metadata_adult {
+        app.db.set_metadata_adult(adult).await?;
     }
     if let Some(sources) = new.metadata_sources {
         app.db.set_metadata_sources(sources).await?;

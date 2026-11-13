@@ -50,5 +50,6 @@ export const NO_METADATA: SeriesMetadata = {
   links: [],
   cover_page_id: null,
   cover_image_id: null,
+  main_source: null,
   right_to_left: null,
 }
