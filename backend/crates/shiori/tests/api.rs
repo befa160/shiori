@@ -583,4 +583,39 @@ async fn library_series_continue_and_publication_status() {
     }
     let (status, _) = call(&f.app, "PATCH", "/api/series/abc", Some("{}")).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    // Métadonnées (lot 5.3) : titre édité et verrouillé, puis rendu aux sources.
+    let (_, detail) = call(&f.app, "PATCH", &uri, Some(r#"{"title":"Autre titre"}"#)).await;
+    assert_eq!(
+        (detail["name"].as_str(), &detail["locked"]),
+        (Some("Autre titre"), &json!(["publication_status", "title"]))
+    );
+    let body = r#"{"unlock":["title","publication_status"]}"#;
+    let (_, detail) = call(&f.app, "PATCH", &uri, Some(body)).await;
+    assert_eq!(
+        (&detail["locked"], &detail["metadata"]["title"]),
+        (&json!([]), &Value::Null)
+    );
+    let (status, _) = call(&f.app, "PATCH", &uri, Some("[1]")).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    // Tome : mêmes règles sur /api/volumes/{id}.
+    let volume = detail["volumes"][0]["volume_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let uri = format!("/api/volumes/{volume}");
+    let (status, v) = call(&f.app, "PATCH", &uri, Some(r#"{"title":"Tome un"}"#)).await;
+    assert_eq!(
+        (status, v["metadata"]["title"].as_str()),
+        (StatusCode::OK, Some("Tome un"))
+    );
+    let (status, err) = call(&f.app, "PATCH", &uri, Some(r#"{"genres":[]}"#)).await;
+    assert_eq!(
+        (status, err["code"].as_str()),
+        (StatusCode::BAD_REQUEST, Some("invalid_body"))
+    );
+    let unknown = format!("/api/volumes/{}", "0".repeat(64));
+    let (status, _) = call(&f.app, "PATCH", &unknown, Some("{}")).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
 }

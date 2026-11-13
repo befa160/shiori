@@ -322,6 +322,7 @@ impl Db {
 
     /// Recalcule le nom de chaque série (celui de son premier fichier), fusionne les
     /// fichiers de la racine dans la série-dossier de même nom et supprime les séries vides.
+    /// Recalcule enfin leurs métadonnées fusionnées.
     pub async fn refresh_series(&self, library: &Library) -> Result<(), Error> {
         let mut tx = self.pool.begin_with("BEGIN IMMEDIATE").await?;
         let rows = sqlx::query(
@@ -380,7 +381,8 @@ impl Db {
         .bind(library.id)
         .execute(&mut *tx)
         .await?;
-        tx.commit().await
+        tx.commit().await?;
+        self.refresh_metadata(Some(library.id)).await
     }
 }
 

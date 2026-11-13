@@ -1003,8 +1003,8 @@ Restent des séries distinctes : déplacement partiel, fusion dans une série ex
 ### Base (une migration par lot qui s'en sert)
 
 - **0008 (lot 5.2)** ✅ : `volume_metadata (volume_id, source, data)` : `ComicInfo.xml` et `index.json` normalisés (`shiori_core::LocalMetadata` en JSON), réécrits à chaque scan du tome. Les tomes déjà scannés sont relus grâce à `SCANNER_VERSION = 2` (pas de colonne `read_at`).
-- **0009 (lot 5.3)** : `series_metadata` (titres par langue, résumé par langue, auteurs avec rôle, genres, tags, année, éditeur, âge, liens, couverture choisie, source principale de la série, `locked`), `series_sources` (dernière réponse normalisée de chaque source, identifiant externe, `matched_by` local / auto / user, `last_error` en code stable), champs édités et `locked` des tomes.
-- **0010 (lot 5.5)** : `metadata_candidates` (correspondances à confirmer) ; `app_settings.metadata_online` (désactivé par défaut) et `metadata_sources` (ordre choisi, `NULL` = ordre par défaut selon la langue).
+- **0009 (lot 5.3)** ✅ : `series_metadata (series_id, edited, merged)` : `edited` = champs édités (un champ présent est verrouillé, `null` compris), `merged` = vue fusionnée recalculée après chaque passe, chaque modification et à l'ouverture de la base ; `series.publication_status` en garde le statut (filtres). Le statut réglé à la main en phase 4 devient un champ édité. `volume_edits (volume_id, edited)` ; la vue d'un tome se calcule à la lecture.
+- **0010 (lot 5.5)** : `series_sources` (dernière réponse normalisée de chaque source web, identifiant externe, `matched_by` auto / user, `last_error` en code stable), `metadata_candidates` (correspondances à confirmer) ; `app_settings.metadata_online` (désactivé par défaut) et `metadata_sources` (ordre choisi, `NULL` = ordre par défaut selon la langue).
 
 ### Routes
 
@@ -1026,7 +1026,7 @@ Restent des séries distinctes : déplacement partiel, fusion dans une série ex
 
 - ✅ **5.1 `feat/series-identity`** : reprise d'une série dont le dossier est renommé ; plan de la phase dans ROADMAP.md.
 - ✅ **5.2 `feat/local-metadata`** : migration 0008 ; `shiori_core::metadata` lit `ComicInfo.xml` (quick-xml ; UTF-8 avec ou sans BOM, UTF-16 ; auteurs par rôle, genres, date partielle, `Manga` → proposition de sens) et `index.json` (titres, auteurs « a / b », description, état, tags, lien) à la racine, dans la même passe que les pages (RAR solid compris) ; fichier illisible ou de plus de 4 Mio = avertissement `metadata_invalid`, jamais une erreur de tome ; `SCANNER_VERSION = 2` pour relire les tomes connus. Vérifié sur le webtoon réel (son `index.json`) et deux vrais CBR (inchangés).
-- ⏳ **5.3 `feat/metadata-api`** : migration 0009 ; fusion avec verrous (fonction pure) depuis les tomes de la série ; GET / PATCH séries et tomes, verrous, déverrouillage ; n'importe quelle page comme couverture.
+- ✅ **5.3 `feat/metadata-api`** : migration 0009 ; fusion (fonctions pures) : pour chaque champ, le premier `index.json` puis le premier `ComicInfo.xml` dans l'ordre des tomes, recouverts par les champs édités ; titres des fichiers en titres alternatifs ; `PATCH /api/series/{id}` et `PATCH /api/volumes/{id}` génériques (champ donné = édité et verrouillé, `unlock: [...]`, champ inconnu ou mauvais type = 400) ; n'importe quelle page de la série comme couverture (oubliée si sa page disparaît) ; listes : titre affiché, auteurs, titres alternatifs, couverture choisie ; détails : `metadata` et `locked`. Vérifié sur une copie de la base d'essai : le webtoon réel donne auteurs, résumé, tag, statut et lien.
 - ⏳ **5.4 `feat/web-metadata-edit`** (UI) : page série (auteurs, résumé repliable, genres, titres alternatifs, liens) ; fenêtre « Modifier » avec cadenas par champ et liste déroulante « Source principale » ; auteur sur les cartes et la couverture de repli ; recherche par auteur et titre alternatif ; choix de la couverture ; **correctif** de la notification trop haute de 56 px dans le lecteur sur mobile.
 - ⏳ **5.5 `feat/online-sources`** : migration 0010 ; crate `shiori-meta` (trait `Source`, AniList GraphQL, MangaDex REST, normalisation, débit limité par source, délais, `Retry-After`, hors ligne = code stocké) ; recherche, liaison, actualisation ; identification automatique des nouvelles séries après un scan ; réglages.
 - ⏳ **5.6 `feat/external-covers`** : téléchargement, stockage persistant dans le dossier de données (pas le cache, qui peut être vidé) par hash, service redimensionné, relais des miniatures.
@@ -1052,7 +1052,7 @@ Restent des séries distinctes : déplacement partiel, fusion dans une série ex
 - **Q31 Niveau** ✅ : séries pour toutes les sources ; tomes (titre, résumé, date, auteurs) depuis ComicInfo et l'édition manuelle ; numéro, ordre et pages restent au scan.
 - **Q32 Couvertures** ✅ : page 0 du premier tome par défaut ; au choix, n'importe quelle page ou une couverture de source, stockée de façon persistante.
 - **Q33 Réseau et vie privée** ✅ : désactivé par défaut, activé dans l'administration avec une explication de ce qui est envoyé ; agent générique ; débit sous les limites publiées (relues au lot 5.5) ; hors ligne = état visible, jamais bloquant ; miniatures relayées.
-- **Q34 Langue du titre** ✅ : titre dans la langue de l'interface s'il existe, sinon romaji, sinon le nom du dossier ; un titre édité l'emporte ; la recherche porte sur tous les titres.
+- **Q34 Langue du titre** ✅ : titre dans la langue de l'interface s'il existe, sinon romaji, sinon le nom du dossier ; un titre édité l'emporte ; la recherche porte sur tous les titres. Les titres des fichiers locaux n'ont pas de langue : ils restent des titres alternatifs (lot 5.3), le titre affiché change avec les sources web (lot 5.5) ou une édition.
 
 ### Reste ouvert de la phase 4
 

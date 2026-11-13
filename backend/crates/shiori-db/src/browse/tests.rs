@@ -234,18 +234,30 @@ async fn continue_reading_lists_the_next_volume_of_each_series() {
 async fn publication_status_is_set_and_cleared() {
     let f = fixture().await;
     let id = f.series("Série").await.id;
-    assert!(
-        f.db.set_publication_status(id, Some(PublicationStatus::Hiatus))
-            .await
+    let status = |v: serde_json::Value| {
+        serde_json::json!({ "publication_status": v })
+            .as_object()
             .unwrap()
-    );
+            .clone()
+    };
+    assert!(f.db.edit_series(id, status("hiatus".into())).await.unwrap());
     assert_eq!(
         f.series("Série").await.publication_status,
         Some(PublicationStatus::Hiatus)
     );
     let detail = f.db.series_detail(id).await.unwrap().unwrap();
     assert_eq!(detail.publication_status, Some(PublicationStatus::Hiatus));
-    assert!(f.db.set_publication_status(id, None).await.unwrap());
+    assert_eq!(detail.locked, ["publication_status"]);
+    assert!(
+        f.db.edit_series(id, status(serde_json::Value::Null))
+            .await
+            .unwrap()
+    );
     assert_eq!(f.series("Série").await.publication_status, None);
-    assert!(!f.db.set_publication_status(999, None).await.unwrap());
+    assert!(
+        !f.db
+            .edit_series(999, status(serde_json::Value::Null))
+            .await
+            .unwrap()
+    );
 }

@@ -22,8 +22,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use shiori_core::{Archive, PageId, PageStatus, Severity, VolumeId, open_archive as open_file};
 use shiori_db::{
-    Db, Language, LibraryError, LibraryKind, PageFile, PageLayout, PageSource, PageTurn,
-    PublicationStatus, ReadingMode, RunFilter, RunStatus, SaveProgress, SettingsChange,
+    Db, EditError, Edited, Language, LibraryError, LibraryKind, PageFile, PageLayout, PageSource,
+    PageTurn, ReadingMode, RunFilter, RunStatus, SaveProgress, SettingsChange,
 };
 use tokio::net::TcpListener;
 use tokio::sync::Semaphore;
@@ -140,7 +140,7 @@ pub fn router(app: Arc<App>, local_only: bool) -> Router {
         .route("/api/series/{id}", get(series).patch(patch_series))
         .route("/api/continue", get(continue_reading))
         .route("/api/series/{id}/settings", patch(series_settings))
-        .route("/api/volumes/{id}", get(volume))
+        .route("/api/volumes/{id}", get(volume).patch(patch_volume))
         .route(
             "/api/volumes/{id}/progress",
             get(progress).put(save_progress).delete(clear_progress),
@@ -298,8 +298,7 @@ async fn save_settings(
     State(app): State<Arc<App>>,
     body: Result<Json<NewSettings>, JsonRejection>,
 ) -> ApiResult<shiori_db::Settings> {
-    let Json(new) =
-        body.map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, "invalid_body", e.body_text()))?;
+    let Json(new) = body.map_err(invalid_body)?;
     if new.page_turn == Some(None) {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -349,8 +348,7 @@ async fn create_library(
     State(app): State<Arc<App>>,
     body: Result<Json<NewLibrary>, JsonRejection>,
 ) -> Result<(StatusCode, Json<CreatedLibrary>), ApiError> {
-    let Json(new) =
-        body.map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, "invalid_body", e.body_text()))?;
+    let Json(new) = body.map_err(invalid_body)?;
     let library = app
         .db
         .create_library(&new.name, &new.root, new.kind)
@@ -426,26 +424,29 @@ async fn continue_reading(
     Ok(Json(app.db.continue_reading(limit).await?))
 }
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct SeriesPatch {
-    /// Absent : inchangé ; `null` : inconnu.
-    #[serde(default, deserialize_with = "present")]
-    publication_status: Option<Option<PublicationStatus>>,
+fn invalid_body(e: JsonRejection) -> ApiError {
+    ApiError::new(StatusCode::BAD_REQUEST, "invalid_body", e.body_text())
 }
 
-/// Modifie une série (statut de publication en phase 4) et renvoie son détail.
+impl From<EditError> for ApiError {
+    fn from(e: EditError) -> Self {
+        match e {
+            EditError::Invalid(msg) => ApiError::new(StatusCode::BAD_REQUEST, "invalid_body", msg),
+            EditError::Db(e) => e.into(),
+        }
+    }
+}
+
+/// Modifie les métadonnées d'une série et renvoie son détail. Chaque champ donné est édité
+/// (verrouillé, `null` compris) ; `unlock: [...]` rend des champs aux sources.
 async fn patch_series(
     State(app): State<Arc<App>>,
     Path(id): Path<String>,
-    body: Result<Json<SeriesPatch>, JsonRejection>,
+    body: Result<Json<Edited>, JsonRejection>,
 ) -> ApiResult<shiori_db::SeriesDetail> {
     let id = int_id(&id)?;
-    let Json(patch) =
-        body.map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, "invalid_body", e.body_text()))?;
-    if let Some(status) = patch.publication_status
-        && !app.db.set_publication_status(id, status).await?
-    {
+    let Json(patch) = body.map_err(invalid_body)?;
+    if !app.db.edit_series(id, patch).await? {
         return Err(ApiError::not_found("série"));
     }
     app.db
@@ -477,6 +478,24 @@ async fn volume(
         .ok_or_else(|| ApiError::not_found("tome"))
 }
 
+/// Modifie les métadonnées d'un tome, comme [`patch_series`].
+async fn patch_volume(
+    State(app): State<Arc<App>>,
+    Path(id): Path<String>,
+    body: Result<Json<Edited>, JsonRejection>,
+) -> ApiResult<shiori_db::VolumeDetail> {
+    let id = volume_id(&id)?;
+    let Json(patch) = body.map_err(invalid_body)?;
+    if !app.db.edit_volume(&id, patch).await? {
+        return Err(ApiError::not_found("tome"));
+    }
+    app.db
+        .volume_detail(&id)
+        .await?
+        .map(Json)
+        .ok_or_else(|| ApiError::not_found("tome"))
+}
+
 /// Progression d'un tome, ou 204 s'il n'a jamais été ouvert.
 async fn progress(
     State(app): State<Arc<App>>,
@@ -503,8 +522,7 @@ async fn save_progress(
     body: Result<Json<NewProgress>, JsonRejection>,
 ) -> ApiResult<shiori_db::Progress> {
     let volume = volume_id(&id)?;
-    let Json(new) =
-        body.map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, "invalid_body", e.body_text()))?;
+    let Json(new) = body.map_err(invalid_body)?;
     let page: PageId = new
         .page_id
         .parse()
@@ -558,8 +576,7 @@ async fn series_settings(
     body: Result<Json<SettingsPatch>, JsonRejection>,
 ) -> ApiResult<shiori_db::ReadingSettings> {
     let id = int_id(&id)?;
-    let Json(patch) =
-        body.map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, "invalid_body", e.body_text()))?;
+    let Json(patch) = body.map_err(invalid_body)?;
     let change = SettingsChange {
         reading_mode: patch.reading_mode,
         page_layout: patch.page_layout,
@@ -886,8 +903,7 @@ async fn start_scan(
     State(app): State<Arc<App>>,
     body: Result<Json<NewScan>, JsonRejection>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), ApiError> {
-    let Json(new) =
-        body.map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, "invalid_body", e.body_text()))?;
+    let Json(new) = body.map_err(invalid_body)?;
     let request = ScanRequest {
         library_id: new.library_id,
         path: new.path,

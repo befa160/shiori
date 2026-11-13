@@ -33,6 +33,7 @@ macro_rules! now {
 
 mod browse;
 mod library;
+mod metadata;
 mod reading;
 mod runs;
 mod settings;
@@ -42,6 +43,7 @@ pub use browse::{
     SeriesDetail, SeriesSummary, SeriesVolume, VolumeDetail, VolumeLocation,
 };
 pub use library::{Library, LibraryError};
+pub use metadata::{EditError, Edited, SeriesMetadata, VolumeMetadata};
 pub use reading::{
     LibraryKind, PageLayout, PageTurn, Progress, ReadingMode, ReadingSettings, SaveProgress,
     SettingsChange,
@@ -120,7 +122,10 @@ impl Db {
             .busy_timeout(Duration::from_secs(60));
         let pool = SqlitePoolOptions::new().connect_with(options).await?;
         sqlx::migrate!().run(&pool).await?;
-        Ok(Self { pool })
+        let db = Self { pool };
+        // Une règle de fusion modifiée par une nouvelle version s'applique dès le démarrage.
+        db.refresh_metadata(None).await?;
+        Ok(db)
     }
 
     pub fn pool(&self) -> &SqlitePool {
