@@ -46,16 +46,16 @@ Autres paires : `#121212` sur ambre 8,4:1 ; blanc sur `#B91C1C` 6,5:1. Le texte 
 
 ### Logo
 
-Marque fournie par l'auteur (`web/public/`) : une page à coin corné, bleu nuit `#1E2A4A` (crème `#F5EFE3` sur fond sombre) et rouge `#E0452B`.
+Marque fournie par l'auteur (`web/public/`, deuxième version du 2026-11-13) : des cases de manga et un marque-page. Sur fond sombre, crème `#F5EFE3` et ambre `#F5A524` ; sur fond clair, noir `#141414` et ambre foncé `#C97A0A`.
 
 | Fichier | Usage |
 |---|---|
-| `shiori-mark-light.svg` | en-tête de la sidebar (fond sombre), README en thème sombre |
-| `shiori-mark.svg` | README en thème clair |
-| `favicon.svg`, `favicon.ico` | onglet du navigateur (le SVG passe en crème quand l'OS est sombre) |
+| `shiori-mark.svg` | pour fond sombre : en-tête de la sidebar, README en thème sombre |
+| `shiori-mark-light.svg` | pour fond clair : README en thème clair (et un futur mode clair de l'interface) |
+| `favicon.svg`, `favicon.ico` | onglet du navigateur (le SVG suit le thème de l'OS) |
 | `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`, `icon-maskable-512.png` | écran d'accueil iOS et Android (manifeste) |
 
-Ces couleurs sont **réservées au logo** : l'interface garde son ambre pour l'action principale et les états actifs. Dans l'interface, le logo est décoratif (`alt=""`) à côté du nom « Shiori ».
+Ces couleurs sont **réservées au logo** : l'interface garde son ambre `#E5A00D` (contrastes mesurés) pour l'action principale et les états actifs. Dans l'interface, le logo est décoratif (`alt=""`) à côté du nom « Shiori ».
 
 ## Typographie
 

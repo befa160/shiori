@@ -936,6 +936,12 @@ Pour chaque lot d'interface : skill UI/UX Pro Max avant de coder et en contrôle
   - Review Ponytail, corrigé : `page_turn: null` était ignoré sans erreur.
   - 153 tests Vitest, 98,6 % des lignes, 93,7 % des branches ; tests Rust (défaut global, réglage de série, `PUT` partiel).
 
+- [x] **4.12** `feat/logo-v2` (ajouté le 2026-11-13) : deuxième version des logos fournie par l'auteur (cases de manga et marque-page ambre).
+  - Les huit fichiers de `web/public/` remplacés. Le nommage s'inverse : `shiori-mark.svg` est désormais la version pour fond sombre (crème et ambre), `shiori-mark-light.svg` celle pour fond clair (noir et ambre foncé) ; la sidebar et le README suivent. Le favicon SVG suit le thème de l'OS.
+  - DESIGN_SYSTEM.md : section « Logo » à jour ; ses couleurs restent réservées au logo.
+  - Un mode clair de l'interface (couleurs, contrastes, captures doublées, choix enregistré) est un lot à part, à planifier.
+  - Captures aux quatre tailles ; types servis vérifiés.
+
 ### Bilan de la phase 4
 
 - Livré :
@@ -953,7 +959,8 @@ Pour chaque lot d'interface : skill UI/UX Pro Max avant de coder et en contrôle
   - dans le lecteur sur mobile, une notification monte de 56 px de trop (`--tabbar-height` globale) ;
   - le journal d'une passe en cours ne se met pas à jour en continu (il se rafraîchit à la fin) ;
   - les messages du serveur sans code (lignes « scanné » du journal) restent en français (Q21) ;
-  - essai sur la tablette réelle à faire par l'utilisateur.
+  - essai sur la tablette réelle à faire par l'utilisateur ;
+  - test e2e instable vu une fois en CI (PR du lot 4.12, qui ne touche pas au lecteur ; vert au second essai et en local) : « reprend à la page lue… puis passe au tome suivant », le bouton « Tome suivant » n'est jamais apparu après la flèche en fin de tome. Cause non trouvée ; à surveiller, et à instrumenter s'il revient.
 
 ### Questions de la phase 4 (résolues le 2026-11-12)
 
