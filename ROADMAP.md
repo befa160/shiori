@@ -1105,7 +1105,7 @@ Rendre Shiori installable et maintenable par quelqu'un d'autre que son développ
 
 ### Lots (une branche + une PR chacun)
 
-- ⏳ **6.1 `ci/dependabot`** : `.github/dependabot.yml` (cargo, npm, actions) selon Q39.
+- ✅ **6.1 `ci/dependabot`** : `.github/dependabot.yml` (cargo, npm, actions) selon Q39 ; CLAUDE.md mis à jour.
 - ⏳ **6.2 `ci/release`** : `release.yml` sur tag `v*` : build du front une fois, matrice des cibles (aarch64 musl sur runner `ubuntu-24.04-arm`, sans compilation croisée), archives, `SHA256SUMS`, `gh release create --generate-notes`. Essai sur `v0.1.0-rc.1`.
 - ⏳ **6.3 `feat/docker`** : arrêt sur SIGTERM (Unix) ; `--allowed-host` (Q35) ; `Dockerfile` à partir des binaires du lot 6.2, `compose.yaml`, image multi-architecture poussée depuis `release.yml`. Tests : hôte autorisé / refusé, arrêt sur SIGTERM, `docker run` réel.
 - ⏳ **6.4 `feat/web-themes`** : jetons des quatre thèmes, couleurs en dur hors lecteur remplacées par des jetons, réglage `theme` (Rust + API), sélecteur avec aperçu, `theme-color` suivant le thème, lecteur forcé en sombre, contrastes testés, DESIGN_SYSTEM.md mis à jour. Captures Playwright aux quatre tailles dans chaque thème.

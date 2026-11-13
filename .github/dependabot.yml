@@ -1,0 +1,35 @@
+# Dernières versions stables (CLAUDE.md, « Versions ») : une PR groupée par écosystème et par
+# semaine pour les mineures et correctifs, une PR par mise à jour majeure, fusion à la main.
+# Le nightly de la couverture (`NIGHTLY`) et `cargo-llvm-cov` (paramètre `tool:` du job
+# `coverage`) ne sont pas vus par Dependabot : ils restent figés et montés à la main.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /backend
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      cargo:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      npm:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci(deps)
+    groups:
+      actions:
+        update-types: [minor, patch]
