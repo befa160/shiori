@@ -81,8 +81,9 @@ impl FetchError {
 
 pub trait Source: Send + Sync {
     fn id(&self) -> SourceId;
-    /// Séries dont un titre ressemble à `query`, les plus pertinentes d'abord.
-    fn search(&self, query: &str) -> Result<Vec<WebMetadata>, FetchError>;
+    /// Séries dont un titre ressemble à `query`, les plus pertinentes d'abord ; les fiches pour
+    /// adultes seulement si `adult` (exclues par défaut, réglage de l'administration).
+    fn search(&self, query: &str, adult: bool) -> Result<Vec<WebMetadata>, FetchError>;
     fn fetch(&self, id: &str) -> Result<WebMetadata, FetchError>;
     /// Image d'une fiche (couverture), depuis les seuls hôtes de la source.
     fn image(&self, url: &str) -> Result<Vec<u8>, FetchError>;

@@ -207,15 +207,20 @@ impl Source for Mangadex {
         SourceId::Mangadex
     }
 
-    fn search(&self, query: &str) -> Result<Vec<WebMetadata>, FetchError> {
-        let body = self.get(
-            "/manga",
-            &[
-                ("title", query),
-                ("limit", "10"),
-                ("order[relevance]", "desc"),
-            ],
-        )?;
+    fn search(&self, query: &str, adult: bool) -> Result<Vec<WebMetadata>, FetchError> {
+        let mut params = vec![
+            ("title", query),
+            ("limit", "10"),
+            ("order[relevance]", "desc"),
+        ];
+        // Classement du contenu : `erotica` et `pornographic` seulement si l'administration le permet.
+        let ratings: &[&str] = if adult {
+            &["safe", "suggestive", "erotica", "pornographic"]
+        } else {
+            &["safe", "suggestive"]
+        };
+        params.extend(ratings.iter().map(|r| ("contentRating[]", *r)));
+        let body = self.get("/manga", &params)?;
         Ok(json::<List>(&body)?
             .data
             .into_iter()

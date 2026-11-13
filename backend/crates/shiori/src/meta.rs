@@ -99,7 +99,8 @@ impl Metadata {
         self.enabled().await?;
         let source = self.source(source)?;
         let id = source.id();
-        let mut found = blocking(move || source.search(&query)).await?;
+        let adult = self.db.settings().await?.metadata_adult;
+        let mut found = blocking(move || source.search(&query, adult)).await?;
         let mut covers = self.covers.lock().expect("verrou des couvertures");
         // shortcut: oubli en bloc au-delà de 1 000 adresses (une recherche en ajoute 10) ; un vrai LRU si des vignettes manquent en usage réel.
         if covers.len() > 1000 {
@@ -260,7 +261,8 @@ impl Metadata {
             for series in todo {
                 let names = series.names.clone();
                 let client = client.clone();
-                let found = blocking(move || client.search(&names[0])).await;
+                let adult = settings.metadata_adult;
+                let found = blocking(move || client.search(&names[0], adult)).await;
                 let outcome = match found {
                     Ok(found) => {
                         let names: Vec<&str> = series.names.iter().map(String::as_str).collect();

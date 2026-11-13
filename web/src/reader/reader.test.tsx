@@ -43,6 +43,7 @@ const series: SeriesDetail = {
   publication_status: null,
   metadata: NO_METADATA,
   locked: [],
+  sources: [],
   resume_volume_id: null,
   page_count: 3,
   pages_read: 0,

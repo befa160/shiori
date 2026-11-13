@@ -88,7 +88,9 @@ fn assert_discreet(request: &str, query: &str) {
 #[test]
 fn anilist_search_is_normalized() {
     let server = mock(vec![(200, "", fixture("anilist_search.json"))]);
-    let found = Anilist::new(&server.url).search("one piece").unwrap();
+    let found = Anilist::new(&server.url)
+        .search("one piece", false)
+        .unwrap();
     assert_eq!(found.len(), 2);
     assert_eq!(
         found[0],
@@ -128,6 +130,8 @@ fn anilist_search_is_normalized() {
     let request = &server.requests.lock().unwrap()[0];
     assert!(request.starts_with("POST / "), "{request}");
     assert!(request.contains("format_not: NOVEL"));
+    // Fiches pour adultes exclues par défaut.
+    assert!(request.contains("isAdult: false"), "{request}");
     assert_discreet(request, r#""q":"one piece""#);
 }
 
@@ -182,19 +186,19 @@ fn a_429_is_honoured_without_more_requests() {
     )]);
     let mangadex = Mangadex::new(&server.url);
     assert_eq!(
-        mangadex.search("akira"),
+        mangadex.search("akira", false),
         Err(FetchError::RateLimited(Duration::from_secs(30)))
     );
     // Pendant l'attente demandée, rien ne part : la requête suivante renonce aussitôt.
     assert!(matches!(
-        mangadex.search("akira"),
+        mangadex.search("akira", false),
         Err(FetchError::RateLimited(_))
     ));
     assert_eq!(server.requests.lock().unwrap().len(), 1);
     // Sans `Retry-After`, une minute.
     let server = mock(vec![(429, "", String::new())]);
     assert_eq!(
-        Anilist::new(&server.url).search("x"),
+        Anilist::new(&server.url).search("x", false),
         Err(FetchError::RateLimited(Duration::from_secs(60)))
     );
 }
@@ -209,7 +213,7 @@ fn an_unreachable_source_is_offline() {
         .port();
     let url = format!("http://127.0.0.1:{port}");
     assert!(matches!(
-        Mangadex::new(&url).search("x"),
+        Mangadex::new(&url).search("x", false),
         Err(FetchError::Offline(_))
     ));
     assert!(matches!(
@@ -232,7 +236,7 @@ fn mangadex_search_and_fetch_are_normalized() {
     ]);
     let mangadex = Mangadex::new(&format!("{}/", server.url));
     assert_eq!(mangadex.id(), SourceId::Mangadex);
-    let found = mangadex.search("one piece").unwrap();
+    let found = mangadex.search("one piece", false).unwrap();
     let id = "a1c7c817-4e59-43b7-9365-09675a149a6f";
     let expected = WebMetadata {
         id: id.into(),
@@ -273,6 +277,11 @@ fn mangadex_search_and_fetch_are_normalized() {
             || requests[0].contains("includes[]=cover_art")
     );
     assert_discreet(&requests[0], "title=one");
+    assert!(
+        requests[0].contains("contentRating%5B%5D=suggestive")
+            || requests[0].contains("contentRating[]=suggestive")
+    );
+    assert!(!requests[0].contains("erotica"), "{}", requests[0]);
     assert!(requests[1].starts_with(&format!("GET /manga/{id}?")));
     drop(requests);
     // Un identifiant qui n'est pas un UUID ne part pas.
@@ -298,8 +307,22 @@ fn redirects_are_never_followed() {
         String::new(),
     )]);
     assert_eq!(
-        Mangadex::new(&server.url).search("x"),
+        Mangadex::new(&server.url).search("x", false),
         Err(FetchError::Http(302))
     );
     assert_eq!(server.requests.lock().unwrap().len(), 1);
+}
+
+#[test]
+fn adult_entries_only_when_allowed() {
+    let server = mock(vec![(200, "", r#"{"data":{"Page":{"media":[]}}}"#.into())]);
+    Anilist::new(&server.url).search("x", true).unwrap();
+    assert!(!server.requests.lock().unwrap()[0].contains("isAdult"));
+    let server = mock(vec![(200, "", r#"{"data":[]}"#.into())]);
+    Mangadex::new(&server.url).search("x", true).unwrap();
+    let request = server.requests.lock().unwrap()[0].clone();
+    assert!(
+        request.contains("pornographic") && request.contains("erotica"),
+        "{request}"
+    );
 }

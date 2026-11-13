@@ -114,9 +114,69 @@ async fn linked_sources_feed_the_merged_view_in_the_chosen_order() {
             .alt_titles
             .contains(&"One Piece (AniList)".to_owned())
     );
-    // Délier rend la place.
+    // Source principale de la série (en français, MangaDex d'abord) : AniList passe devant.
+    db.set_language(None).await.unwrap();
+    db.set_metadata_sources(None).await.unwrap();
+    let main = json!({ "main_source": "anilist" })
+        .as_object()
+        .unwrap()
+        .clone();
+    db.edit_series(one, main).await.unwrap();
+    let detail = series(&db, one).await;
+    assert_eq!(detail.name, "One Piece (AniList)");
+    assert_eq!(detail.metadata.main_source, Some(SourceId::Anilist));
+    let bad = json!({ "main_source": "kitsu" })
+        .as_object()
+        .unwrap()
+        .clone();
+    assert!(matches!(
+        db.edit_series(one, bad).await,
+        Err(crate::EditError::Invalid(_))
+    ));
+    // Délier la source principale : elle ne pèse plus, et cesse d'être principale.
+    db.unlink_source(one, SourceId::Anilist).await.unwrap();
+    let detail = series(&db, one).await;
+    assert_eq!(
+        (detail.name.as_str(), detail.metadata.main_source),
+        ("One Piece (MangaDex)", None)
+    );
+    db.record_source(
+        one,
+        SourceId::Anilist,
+        linked("30013", "One Piece (AniList)", "en"),
+    )
+    .await
+    .unwrap();
+    let main = json!({ "main_source": "anilist" })
+        .as_object()
+        .unwrap()
+        .clone();
+    db.edit_series(one, main).await.unwrap();
+    // Principale mais plus liée (fiche retirée à la main) : la langue reprend la main.
+    sqlx::query("DELETE FROM series_sources WHERE source = 'anilist'")
+        .execute(db.pool())
+        .await
+        .unwrap();
+    db.refresh_metadata(None).await.unwrap();
+    assert_eq!(series(&db, one).await.name, "One Piece (MangaDex)");
+    db.record_source(
+        one,
+        SourceId::Anilist,
+        linked("30013", "One Piece (AniList)", "en"),
+    )
+    .await
+    .unwrap();
+    let auto = json!({ "unlock": ["main_source"] })
+        .as_object()
+        .unwrap()
+        .clone();
+    db.edit_series(one, auto).await.unwrap();
+    assert_eq!(series(&db, one).await.name, "One Piece (MangaDex)");
+    // Délier rend la place : AniList, puis le nom du dossier.
     assert!(db.unlink_source(one, SourceId::Mangadex).await.unwrap());
     assert!(!db.unlink_source(one, SourceId::Mangadex).await.unwrap());
+    assert_eq!(series(&db, one).await.name, "One Piece (AniList)");
+    db.unlink_source(one, SourceId::Anilist).await.unwrap();
     assert_eq!(series(&db, one).await.name, "one-piece");
 }
 
@@ -225,6 +285,11 @@ async fn an_edited_field_beats_the_web_and_settings_round_trip() {
     );
     assert_eq!(settings.lang(), "fr");
     assert!(db.set_metadata_online(true).await.unwrap().metadata_online);
+    assert!(
+        !settings.metadata_adult,
+        "fiches pour adultes exclues par défaut"
+    );
+    assert!(db.set_metadata_adult(true).await.unwrap().metadata_adult);
     let custom = db
         .set_metadata_sources(Some(vec![SourceId::Anilist]))
         .await

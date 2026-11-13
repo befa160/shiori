@@ -35,6 +35,8 @@ pub struct SeriesMetadata {
     pub cover_page_id: Option<String>,
     /// Couverture d'une source, gardée par le serveur (`/api/covers/{id}`) ; l'emporte sur la page.
     pub cover_image_id: Option<String>,
+    /// Source qui passe en premier pour cette série (« Source principale ») ; vide : l'ordre réglé.
+    pub main_source: Option<SourceId>,
     /// Sens de lecture proposé par les fichiers : une suggestion, jamais imposée, pas éditable.
     pub right_to_left: Option<bool>,
 }
@@ -53,6 +55,7 @@ const SERIES_FIELDS: &[&str] = &[
     "links",
     "cover_page_id",
     "cover_image_id",
+    "main_source",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -130,6 +133,7 @@ fn from_locals(name: &str, locals: &[(MetadataSource, LocalMetadata)]) -> Series
         links: list(|m| &m.links),
         cover_page_id: None,
         cover_image_id: None,
+        main_source: None,
         right_to_left: ordered.iter().find_map(|m| m.right_to_left),
     }
 }
@@ -139,23 +143,30 @@ fn from_locals(name: &str, locals: &[(MetadataSource, LocalMetadata)]) -> Series
 /// d'une fiche dans la langue de l'interface `lang`, sinon son romaji, sinon la première ; le
 /// nom du dossier ne vient qu'après (à l'affichage). Résumé : celui des fichiers, sinon dans la
 /// langue de l'interface, sinon en anglais, sinon le premier. Les autres titres et les liens
-/// s'additionnent ; les autres champs vides prennent la première fiche qui les a.
+/// s'additionnent ; les autres champs vides prennent la première fiche qui les a. `main` : la
+/// première fiche est la source principale choisie pour la série ; titre et résumé viennent
+/// d'elle d'abord (la langue ne départage alors qu'en elle), les autres fiches en repli.
 fn with_web(
     mut meta: SeriesMetadata,
     name: &str,
     webs: &[WebMetadata],
     lang: &str,
+    main: bool,
 ) -> SeriesMetadata {
     let pick = |texts: fn(&WebMetadata) -> &Vec<Text>, langs: &[&str]| {
-        langs
-            .iter()
-            .find_map(|l| {
-                webs.iter()
-                    .flat_map(texts)
-                    .find(|t| t.lang.as_deref() == Some(*l))
-            })
-            .or_else(|| webs.iter().flat_map(texts).next())
-            .map(|t| t.text.clone())
+        let search = |pool: &[WebMetadata]| {
+            langs
+                .iter()
+                .find_map(|l| {
+                    pool.iter()
+                        .flat_map(texts)
+                        .find(|t| t.lang.as_deref() == Some(*l))
+                })
+                .or_else(|| pool.iter().flat_map(texts).next())
+                .map(|t| t.text.clone())
+        };
+        let first = &webs[..webs.len().min(usize::from(main))];
+        search(first).or_else(|| search(webs))
     };
     if meta.title.is_none() {
         meta.title = pick(|w| &w.titles, &[lang, "ja-ro"]);
@@ -321,7 +332,7 @@ impl Db {
                 .or_default()
                 .push(local(&row)?);
         }
-        let mut webs: HashMap<i64, Vec<(usize, WebMetadata)>> = HashMap::new();
+        let mut webs: HashMap<i64, Vec<(usize, SourceId, WebMetadata)>> = HashMap::new();
         let sql = concat!(
             "SELECT w.series_id, w.source, w.data FROM series_sources w
              JOIN series s ON s.id = w.series_id WHERE w.data IS NOT NULL AND ",
@@ -342,17 +353,24 @@ impl Db {
                 serde_json::from_str(row.get("data")).map_err(|e| Error::Decode(Box::new(e)))?;
             webs.entry(row.get("series_id"))
                 .or_default()
-                .push((rank, data));
+                .push((rank, source, data));
         }
         for row in rows {
             let id: i64 = row.get("id");
             let name: &str = row.get("name");
             let base = from_locals(name, locals.get(&id).map_or(&[], Vec::as_slice));
+            let edited = parse_edited(row.get("edited"))?;
+            // La source principale de la série passe devant l'ordre réglé.
+            let main: Option<SourceId> = edited
+                .get("main_source")
+                .and_then(|v| serde_json::from_value(v.clone()).ok());
             let mut linked = webs.remove(&id).unwrap_or_default();
-            linked.sort_by_key(|(rank, _)| *rank);
-            let linked: Vec<WebMetadata> = linked.into_iter().map(|(_, w)| w).collect();
-            let base = with_web(base, name, &linked, settings.lang());
-            let mut merged = overlay(base, &parse_edited(row.get("edited"))?).map_err(decode)?;
+            // Seulement si elle est liée : une source principale déliée ne pèse plus.
+            let main = main.filter(|m| linked.iter().any(|(_, s, _)| s == m));
+            linked.sort_by_key(|(rank, source, _)| (Some(*source) != main, *rank));
+            let linked: Vec<WebMetadata> = linked.into_iter().map(|(_, _, w)| w).collect();
+            let base = with_web(base, name, &linked, settings.lang(), main.is_some());
+            let mut merged = overlay(base, &edited).map_err(decode)?;
             // Une couverture choisie disparaît avec sa page (fichier modifié : nouveaux IDs).
             if let Some(page) = &merged.cover_page_id
                 && !page_in_series(&mut tx, page, id).await?

@@ -234,6 +234,7 @@ describe('lien vers un tome', () => {
           publication_status: null,
           metadata: NO_METADATA,
           locked: [],
+          sources: [],
           resume_volume_id: 'v1',
           settings: { reading_mode: 'rtl', page_layout: 'auto', page_turn: 'reading', reading_mode_override: null, page_layout_override: null, page_turn_override: null },
           volumes: [

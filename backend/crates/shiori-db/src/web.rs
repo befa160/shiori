@@ -147,13 +147,22 @@ impl Db {
         self.refresh_series_metadata(series).await
     }
 
-    /// Délie une source (sa fiche ne compte plus) ; `false` si elle n'était pas enregistrée.
+    /// Délie une source (sa fiche ne compte plus, et elle cesse d'être la source principale) ;
+    /// `false` si elle n'était pas enregistrée.
     pub async fn unlink_source(&self, series: i64, source: SourceId) -> Result<bool, Error> {
         let done = sqlx::query("DELETE FROM series_sources WHERE series_id = ? AND source = ?")
             .bind(series)
             .bind(to_db(&source))
             .execute(&self.pool)
             .await?;
+        sqlx::query(
+            "UPDATE series_metadata SET edited = json_remove(edited, '$.main_source')
+             WHERE series_id = ? AND json_extract(edited, '$.main_source') = ?",
+        )
+        .bind(series)
+        .bind(to_db(&source))
+        .execute(&self.pool)
+        .await?;
         self.refresh_series_metadata(series).await?;
         Ok(done.rows_affected() > 0)
     }

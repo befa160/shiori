@@ -37,6 +37,7 @@ const detail: SeriesDetail = {
   publication_status: null,
   metadata: NO_METADATA,
   locked: [],
+  sources: [],
   resume_volume_id: 'b',
   page_count: 392,
   pages_read: 245,

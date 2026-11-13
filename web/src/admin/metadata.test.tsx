@@ -9,7 +9,7 @@ afterEach(() => vi.unstubAllGlobals())
 const idle = { running: false, done: 0, total: 0, stopped: null }
 
 function serve(overview: Partial<MetadataOverview>, settings: Partial<Settings> = {}) {
-  let current: Settings = { language: 'fr', page_turn: 'reading', metadata_online: false, metadata_sources: null, ...settings }
+  let current: Settings = { language: 'fr', page_turn: 'reading', metadata_online: false, metadata_sources: null, metadata_adult: false, ...settings }
   let state: MetadataOverview = { online: current.metadata_online, sources: ['mangadex', 'anilist'], identify: idle, issues: [], ...overview }
   const fetch = mockApi({
     '/api/libraries': () => json([]),
@@ -52,6 +52,13 @@ describe('administration : métadonnées web', () => {
     await userEvent.click(online)
     await waitFor(() => expect(online).toBeChecked())
     expect(sent('/api/settings')).toEqual([{ metadata_online: true }])
+    // Fiches pour adultes : exclues par défaut, la case les permet.
+    const adult = s.getByRole('checkbox', { name: 'Inclure les fiches pour adultes' })
+    expect(adult).not.toBeChecked()
+    expect(adult).toHaveAccessibleDescription(/Exclues par défaut/)
+    await userEvent.click(adult)
+    await waitFor(() => expect(adult).toBeChecked())
+    expect(sent('/api/settings').at(-1)).toEqual({ metadata_adult: true })
     await waitFor(() => expect(identify).toBeEnabled())
     await userEvent.click(identify)
     expect(await screen.findByText('Identification lancée')).toBeInTheDocument()

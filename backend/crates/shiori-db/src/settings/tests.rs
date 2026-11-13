@@ -11,6 +11,7 @@ async fn language_is_unset_then_chosen_then_reset() {
             page_turn: PageTurn::Reading,
             metadata_online: false,
             metadata_sources: None,
+            metadata_adult: false,
         }
     );
     let en = db.set_language(Some(Language::En)).await.unwrap();

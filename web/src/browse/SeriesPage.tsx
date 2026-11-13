@@ -1,5 +1,5 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { EllipsisVertical, Pencil, Play } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { EllipsisVertical, Pencil, Play, ScanSearch } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation } from 'react-router'
@@ -15,6 +15,7 @@ import { errorText, issueText } from '@/i18n/errors'
 import { Cover, CoverCard, CoverGrid } from '@/library/covers'
 import { volumeLabel } from './labels'
 import { BackLink, QueryState } from './parts'
+import { IdentifyDialog } from './IdentifyDialog'
 import { LISTS } from './series'
 import { EditSeriesDialog, SeriesAbout } from './SeriesMetadata'
 
@@ -80,6 +81,9 @@ function SeriesHeader({ series }: { series: SeriesDetail }) {
   const cover = series.metadata.cover_page_id ?? series.volumes[0]?.cover_page_id ?? null
   const authors = series.metadata.authors.map((a) => a.name).join(', ')
   const [editing, setEditing] = useState(false)
+  const [identifying, setIdentifying] = useState(false)
+  // « Identifier » n'a de sens que si le réseau est autorisé (Administration).
+  const online = useQuery({ queryKey: ['settings'], queryFn: ({ signal }) => api.settings({ signal }) }).data?.metadata_online
   return (
     <div className="flex flex-col gap-6 sm:flex-row">
       <div className="relative aspect-[2/3] w-36 shrink-0 overflow-hidden rounded-md bg-card sm:w-48">
@@ -118,10 +122,19 @@ function SeriesHeader({ series }: { series: SeriesDetail }) {
             <Pencil aria-hidden />
             {t('series.edit')}
           </Button>
+          {online && (
+            <Button size="lg" variant="secondary" onClick={() => setIdentifying(true)}>
+              <ScanSearch aria-hidden />
+              {t('series.identify')}
+            </Button>
+          )}
         </div>
         <SeriesAbout series={series} />
         <Dialog open={editing} onOpenChange={setEditing}>
           {editing && <EditSeriesDialog series={series} onDone={() => setEditing(false)} />}
+        </Dialog>
+        <Dialog open={identifying} onOpenChange={setIdentifying}>
+          {identifying && <IdentifyDialog series={series} />}
         </Dialog>
       </div>
     </div>

@@ -13,6 +13,8 @@ import type {
   SeriesDetail,
   SeriesPatch,
   SeriesSummary,
+  SourceId,
+  WebMetadata,
   Settings,
   SettingsPatch,
   VolumeDetail,
@@ -84,6 +86,18 @@ export const api = {
   clearProgress: (volumeId: string) => request<null>(`/volumes/${volumeId}/progress`, { method: 'DELETE' }),
   patchSeries: (seriesId: number, patch: SeriesPatch) =>
     must<SeriesDetail>(`/series/${seriesId}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+  searchMetadata: (seriesId: number, source: SourceId, q: string, init?: RequestInit) =>
+    must<WebMetadata[]>(`/series/${seriesId}/metadata/search?${new URLSearchParams({ source, q })}`, init),
+  linkSource: (seriesId: number, source: SourceId, externalId: string) =>
+    must<SeriesDetail>(`/series/${seriesId}/metadata/links/${source}`, {
+      method: 'PUT',
+      body: JSON.stringify({ external_id: externalId }),
+    }),
+  unlinkSource: (seriesId: number, source: SourceId) =>
+    must<SeriesDetail>(`/series/${seriesId}/metadata/links/${source}`, { method: 'DELETE' }),
+  refreshMetadata: (seriesId: number) => must<SeriesDetail>(`/series/${seriesId}/metadata/refresh`, { method: 'POST' }),
+  useSourceCover: (seriesId: number, source: SourceId) =>
+    must<SeriesDetail>(`/series/${seriesId}/metadata/cover`, { method: 'POST', body: JSON.stringify({ source }) }),
   metadataOverview: (init?: RequestInit) => must<MetadataOverview>('/admin/metadata', init),
   identify: () => request<null>('/admin/metadata/identify', { method: 'POST' }),
   saveSeriesSettings: (seriesId: number, patch: SettingsPatch) =>
@@ -94,6 +108,11 @@ export const api = {
 export const WIDTHS = [160, 320, 480, 640, 800, 1080, 1280, 1600, 2048] as const
 export type Width = (typeof WIDTHS)[number]
 export type ImageFormat = 'avif' | 'jpeg'
+
+/** Vignette d'une fiche, relayée par le serveur (le navigateur ne contacte jamais les sources). */
+export function thumbnailUrl(source: SourceId, id: string): string {
+  return `/api/metadata/thumbnail/${source}/${encodeURIComponent(id)}`
+}
 
 /** URL immuable d'une couverture gardée par le serveur, originale ou redimensionnée. */
 export function coverImageUrl(id: string, resize?: { width: Width; format: ImageFormat }): string {
