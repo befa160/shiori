@@ -49,6 +49,32 @@ export interface Settings {
   language: 'fr' | 'en' | null
   /** Sens par défaut pour tourner les pages ; une série peut avoir le sien. */
   page_turn: PageTurn
+  /** Métadonnées web autorisées (désactivées par défaut). */
+  metadata_online: boolean
+  /** Ordre choisi des sources ; `null` : d'après la langue de l'interface. */
+  metadata_sources: SourceId[] | null
+}
+
+/** Sources de métadonnées web. */
+export type SourceId = 'anilist' | 'mangadex'
+
+/** Une source qui demande l'attention : fiches à confirmer, ou dernier essai raté. */
+export interface SourceIssue {
+  series_id: number
+  series_name: string
+  source: SourceId
+  candidates: number
+  /** Code stable (`offline`, `rate_limited`, `not_found`, `http_error`, `bad_response`). */
+  last_error: string | null
+}
+
+/** `GET /api/admin/metadata`. */
+export interface MetadataOverview {
+  online: boolean
+  /** Ordre appliqué des sources. */
+  sources: SourceId[]
+  identify: { running: boolean; done: number; total: number; stopped: string | null }
+  issues: SourceIssue[]
 }
 
 export interface Health {
@@ -86,6 +112,8 @@ export interface SeriesSummary {
   last_read_at: string | null
   /** Page choisie comme couverture, sinon page 0 du premier tome. */
   cover_page_id: string | null
+  /** Couverture d'une source choisie (`/api/covers/{id}`) : l'emporte sur la page. */
+  cover_image_id: string | null
   /** Tome qu'ouvre « Lire » : la suite de la lecture, sinon le premier non lu, sinon le premier. */
   resume_volume_id: string | null
 }
@@ -134,6 +162,7 @@ export interface SeriesMetadata {
   publication_status: PublicationStatus | null
   links: string[]
   cover_page_id: string | null
+  cover_image_id: string | null
   /** Sens de lecture proposé par les fichiers : une suggestion, jamais imposée. */
   right_to_left: boolean | null
 }

@@ -83,7 +83,14 @@ function SeriesHeader({ series }: { series: SeriesDetail }) {
   return (
     <div className="flex flex-col gap-6 sm:flex-row">
       <div className="relative aspect-[2/3] w-36 shrink-0 overflow-hidden rounded-md bg-card sm:w-48">
-        <Cover key={cover} pageId={cover} title={series.name} author={authors} eager />
+        <Cover
+          key={series.metadata.cover_image_id ?? cover}
+          pageId={cover}
+          imageId={series.metadata.cover_image_id}
+          title={series.name}
+          author={authors}
+          eager
+        />
       </div>
       <div className="min-w-0 flex-1 space-y-4">
         <h1 title={series.name} className="line-clamp-3 text-2xl font-semibold break-words">

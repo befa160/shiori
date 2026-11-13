@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { json, mockApi } from '@/test/render'
-import { ApiError, WIDTHS, api, pageImageUrl, request } from './client'
+import { ApiError, WIDTHS, api, coverImageUrl, pageImageUrl, request } from './client'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -11,9 +11,13 @@ describe('request', () => {
     expect(fetch.mock.calls[0][1]).toMatchObject({ headers: { accept: 'application/json' } })
   })
 
-  it('renvoie null pour un 204', async () => {
-    mockApi({ '/api/vide': () => new Response(null, { status: 204 }) })
+  it('renvoie null pour une réponse sans corps (204, 202)', async () => {
+    mockApi({
+      '/api/vide': () => new Response(null, { status: 204 }),
+      '/api/accepte': () => new Response(null, { status: 202 }),
+    })
     expect(await request('/vide')).toBeNull()
+    expect(await request('/accepte')).toBeNull()
   })
 
   it("garde le code et le message d'une erreur de l'API", async () => {
@@ -55,5 +59,10 @@ describe('pageImageUrl', () => {
     expect(pageImageUrl('p1')).toBe('/api/pages/p1/image')
     expect(pageImageUrl('p1', { width: 640, format: 'avif' })).toBe('/api/pages/p1/image?w=640&f=avif')
     expect(WIDTHS).toContain(2048)
+  })
+
+  it('les couvertures gardées par le serveur ont la même forme', () => {
+    expect(coverImageUrl('c1')).toBe('/api/covers/c1')
+    expect(coverImageUrl('c1', { width: 320, format: 'jpeg' })).toBe('/api/covers/c1?w=320&f=jpeg')
   })
 })

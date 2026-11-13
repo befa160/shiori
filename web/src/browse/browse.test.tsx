@@ -20,6 +20,7 @@ const summary = {
   last_read_at: null,
   cover_page_id: null,
   resume_volume_id: null,
+  cover_image_id: null,
   alt_titles: [] as string[],
   authors: [] as string[],
 } as const
@@ -244,7 +245,8 @@ describe('page d’une série', () => {
     await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Enregistrer' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(patches()).toHaveLength(before)
-  })
+    // Beaucoup de saisie : plus de 5 s quand toute la suite tourne en parallèle.
+  }, 15_000)
 
   it('marque un tome lu (dernière page) ou non lu, depuis son menu', async () => {
     const fetch = mockApi({

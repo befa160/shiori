@@ -4,6 +4,7 @@ import type {
   Library,
   LibraryKind,
   LogLine,
+  MetadataOverview,
   PageInfo,
   Progress,
   ReadingSettings,
@@ -30,7 +31,8 @@ export class ApiError extends Error {
   }
 }
 
-/** Requête JSON ; `null` pour un 204. Toute réponse non 2xx devient une `ApiError`. */
+/** Requête JSON ; `null` pour une réponse sans corps (204, 202). Toute réponse non 2xx devient
+ * une `ApiError`. */
 export async function request<T>(path: string, init?: RequestInit): Promise<T | null> {
   let response: Response
   try {
@@ -45,7 +47,8 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T | 
     const message = typeof body?.message === 'string' ? body.message : `erreur HTTP ${response.status}`
     throw new ApiError(response.status, code, message)
   }
-  return response.status === 204 ? null : ((await response.json()) as T)
+  const text = await response.text()
+  return text ? (JSON.parse(text) as T) : null
 }
 
 /** Comme `request`, pour les routes qui ne répondent jamais 204. */
@@ -81,6 +84,8 @@ export const api = {
   clearProgress: (volumeId: string) => request<null>(`/volumes/${volumeId}/progress`, { method: 'DELETE' }),
   patchSeries: (seriesId: number, patch: SeriesPatch) =>
     must<SeriesDetail>(`/series/${seriesId}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+  metadataOverview: (init?: RequestInit) => must<MetadataOverview>('/admin/metadata', init),
+  identify: () => request<null>('/admin/metadata/identify', { method: 'POST' }),
   saveSeriesSettings: (seriesId: number, patch: SettingsPatch) =>
     must<ReadingSettings>(`/series/${seriesId}/settings`, { method: 'PATCH', body: JSON.stringify(patch) }),
 }
@@ -89,6 +94,12 @@ export const api = {
 export const WIDTHS = [160, 320, 480, 640, 800, 1080, 1280, 1600, 2048] as const
 export type Width = (typeof WIDTHS)[number]
 export type ImageFormat = 'avif' | 'jpeg'
+
+/** URL immuable d'une couverture gardée par le serveur, originale ou redimensionnée. */
+export function coverImageUrl(id: string, resize?: { width: Width; format: ImageFormat }): string {
+  const base = `/api/covers/${encodeURIComponent(id)}`
+  return resize ? `${base}?w=${resize.width}&f=${resize.format}` : base
+}
 
 /** URL immuable d'une page : originale, ou redimensionnée à une largeur de la liste fixe. */
 export function pageImageUrl(pageId: string, resize?: { width: Width; format: ImageFormat }): string {

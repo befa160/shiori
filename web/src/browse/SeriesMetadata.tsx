@@ -80,7 +80,7 @@ export function SeriesAbout({ series }: { series: SeriesDetail }) {
 }
 
 /** Champs du formulaire, chacun en texte ; une liste par ligne, sauf genres et tags (virgules). */
-type Form = Record<Exclude<SeriesField, 'cover_page_id'>, string>
+type Form = Record<Exclude<SeriesField, 'cover_page_id' | 'cover_image_id'>, string>
 const UNKNOWN = 'unknown'
 const lines = (text: string) => text.split('\n').map((s) => s.trim()).filter(Boolean)
 const commas = (text: string) => text.split(',').map((s) => s.trim()).filter(Boolean)

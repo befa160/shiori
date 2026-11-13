@@ -2,7 +2,7 @@ import { Play } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
-import { pageImageUrl } from '@/api/client'
+import { type Width, coverImageUrl, pageImageUrl } from '@/api/client'
 import type { ContinueItem, SeriesSummary } from '@/api/types'
 import { volumeLabel } from '@/browse/labels'
 import { cn } from '@/lib/utils'
@@ -31,14 +31,29 @@ export function FallbackCover({ title, author }: { title: string; author?: strin
   )
 }
 
-/** Miniature JPEG du serveur ; couverture de repli si elle manque ou ne se charge pas. */
-export function Cover({ pageId, title, author, eager }: { pageId: string | null; title: string; author?: string; eager: boolean }) {
+/** Miniature JPEG du serveur : couverture d'une source (`imageId`) si elle a été choisie, sinon
+ * la page ; couverture de repli si rien n'existe ou ne se charge. */
+export function Cover({
+  pageId,
+  imageId = null,
+  title,
+  author,
+  eager,
+}: {
+  pageId: string | null
+  imageId?: string | null
+  title: string
+  author?: string
+  eager: boolean
+}) {
   const [failed, setFailed] = useState(false)
-  if (pageId === null || failed) return <FallbackCover title={title} author={author} />
+  if ((pageId === null && imageId === null) || failed) return <FallbackCover title={title} author={author} />
+  const url = (width: Width) =>
+    imageId !== null ? coverImageUrl(imageId, { width, format: 'jpeg' }) : pageImageUrl(pageId as string, { width, format: 'jpeg' })
   return (
     <img
-      src={pageImageUrl(pageId, { width: 320, format: 'jpeg' })}
-      srcSet={THUMBS.map((width) => `${pageImageUrl(pageId, { width, format: 'jpeg' })} ${width}w`).join(', ')}
+      src={url(320)}
+      srcSet={THUMBS.map((width) => `${url(width)} ${width}w`).join(', ')}
       sizes={SIZES}
       alt=""
       loading={eager ? 'eager' : 'lazy'}
@@ -56,6 +71,8 @@ export interface CoverCardProps {
   /** Sous le titre de la couverture de repli. */
   author?: string
   coverPageId: string | null
+  /** Couverture d'une source choisie : l'emporte sur la page. */
+  coverImageId?: string | null
   /** Barre ambre en bas de la couverture, de 0 à 1 ; absente si `null`. */
   progress: number | null
   progressLabel?: string
@@ -70,7 +87,7 @@ export interface CoverCardProps {
   eager?: boolean
 }
 
-export function CoverCard({ to, title, subtitle, author, coverPageId, progress, progressLabel, badges = [], actions, quickRead, eager = false }: CoverCardProps) {
+export function CoverCard({ to, title, subtitle, author, coverPageId, coverImageId, progress, progressLabel, badges = [], actions, quickRead, eager = false }: CoverCardProps) {
   return (
     <div className="group relative">
       {/* Texte d'abord dans le DOM (le lecteur d'écran annonce le titre en premier), couverture
@@ -84,7 +101,7 @@ export function CoverCard({ to, title, subtitle, author, coverPageId, progress, 
         </div>
         <div className="relative aspect-[2/3] overflow-hidden rounded-md bg-card ring-1 ring-transparent transition-shadow group-hover:ring-white/15">
           {/* `key` : une autre couverture repart sans l'échec de la précédente. */}
-          <Cover key={coverPageId} pageId={coverPageId} title={title} author={author} eager={eager} />
+          <Cover key={coverImageId ?? coverPageId} pageId={coverPageId} imageId={coverImageId} title={title} author={author} eager={eager} />
           {badges.length > 0 && (
             // Tronquées avant le menu d'actions (en haut à droite) sur une carte étroite.
             <div className="absolute top-2 left-2 flex max-w-[calc(100%-3.5rem)] flex-col items-start gap-1">
@@ -179,6 +196,7 @@ export function SeriesCard({ series, eager }: { series: SeriesSummary; eager?: b
       subtitle={authors || t('counts.volumes', { count: series.volume_count })}
       author={authors}
       coverPageId={series.cover_page_id}
+      coverImageId={series.cover_image_id}
       // Avancement en pages : un webtoon d'un seul tome, commencé, a aussi sa barre.
       progress={series.reading_status === 'in_progress' ? series.pages_read / Math.max(series.page_count, 1) : null}
       progressLabel={t('library.percentRead', { percent: series.pages_read / Math.max(series.page_count, 1) })}

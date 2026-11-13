@@ -22,6 +22,7 @@ const base = {
   last_read_at: null,
   cover_page_id: null,
   resume_volume_id: null,
+  cover_image_id: null,
   alt_titles: [] as string[],
   authors: [] as string[],
 } as const
@@ -47,6 +48,18 @@ describe('séries : recherche, filtres et tri', () => {
     expect(router.state.location.search).toBe('?q=ete')
     // Taper ne remplit pas l'historique.
     expect(router.state.historyAction).toBe('REPLACE')
+  })
+
+  it('montre la couverture d’une source quand elle a été choisie', async () => {
+    mockApi({
+      '/api/libraries': () => json(libraries),
+      '/api/series': () => json([{ ...series[0], cover_page_id: 'p1', cover_image_id: 'c1' }]),
+    })
+    renderAt('/series')
+    const akira = (await screen.findByRole('link', { name: /^Akira/ })).closest('li') as HTMLElement
+    const img = akira.querySelector('img') as HTMLImageElement
+    expect(img.getAttribute('src')).toBe('/api/covers/c1?w=320&f=jpeg')
+    expect(img.getAttribute('srcset')).toContain('/api/covers/c1?w=160&f=jpeg 160w')
   })
 
   it('montre l’auteur sous le titre, et sur la couverture de repli', async () => {

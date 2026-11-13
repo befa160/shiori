@@ -16,6 +16,7 @@ const base: SeriesSummary = {
   last_read_at: null,
   cover_page_id: null,
   resume_volume_id: null,
+  cover_image_id: null,
   alt_titles: [],
   authors: [],
 }
