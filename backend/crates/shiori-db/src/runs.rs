@@ -5,7 +5,7 @@ use shiori_core::{IssueCode, Severity, Status};
 use sqlx::Row;
 use sqlx::sqlite::SqliteRow;
 
-use crate::{Db, Error, Scanned, from_db, to_db};
+use crate::{Db, Error, Scanned, from_db, location_key, to_db};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -74,6 +74,9 @@ pub struct LogLine {
     pub path: Option<String>,
     pub code: Option<IssueCode>,
     pub message: String,
+    /// Série et tome de ce chemin aujourd'hui ; `None` si le fichier n'est plus suivi.
+    pub series_id: Option<i64>,
+    pub volume_id: Option<String>,
 }
 
 /// Filtre de l'historique des passes.
@@ -160,10 +163,11 @@ impl Db {
         limit: u32,
     ) -> Result<Vec<LogLine>, Error> {
         let rows = sqlx::query(
-            "SELECT id, at, level, path, code, message FROM scan_run_logs
-             WHERE scan_run_id = ?1 AND (?2 IS NULL OR id > ?2)
-               AND CASE level WHEN 'info' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END >= ?3
-             ORDER BY id LIMIT ?4",
+            "SELECT g.id, g.at, g.level, g.path, g.code, g.message, l.series_id, l.volume_id
+             FROM scan_run_logs g LEFT JOIN file_locations l ON l.path = g.path
+             WHERE g.scan_run_id = ?1 AND (?2 IS NULL OR g.id > ?2)
+               AND CASE g.level WHEN 'info' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END >= ?3
+             ORDER BY g.id LIMIT ?4",
         )
         .bind(run)
         .bind(after)
@@ -180,6 +184,8 @@ impl Db {
                     path: r.get("path"),
                     code: r.get::<Option<&str>, _>("code").map(from_db).transpose()?,
                     message: r.get("message"),
+                    series_id: r.get("series_id"),
+                    volume_id: r.get("volume_id"),
                 })
             })
             .collect()
@@ -285,7 +291,8 @@ impl Db {
             return Ok(());
         }
         let report = &scanned.report;
-        let path = report.path.to_string_lossy();
+        // Même forme que la clé des emplacements (absolue, `/`) : le journal y retrouve le tome.
+        let path = location_key(&report.path);
         let pages = report.pages.len();
         let message = format!("scanné : {}, {pages} page(s)", to_db(&report.status));
         self.log(run, Severity::Info, Some(&path), None, &message)

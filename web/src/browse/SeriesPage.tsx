@@ -1,8 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { EllipsisVertical, Play } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router'
+import { Link, useLocation } from 'react-router'
 import { toast } from 'sonner'
 import { api } from '@/api/client'
 import { useLibraries, useSeries, useVolume } from '@/api/queries'
@@ -28,6 +28,16 @@ export function SeriesPage({ id }: { id: number }) {
   // Retour vers la bibliothèque de la série, nommée (souvent déjà en cache) ; l'accueil sinon.
   const libraryId = series.data?.library_id
   const libraryName = useLibraries().data?.find((l) => l.id === libraryId)?.name ?? t('library.fallbackName')
+  // Lien vers un tome (`#volume-…`, depuis les journaux de scan) : React Router ne fait pas défiler
+  // jusqu'à l'ancre ; on y va une fois les tomes affichés, et le focus suit pour le clavier.
+  const { hash } = useLocation()
+  const loaded = series.data !== undefined
+  useEffect(() => {
+    if (!loaded || !hash) return
+    const target = document.getElementById(decodeURIComponent(hash.slice(1)))
+    target?.scrollIntoView?.({ block: 'center' })
+    target?.querySelector('a')?.focus({ preventScroll: true })
+  }, [loaded, hash])
   return (
     <section className="space-y-6">
       <title>{`${name} · Shiori`}</title>

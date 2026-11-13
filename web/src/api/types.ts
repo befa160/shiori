@@ -136,3 +136,56 @@ export interface PageInfo {
   media_type: string | null
   status: PageStatus
 }
+
+// Scans (backend/crates/shiori-db/src/runs.rs, shiori/src/job.rs).
+export type RunStatus = 'running' | 'completed' | 'cancelled' | 'failed' | 'interrupted'
+
+export interface RunCounts {
+  ok: number
+  warning: number
+  error: number
+  unchanged: number
+  removed: number
+}
+
+/** Passe de scan en cours (`GET /api/admin/scans/current`). */
+export interface ScanProgress {
+  run: number
+  library_id: number
+  target: string
+  /** 0 tant que la liste des fichiers n'est pas faite. */
+  total: number
+  done: number
+  current: string | null
+  counts: RunCounts
+  cancelling: boolean
+}
+
+/** Une passe de l'historique (`GET /api/admin/scans`, du plus récent au plus ancien). */
+export interface RunSummary {
+  id: number
+  library_id: number | null
+  origin: 'cli' | 'api'
+  status: RunStatus
+  root: string
+  options: { deep?: boolean; rehash?: boolean }
+  started_at: string
+  finished_at: string | null
+  duration_ms: number | null
+  files_total: number | null
+  counts: RunCounts
+  /** Erreur fatale qui a arrêté la passe. */
+  error: string | null
+}
+
+export interface LogLine {
+  id: number
+  at: string
+  level: Severity
+  path: string | null
+  code: string | null
+  message: string
+  /** Série et tome de ce chemin aujourd'hui ; `null` si le fichier n'est plus suivi. */
+  series_id: number | null
+  volume_id: string | null
+}

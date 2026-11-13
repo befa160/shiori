@@ -26,3 +26,13 @@ export const useVolume = (id: string) =>
 
 export const usePages = (volumeId: string) =>
   useQuery({ queryKey: ['volumes', volumeId, 'pages'], queryFn: ({ signal }) => api.pages(volumeId, { signal }) })
+
+/** Passe de scan en cours (`null` : rien ne tourne), redemandée chaque seconde tant qu'elle tourne.
+ * `idlePoll` : au repos aussi, pour voir un scan lancé ailleurs (autre appareil) là où il s'affiche. */
+export const useCurrentScan = (idlePoll: number | false = false) =>
+  useQuery({
+    queryKey: ['scans', 'current'],
+    queryFn: ({ signal }) => api.currentScan({ signal }),
+    refetchInterval: (query) => (query.state.data ? 1000 : idlePoll),
+    staleTime: 0,
+  })

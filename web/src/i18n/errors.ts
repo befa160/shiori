@@ -13,7 +13,7 @@ export function errorText(error: Error, t: TFunction, notFound?: string): string
 }
 
 /** Texte d'un problème de scan, d'après son code stable ; un code inconnu garde le message du serveur. */
-export function issueText(issue: Issue, t: TFunction): string {
+export function issueText(issue: Pick<Issue, 'message'> & { code: string }, t: TFunction): string {
   const key = `issues.${issue.code}`
   return i18n.exists(key) ? t(key as 'issues.no_pages') : issue.message
 }

@@ -19,6 +19,7 @@ import {
   SidebarTrigger,
   useSidebar,
 } from '@/components/ui/sidebar'
+import { ScanWatcher } from '@/admin/scans'
 import { LanguageSelect } from './LanguageSelect'
 
 // Destinations principales : sidebar à partir de `lg`, barre d'onglets en dessous (4 au plus).
@@ -52,6 +53,7 @@ export function Layout() {
         </main>
       </SidebarInset>
       <TabBar />
+      <ScanWatcher />
     </SidebarProvider>
   )
 }
