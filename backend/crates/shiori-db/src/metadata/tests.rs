@@ -53,7 +53,9 @@ fn index_json_describes_the_series_then_the_first_comic_info() {
     assert_eq!(
         meta,
         SeriesMetadata {
-            // Le nom du dossier n'est pas répété ; doublons sans casse retirés.
+            // Titre des fichiers (index.json d'abord) ; les autres restent alternatifs, sans
+            // répéter le titre affiché ni le nom du dossier qui lui est égal, doublons sans casse retirés.
+            title: Some("Leviathan".into()),
             alt_titles: vec!["Léviathan".into(), "One Piece".into(), "Autre".into()],
             summary: Some("Série".into()),
             authors: vec![author("Oda")],
@@ -66,6 +68,9 @@ fn index_json_describes_the_series_then_the_first_comic_info() {
         }
     );
     assert_eq!(from_locals("x", &[]), SeriesMetadata::default());
+    // Un dossier nommé autrement reste cherchable.
+    let meta = from_locals("Webtoon", &locals[2..]);
+    assert_eq!(meta.alt_titles, ["Léviathan", "Webtoon"]);
 }
 
 #[test]
@@ -206,8 +211,9 @@ mod db {
             panic!()
         };
         let id = s.id;
-        assert_eq!(s.name, "One Piece");
-        // « ONE PIECE » du fichier = le nom du dossier, à la casse près : pas un autre titre.
+        // Le titre du fichier passe avant le nom du dossier ; égal à la casse près, celui-ci
+        // n'est pas répété en titre alternatif.
+        assert_eq!(s.name, "ONE PIECE");
         assert!(s.alt_titles.is_empty());
         assert_eq!(s.authors, ["Eiichiro Oda"]);
         let volume = db.series_detail(id).await.unwrap().unwrap().volumes[0]
@@ -242,7 +248,7 @@ mod db {
         let detail = db.series_detail(id).await.unwrap().unwrap();
         assert_eq!(
             (detail.name.as_str(), detail.metadata.summary.as_deref()),
-            ("One Piece", Some("Luffy."))
+            ("ONE PIECE", Some("Luffy."))
         );
 
         // Refus : champ inconnu, mauvais type, page d'une autre série.

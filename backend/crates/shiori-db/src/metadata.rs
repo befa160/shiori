@@ -74,8 +74,8 @@ pub enum EditError {
 
 /// Vue des fichiers locaux d'une série nommée `name` (`locals` dans l'ordre de ses tomes).
 /// Pour chaque champ : le premier `index.json` qui l'a (il décrit la série), sinon le premier
-/// `ComicInfo.xml`. Les titres des fichiers deviennent des titres alternatifs (Q34 : le
-/// titre affiché reste celui du dossier tant qu'aucune source web ni édition ne le change).
+/// `ComicInfo.xml`. Titre : celui des fichiers, sinon (plus tard le web, puis) le nom du
+/// dossier ; les autres titres, nom du dossier compris, restent cherchables en alternatifs.
 fn from_locals(name: &str, locals: &[(MetadataSource, LocalMetadata)]) -> SeriesMetadata {
     let of = |source| locals.iter().filter(move |(s, _)| *s == source);
     let ordered: Vec<&LocalMetadata> = of(MetadataSource::IndexJson)
@@ -91,18 +91,20 @@ fn from_locals(name: &str, locals: &[(MetadataSource, LocalMetadata)]) -> Series
             .cloned()
             .unwrap_or_default()
     };
+    let title = text(|m| &m.series);
+    let shown = title.as_deref().unwrap_or(name).to_owned();
     let mut alt_titles: Vec<String> = Vec::new();
-    for title in ordered
+    let candidates = ordered
         .iter()
-        .flat_map(|m| m.series.iter().chain(&m.alt_titles))
-    {
-        let known = |t: &String| t.eq_ignore_ascii_case(title);
-        if !title.eq_ignore_ascii_case(name) && !alt_titles.iter().any(known) {
-            alt_titles.push(title.clone());
+        .flat_map(|m| m.series.iter().chain(&m.alt_titles));
+    for t in candidates.chain([&name.to_owned()]) {
+        let known = |a: &String| a.eq_ignore_ascii_case(t);
+        if !t.eq_ignore_ascii_case(&shown) && !alt_titles.iter().any(known) {
+            alt_titles.push(t.clone());
         }
     }
     SeriesMetadata {
-        title: None,
+        title,
         alt_titles,
         summary: text(|m| &m.summary),
         authors: ordered
