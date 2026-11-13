@@ -8,6 +8,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use shiori_core::{Author, LocalMetadata, MetadataSource, VolumeId};
+use shiori_meta::{SourceId, Text, WebMetadata};
 use sqlx::Row;
 
 use crate::{Db, Error, PublicationStatus, from_db, to_db};
@@ -129,6 +130,69 @@ fn from_locals(name: &str, locals: &[(MetadataSource, LocalMetadata)]) -> Series
     }
 }
 
+/// Complète la vue des fichiers avec les fiches web liées, `webs` dans l'ordre des sources
+/// (Q28 : les fichiers d'abord, puis le web). Titre (Q34) : celui des fichiers, sinon celui
+/// d'une fiche dans la langue de l'interface `lang`, sinon son romaji, sinon la première ; le
+/// nom du dossier ne vient qu'après (à l'affichage). Résumé : celui des fichiers, sinon dans la
+/// langue de l'interface, sinon en anglais, sinon le premier. Les autres titres et les liens
+/// s'additionnent ; les autres champs vides prennent la première fiche qui les a.
+fn with_web(
+    mut meta: SeriesMetadata,
+    name: &str,
+    webs: &[WebMetadata],
+    lang: &str,
+) -> SeriesMetadata {
+    let pick = |texts: fn(&WebMetadata) -> &Vec<Text>, langs: &[&str]| {
+        langs
+            .iter()
+            .find_map(|l| {
+                webs.iter()
+                    .flat_map(texts)
+                    .find(|t| t.lang.as_deref() == Some(*l))
+            })
+            .or_else(|| webs.iter().flat_map(texts).next())
+            .map(|t| t.text.clone())
+    };
+    if meta.title.is_none() {
+        meta.title = pick(|w| &w.titles, &[lang, "ja-ro"]);
+    }
+    let shown = meta.title.clone().unwrap_or_else(|| name.to_owned());
+    for t in webs.iter().flat_map(|w| &w.titles) {
+        let known = |a: &String| a.eq_ignore_ascii_case(&t.text);
+        if !t.text.eq_ignore_ascii_case(&shown)
+            && !t.text.eq_ignore_ascii_case(name)
+            && !meta.alt_titles.iter().any(known)
+        {
+            meta.alt_titles.push(t.text.clone());
+        }
+    }
+    if meta.summary.is_none() {
+        meta.summary = pick(|w| &w.summaries, &[lang, "en"]);
+    }
+    let first = |empty: bool, f: fn(&WebMetadata) -> bool| {
+        empty.then(|| webs.iter().find(|w| f(w))).flatten()
+    };
+    if let Some(w) = first(meta.authors.is_empty(), |w| !w.authors.is_empty()) {
+        meta.authors = w.authors.clone();
+    }
+    if let Some(w) = first(meta.genres.is_empty(), |w| !w.genres.is_empty()) {
+        meta.genres = w.genres.clone();
+    }
+    if let Some(w) = first(meta.tags.is_empty(), |w| !w.tags.is_empty()) {
+        meta.tags = w.tags.clone();
+    }
+    meta.year = meta.year.or_else(|| webs.iter().find_map(|w| w.year));
+    meta.publication_status = meta
+        .publication_status
+        .or_else(|| webs.iter().find_map(|w| from_db(w.status.as_deref()?).ok()));
+    for link in webs.iter().flat_map(|w| &w.links) {
+        if !meta.links.contains(link) {
+            meta.links.push(link.clone());
+        }
+    }
+    meta
+}
+
 /// Vue d'un tome : son `ComicInfo.xml` (l'`index.json` décrit la série, pas le tome).
 fn volume_from_locals(locals: &[(MetadataSource, LocalMetadata)]) -> VolumeMetadata {
     let Some((_, m)) = locals.iter().find(|(s, _)| *s == MetadataSource::Comicinfo) else {
@@ -210,12 +274,18 @@ impl Db {
         self.refresh(library, None).await
     }
 
+    pub(crate) async fn refresh_series_metadata(&self, series: i64) -> Result<(), Error> {
+        self.refresh(None, Some(series)).await
+    }
+
     async fn refresh(&self, library: Option<i64>, series: Option<i64>) -> Result<(), Error> {
         macro_rules! filter {
             () => {
                 "(?1 IS NULL OR s.library_id = ?1) AND (?2 IS NULL OR s.id = ?2)"
             };
         }
+        let settings = self.settings().await?;
+        let order = settings.source_order();
         let mut tx = self.pool.begin_with("BEGIN IMMEDIATE").await?;
         let rows = sqlx::query(concat!(
             "SELECT s.id, s.name, m.edited FROM series s
@@ -247,9 +317,37 @@ impl Db {
                 .or_default()
                 .push(local(&row)?);
         }
+        let mut webs: HashMap<i64, Vec<(usize, WebMetadata)>> = HashMap::new();
+        let sql = concat!(
+            "SELECT w.series_id, w.source, w.data FROM series_sources w
+             JOIN series s ON s.id = w.series_id WHERE w.data IS NOT NULL AND ",
+            filter!()
+        );
+        for row in sqlx::query(sql)
+            .bind(library)
+            .bind(series)
+            .fetch_all(&mut *tx)
+            .await?
+        {
+            let source: SourceId = from_db(row.get("source"))?;
+            // Une source retirée de l'ordre ne compte plus.
+            let Some(rank) = order.iter().position(|s| *s == source) else {
+                continue;
+            };
+            let data =
+                serde_json::from_str(row.get("data")).map_err(|e| Error::Decode(Box::new(e)))?;
+            webs.entry(row.get("series_id"))
+                .or_default()
+                .push((rank, data));
+        }
         for row in rows {
             let id: i64 = row.get("id");
-            let base = from_locals(row.get("name"), locals.get(&id).map_or(&[], Vec::as_slice));
+            let name: &str = row.get("name");
+            let base = from_locals(name, locals.get(&id).map_or(&[], Vec::as_slice));
+            let mut linked = webs.remove(&id).unwrap_or_default();
+            linked.sort_by_key(|(rank, _)| *rank);
+            let linked: Vec<WebMetadata> = linked.into_iter().map(|(_, w)| w).collect();
+            let base = with_web(base, name, &linked, settings.lang());
             let mut merged = overlay(base, &parse_edited(row.get("edited"))?).map_err(decode)?;
             // Une couverture choisie disparaît avec sa page (fichier modifié : nouveaux IDs).
             if let Some(page) = &merged.cover_page_id

@@ -358,3 +358,99 @@ mod db {
         assert_eq!((b.publication_status, b.locked.len()), (None, 0));
     }
 }
+
+fn web(id: &str, titles: &[(Option<&str>, &str)], summaries: &[(&str, &str)]) -> WebMetadata {
+    let text = |lang: Option<&str>, t: &str| Text {
+        lang: lang.map(Into::into),
+        text: t.into(),
+    };
+    WebMetadata {
+        id: id.into(),
+        titles: titles.iter().map(|(l, t)| text(*l, t)).collect(),
+        summaries: summaries.iter().map(|(l, t)| text(Some(l), t)).collect(),
+        ..WebMetadata::default()
+    }
+}
+
+#[test]
+fn web_fills_what_the_files_do_not_say() {
+    let mangadex = WebMetadata {
+        authors: vec![author("Oda")],
+        genres: vec!["Action".into()],
+        year: Some(1997),
+        status: Some("ongoing".into()),
+        links: vec!["https://mangadex.org/title/x".into()],
+        ..web(
+            "x",
+            &[(Some("ja-ro"), "One Piece"), (Some("ja"), "ワンピース")],
+            &[("en", "A boy."), ("fr", "Un garçon.")],
+        )
+    };
+    let anilist = WebMetadata {
+        tags: vec!["Pirates".into()],
+        links: vec!["https://anilist.co/manga/1".into()],
+        ..web(
+            "1",
+            &[(Some("en"), "One Piece"), (None, "Wan Pīsu")],
+            &[("en", "A boy (AniList).")],
+        )
+    };
+    let meta = with_web(
+        SeriesMetadata::default(),
+        "one-piece",
+        &[mangadex.clone(), anilist.clone()],
+        "fr",
+    );
+    // Pas de titre français : le romaji de la première source ; le résumé en français.
+    assert_eq!(meta.title.as_deref(), Some("One Piece"));
+    assert_eq!(meta.alt_titles, ["ワンピース", "Wan Pīsu"]);
+    assert_eq!(meta.summary.as_deref(), Some("Un garçon."));
+    assert_eq!(
+        (meta.authors.len(), meta.genres.clone(), meta.tags.clone()),
+        (1, vec!["Action".into()], vec!["Pirates".into()])
+    );
+    assert_eq!(
+        (meta.year, meta.publication_status),
+        (Some(1997), Some(PublicationStatus::Ongoing))
+    );
+    assert_eq!(meta.links.len(), 2);
+    // En anglais, AniList d'abord : son titre anglais, son résumé.
+    let meta = with_web(
+        SeriesMetadata::default(),
+        "x",
+        &[anilist, mangadex.clone()],
+        "en",
+    );
+    assert_eq!(
+        (meta.title.as_deref(), meta.summary.as_deref()),
+        (Some("One Piece"), Some("A boy (AniList)."))
+    );
+    // Les fichiers l'emportent ; le titre du web reste cherchable.
+    let local = SeriesMetadata {
+        title: Some("Mon titre".into()),
+        summary: Some("Le mien.".into()),
+        year: Some(2000),
+        ..SeriesMetadata::default()
+    };
+    let meta = with_web(local, "x", &[mangadex], "fr");
+    assert_eq!(
+        (meta.title.as_deref(), meta.summary.as_deref(), meta.year),
+        (Some("Mon titre"), Some("Le mien."), Some(2000))
+    );
+    assert!(meta.alt_titles.contains(&"One Piece".to_owned()));
+    // Sans fiche, rien ne change ; sans romaji ni langue voulue, le premier titre et le premier résumé.
+    assert_eq!(
+        with_web(SeriesMetadata::default(), "x", &[], "fr"),
+        SeriesMetadata::default()
+    );
+    let odd = with_web(
+        SeriesMetadata::default(),
+        "x",
+        &[web("y", &[(None, "Titre")], &[("es", "Resumen.")])],
+        "fr",
+    );
+    assert_eq!(
+        (odd.title.as_deref(), odd.summary.as_deref()),
+        (Some("Titre"), Some("Resumen."))
+    );
+}

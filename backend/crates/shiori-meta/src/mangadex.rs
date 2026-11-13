@@ -116,6 +116,38 @@ fn texts(map: HashMap<String, String>) -> Vec<Text> {
     out
 }
 
+/// Résumés MangaDex en Markdown : texte simple (gras et italique retirés, lien réduit à son
+/// texte, filets `---` enlevés). Le résumé est affiché tel quel, jamais interprété.
+fn markdown_plain(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for line in text.lines() {
+        if line
+            .trim()
+            .chars()
+            .all(|c| c == '-' || c == '*' || c == '_')
+            && !line.trim().is_empty()
+        {
+            continue;
+        }
+        let mut rest = line;
+        // `[texte](adresse)` → `texte`.
+        while let Some(open) = rest.find('[') {
+            let Some(close) = rest[open..].find("](").map(|i| open + i) else {
+                break;
+            };
+            let Some(end) = rest[close..].find(')').map(|i| close + i) else {
+                break;
+            };
+            out.push_str(&rest[..open]);
+            out.push_str(&rest[open + 1..close]);
+            rest = &rest[end + 1..];
+        }
+        out.push_str(rest);
+        out.push('\n');
+    }
+    out.replace("**", "").replace("__", "").trim().to_owned()
+}
+
 impl From<Manga> for WebMetadata {
     fn from(m: Manga) -> Self {
         let a = m.attributes;
@@ -149,7 +181,13 @@ impl From<Manga> for WebMetadata {
         };
         WebMetadata {
             titles,
-            summaries: texts(a.description),
+            summaries: texts(a.description)
+                .into_iter()
+                .map(|t| Text {
+                    text: markdown_plain(&t.text),
+                    ..t
+                })
+                .collect(),
             authors,
             genres: tags("genre"),
             tags: tags("theme"),

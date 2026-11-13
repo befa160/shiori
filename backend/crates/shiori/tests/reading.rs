@@ -324,7 +324,7 @@ async fn language_setting_round_trip() {
         call(&f.app, "GET", "/api/settings", None).await,
         (
             StatusCode::OK,
-            json!({ "language": null, "page_turn": "reading" })
+            json!({ "language": null, "page_turn": "reading", "metadata_online": false, "metadata_sources": null })
         )
     );
     let (status, saved) = call(
@@ -338,12 +338,12 @@ async fn language_setting_round_trip() {
         (status, saved),
         (
             StatusCode::OK,
-            json!({ "language": "en", "page_turn": "reading" })
+            json!({ "language": "en", "page_turn": "reading", "metadata_online": false, "metadata_sources": null })
         )
     );
     assert_eq!(
         call(&f.app, "GET", "/api/settings", None).await.1,
-        json!({ "language": "en", "page_turn": "reading" })
+        json!({ "language": "en", "page_turn": "reading", "metadata_online": false, "metadata_sources": null })
     );
     let (_, reset) = call(
         &f.app,
@@ -352,7 +352,10 @@ async fn language_setting_round_trip() {
         Some(json!({ "language": null })),
     )
     .await;
-    assert_eq!(reset, json!({ "language": null, "page_turn": "reading" }));
+    assert_eq!(
+        reset,
+        json!({ "language": null, "page_turn": "reading", "metadata_online": false, "metadata_sources": null })
+    );
     // Un champ absent reste inchangé.
     let (_, turned) = call(
         &f.app,
@@ -361,7 +364,10 @@ async fn language_setting_round_trip() {
         Some(json!({ "page_turn": "ltr" })),
     )
     .await;
-    assert_eq!(turned, json!({ "language": null, "page_turn": "ltr" }));
+    assert_eq!(
+        turned,
+        json!({ "language": null, "page_turn": "ltr", "metadata_online": false, "metadata_sources": null })
+    );
     for body in [
         json!({ "language": "de" }),
         json!({ "page_turn": null }),

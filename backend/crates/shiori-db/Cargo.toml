@@ -13,6 +13,7 @@ workspace = true
 serde.workspace = true
 serde_json.workspace = true
 shiori-core.workspace = true
+shiori-meta.workspace = true
 sqlx.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["rt"] }

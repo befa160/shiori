@@ -36,6 +36,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 shiori-db = { path = "crates/shiori-db" }
 shiori-core = { path = "crates/shiori-core" }
+shiori-meta = { path = "crates/shiori-meta" }
 blake3 = { version = "1.8", default-features = false, features = ["std", "pure"] }
 thiserror = "2.0"
 rars = { version = "0.12", default-features = false }
