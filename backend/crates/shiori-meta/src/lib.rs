@@ -84,7 +84,11 @@ pub trait Source: Send + Sync {
     /// Séries dont un titre ressemble à `query`, les plus pertinentes d'abord.
     fn search(&self, query: &str) -> Result<Vec<WebMetadata>, FetchError>;
     fn fetch(&self, id: &str) -> Result<WebMetadata, FetchError>;
+    /// Image d'une fiche (couverture), depuis les seuls hôtes de la source.
+    fn image(&self, url: &str) -> Result<Vec<u8>, FetchError>;
 }
+
+type Response = Result<ureq::http::Response<ureq::Body>, ureq::Error>;
 
 /// Attente au-delà de laquelle une requête renonce plutôt que de faire patienter (429 reçu).
 const MAX_WAIT: Duration = Duration::from_secs(10);
@@ -103,6 +107,9 @@ impl Http {
             .user_agent(concat!("Shiori/", env!("CARGO_PKG_VERSION")))
             .timeout_global(Some(Duration::from_secs(15)))
             .http_status_as_error(false)
+            // Aucune redirection suivie : une image redirigée vers le réseau local contournerait
+            // la liste blanche des hôtes (SSRF) ; un 3xx devient une erreur `http_error`.
+            .max_redirects(0)
             .build()
             .into();
         Self {
@@ -125,18 +132,39 @@ impl Http {
         Ok(())
     }
 
-    /// Envoie la requête et rend le corps d'une réponse 200.
-    fn send(
+    /// Envoie la requête et rend le corps (texte) d'une réponse 200.
+    fn send(&self, request: impl FnOnce(&ureq::Agent) -> Response) -> Result<String, FetchError> {
+        self.ok(request)?
+            .body_mut()
+            .read_to_string()
+            .map_err(|e| FetchError::BadResponse(e.to_string()))
+    }
+
+    /// Télécharge une image, `https` seulement et depuis un hôte que `allowed` accepte : une
+    /// adresse venue d'une réponse ne fait jamais appeler le réseau local (SSRF). 8 Mio au plus.
+    fn image(&self, url: &str, allowed: fn(&str) -> bool) -> Result<Vec<u8>, FetchError> {
+        if !image_host(url).is_some_and(|h| allowed(&h)) {
+            return Err(FetchError::BadResponse(format!(
+                "adresse d'image refusée : {url}"
+            )));
+        }
+        self.ok(|agent| agent.get(url).call())?
+            .body_mut()
+            .with_config()
+            .limit(8 * 1024 * 1024)
+            .read_to_vec()
+            .map_err(|e| FetchError::BadResponse(e.to_string()))
+    }
+
+    /// Envoie la requête (à son tour) et rend une réponse 200 ; erreur typée sinon.
+    fn ok(
         &self,
-        request: impl FnOnce(&ureq::Agent) -> Result<ureq::http::Response<ureq::Body>, ureq::Error>,
-    ) -> Result<String, FetchError> {
+        request: impl FnOnce(&ureq::Agent) -> Response,
+    ) -> Result<ureq::http::Response<ureq::Body>, FetchError> {
         self.turn()?;
-        let mut response = request(&self.agent).map_err(|e| FetchError::Offline(e.to_string()))?;
+        let response = request(&self.agent).map_err(|e| FetchError::Offline(e.to_string()))?;
         match response.status().as_u16() {
-            200 => response
-                .body_mut()
-                .read_to_string()
-                .map_err(|e| FetchError::BadResponse(e.to_string())),
+            200 => Ok(response),
             404 => Err(FetchError::NotFound),
             429 => {
                 // `Retry-After` en secondes ; une minute sans lui (le blocage d'AniList).
@@ -156,6 +184,16 @@ impl Http {
 
 fn json<T: serde::de::DeserializeOwned>(body: &str) -> Result<T, FetchError> {
     serde_json::from_str(body).map_err(|e| FetchError::BadResponse(e.to_string()))
+}
+
+/// Hôte d'une adresse `https` (en minuscules) ; `None` pour tout autre schéma, ou si
+/// l'adresse porte des identifiants (`user@hôte`), un port ou une barre inverse.
+fn image_host(url: &str) -> Option<String> {
+    let host = url
+        .strip_prefix("https://")?
+        .split(['/', '?', '#'])
+        .next()?;
+    (!host.is_empty() && !host.contains(['@', ':', '\\'])).then(|| host.to_ascii_lowercase())
 }
 
 /// Minuscules, sans accents ni ponctuation ni espaces : « One-Piece ! » = « one piece ».

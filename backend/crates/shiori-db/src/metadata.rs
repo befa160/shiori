@@ -33,6 +33,8 @@ pub struct SeriesMetadata {
     pub links: Vec<String>,
     /// Page choisie comme couverture ; vide : page 0 du premier tome.
     pub cover_page_id: Option<String>,
+    /// Couverture d'une source, gardée par le serveur (`/api/covers/{id}`) ; l'emporte sur la page.
+    pub cover_image_id: Option<String>,
     /// Sens de lecture proposé par les fichiers : une suggestion, jamais imposée, pas éditable.
     pub right_to_left: Option<bool>,
 }
@@ -50,6 +52,7 @@ const SERIES_FIELDS: &[&str] = &[
     "publication_status",
     "links",
     "cover_page_id",
+    "cover_image_id",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -126,6 +129,7 @@ fn from_locals(name: &str, locals: &[(MetadataSource, LocalMetadata)]) -> Series
             .find_map(|m| from_db(m.status.as_deref()?).ok()),
         links: list(|m| &m.links),
         cover_page_id: None,
+        cover_image_id: None,
         right_to_left: ordered.iter().find_map(|m| m.right_to_left),
     }
 }
@@ -388,7 +392,19 @@ impl Db {
             return Ok(false);
         };
         let mut edited = parse_edited(row.get("edited"))?;
+        // Une seule couverture choisie : une page, ou une image d'une source.
+        let (page, image) = (
+            patch.contains_key("cover_page_id"),
+            patch.contains_key("cover_image_id"),
+        );
         apply(&mut edited, patch, SERIES_FIELDS).map_err(EditError::Invalid)?;
+        if page != image {
+            edited.remove(if page {
+                "cover_image_id"
+            } else {
+                "cover_page_id"
+            });
+        }
         let check = overlay(SeriesMetadata::default(), &edited).map_err(EditError::Invalid)?;
         if let Some(page) = &check.cover_page_id
             && !page_in_series(&mut tx, page, id).await?
@@ -396,6 +412,15 @@ impl Db {
             return Err(EditError::Invalid(format!(
                 "la page {page} n'est pas dans cette série"
             )));
+        }
+        if let Some(cover) = &check.cover_image_id {
+            let known = sqlx::query("SELECT 1 FROM covers WHERE id = ?")
+                .bind(cover)
+                .fetch_optional(&mut *tx)
+                .await?;
+            if known.is_none() {
+                return Err(EditError::Invalid(format!("couverture {cover} inconnue")));
+            }
         }
         sqlx::query(
             "INSERT INTO series_metadata (series_id, edited) VALUES (?, ?)

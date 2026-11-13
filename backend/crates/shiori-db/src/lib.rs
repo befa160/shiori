@@ -51,7 +51,7 @@ pub use reading::{
 };
 pub use runs::{LogLine, RunCounts, RunFilter, RunOrigin, RunStatus, RunSummary};
 pub use settings::{Language, Settings};
-pub use web::{MatchedBy, Outcome, SourceIssue, SourceState, ToIdentify};
+pub use web::{Cover, MatchedBy, Outcome, SourceIssue, SourceState, ToIdentify};
 
 pub struct Db {
     pool: SqlitePool,

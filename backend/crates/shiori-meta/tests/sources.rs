@@ -288,3 +288,18 @@ fn ids_name_their_source() {
         r#""mangadex""#
     );
 }
+
+#[test]
+fn redirects_are_never_followed() {
+    // Une réponse 302 vers le réseau local : rien n'est suivi, une seule requête part.
+    let server = mock(vec![(
+        302,
+        "location: http://127.0.0.1:1/admin\r\n",
+        String::new(),
+    )]);
+    assert_eq!(
+        Mangadex::new(&server.url).search("x"),
+        Err(FetchError::Http(302))
+    );
+    assert_eq!(server.requests.lock().unwrap().len(), 1);
+}

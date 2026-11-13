@@ -231,4 +231,8 @@ impl Source for Mangadex {
         let body = self.get(&format!("/manga/{id}"), &[])?;
         Ok(json::<One>(&body)?.data.into())
     }
+
+    fn image(&self, url: &str) -> Result<Vec<u8>, FetchError> {
+        self.http.image(url, |host| host == "uploads.mangadex.org")
+    }
 }

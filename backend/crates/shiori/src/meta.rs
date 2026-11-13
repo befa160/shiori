@@ -6,6 +6,7 @@
 //! plus arrête la tâche (aucune erreur enregistrée série par série) ; la suivante reprendra
 //! là où elle s'est arrêtée.
 
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 
 use serde::Serialize;
@@ -47,6 +48,9 @@ pub enum MetaError {
 pub struct Metadata {
     db: Arc<Db>,
     sources: Vec<Arc<dyn Source>>,
+    /// Adresses de couverture des derniers résultats de recherche, pour relayer leurs vignettes
+    /// (les candidats et fiches liées gardent la leur en base).
+    covers: Mutex<HashMap<(SourceId, String), String>>,
     running: Mutex<Option<JoinHandle<()>>>,
     status: RwLock<IdentifyStatus>,
 }
@@ -64,6 +68,7 @@ impl Metadata {
         Self {
             db,
             sources,
+            covers: Mutex::default(),
             running: Mutex::new(None),
             status: RwLock::new(IdentifyStatus::default()),
         }
@@ -93,9 +98,17 @@ impl Metadata {
     ) -> Result<Vec<WebMetadata>, MetaError> {
         self.enabled().await?;
         let source = self.source(source)?;
+        let id = source.id();
         let mut found = blocking(move || source.search(&query)).await?;
+        let mut covers = self.covers.lock().expect("verrou des couvertures");
+        // shortcut: oubli en bloc au-delà de 1 000 adresses (une recherche en ajoute 10) ; un vrai LRU si des vignettes manquent en usage réel.
+        if covers.len() > 1000 {
+            covers.clear();
+        }
         for f in &mut found {
-            f.cover_url = None;
+            if let Some(url) = f.cover_url.take() {
+                covers.insert((id, f.id.clone()), url);
+            }
         }
         Ok(found)
     }
@@ -142,6 +155,63 @@ impl Metadata {
             self.db.record_source(series, state.source, outcome).await?;
         }
         Ok(())
+    }
+
+    /// Vignette d'une fiche (résultat de recherche, candidat ou fiche liée), relayée : le
+    /// navigateur ne contacte jamais les sources (lien direct interdit par MangaDex).
+    pub async fn thumbnail(
+        &self,
+        source: SourceId,
+        external_id: &str,
+    ) -> Result<Vec<u8>, MetaError> {
+        self.enabled().await?;
+        let client = self.source(source)?;
+        let known = self
+            .covers
+            .lock()
+            .expect("verrou des couvertures")
+            .get(&(source, external_id.to_owned()))
+            .cloned();
+        let url = match known {
+            Some(url) => url,
+            None => self
+                .db
+                .cover_url(source, external_id)
+                .await?
+                .ok_or(FetchError::NotFound)?,
+        };
+        Ok(blocking(move || client.image(&url)).await?)
+    }
+
+    /// Prend la couverture de la fiche liée chez `source` comme couverture de la série (Q32) :
+    /// téléchargée, gardée en base, choisie (champ édité `cover_image_id`).
+    pub async fn use_cover(&self, series: i64, source: SourceId) -> Result<(), MetaError> {
+        self.enabled().await?;
+        let client = self.source(source)?;
+        let linked = self.db.linked_sources(series).await?;
+        let (_, external_id) = linked
+            .into_iter()
+            .find(|(s, _)| *s == source)
+            .ok_or(FetchError::NotFound)?;
+        let url = self
+            .db
+            .cover_url(source, &external_id)
+            .await?
+            .ok_or(FetchError::NotFound)?;
+        let bytes = blocking(move || client.image(&url)).await?;
+        let id = self.db.store_cover(bytes).await?.ok_or_else(|| {
+            FetchError::BadResponse("la couverture n'est pas une image lisible".into())
+        })?;
+        let patch = serde_json::json!({ "cover_image_id": id });
+        match self
+            .db
+            .edit_series(series, patch.as_object().expect("objet").clone())
+            .await
+        {
+            Ok(_) => Ok(()),
+            Err(shiori_db::EditError::Db(e)) => Err(e.into()),
+            Err(shiori_db::EditError::Invalid(e)) => Err(FetchError::BadResponse(e).into()),
+        }
     }
 
     pub fn status(&self) -> IdentifyStatus {

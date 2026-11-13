@@ -229,4 +229,8 @@ impl Source for Anilist {
             .map(WebMetadata::from)
             .ok_or(FetchError::NotFound)
     }
+
+    fn image(&self, url: &str) -> Result<Vec<u8>, FetchError> {
+        self.http.image(url, |host| host.ends_with(".anilist.co"))
+    }
 }
