@@ -383,6 +383,11 @@ async fn identities(db: &Db, library: &Library) -> Vec<(i64, Option<String>, Opt
     .collect()
 }
 
+fn status(value: &str) -> crate::Edited {
+    let patch = serde_json::json!({ "publication_status": value });
+    patch.as_object().unwrap().clone()
+}
+
 fn rename(root: &Path, from: &str, to: &str) -> PathBuf {
     let to = root.join(to);
     std::fs::create_dir_all(to.parent().unwrap()).unwrap();
@@ -402,9 +407,7 @@ async fn a_renamed_folder_keeps_its_series_and_settings() {
     let [(id, ..)] = identities(&db, &library).await[..] else {
         panic!("une série attendue");
     };
-    db.set_publication_status(id, Some(crate::PublicationStatus::Completed))
-        .await
-        .unwrap();
+    db.edit_series(id, status("completed")).await.unwrap();
 
     let moved = [
         rename(
@@ -545,9 +548,7 @@ async fn a_known_copy_keeps_its_identity_when_the_original_goes() {
     std::fs::copy(&original, &copy).unwrap();
     full_pass(&db, &library, &[original.clone(), copy.clone()]).await;
     let id_copy = identities(&db, &library).await[1].0;
-    db.set_publication_status(id_copy, Some(crate::PublicationStatus::Hiatus))
-        .await
-        .unwrap();
+    db.edit_series(id_copy, status("hiatus")).await.unwrap();
 
     std::fs::remove_file(&original).unwrap();
     full_pass(&db, &library, &[copy]).await;

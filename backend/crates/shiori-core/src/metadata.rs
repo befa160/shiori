@@ -187,10 +187,23 @@ fn comic_info(text: &str) -> Result<LocalMetadata, String> {
             Some("No") => Some(false),
             _ => None,
         },
-        links: clean(info.web)
-            .map(|w| w.split_whitespace().map(str::to_owned).collect())
-            .unwrap_or_default(),
+        links: urls(info.web),
     })
+}
+
+/// Adresses web seulement : certains outils écrivent un titre dans `<Web>`, et un lien
+/// affiché ne doit jamais être autre chose que `http(s)` (`javascript:` dans une archive).
+fn urls(value: Option<String>) -> Vec<String> {
+    let web = |u: &&str| {
+        let u = u.to_ascii_lowercase();
+        u.starts_with("https://") || u.starts_with("http://")
+    };
+    value
+        .iter()
+        .flat_map(|v| v.split_whitespace())
+        .filter(web)
+        .map(str::to_owned)
+        .collect()
 }
 
 /// Date partielle valide, sinon rien (ComicRack écrit `-1` pour « inconnu »).
@@ -261,7 +274,7 @@ fn index_json(text: &str) -> Result<LocalMetadata, String> {
             Some("ABANDONED") => Some("cancelled".to_owned()),
             _ => None,
         },
-        links: clean(index.public_url).into_iter().collect(),
+        links: urls(index.public_url),
         ..LocalMetadata::default()
     })
 }

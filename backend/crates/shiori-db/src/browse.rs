@@ -14,7 +14,10 @@ use sqlx::Row;
 use sqlx::sqlite::SqliteRow;
 
 use crate::reading::settings_columns;
-use crate::{Db, Error, LibraryKind, Progress, ReadingSettings, from_db, stamp, to_db};
+use crate::{
+    Db, Error, LibraryKind, Progress, ReadingSettings, SeriesMetadata, VolumeMetadata, from_db,
+    stamp,
+};
 
 #[derive(Debug, Serialize)]
 pub struct LibrarySummary {
@@ -30,7 +33,11 @@ pub struct LibrarySummary {
 pub struct SeriesSummary {
     pub id: i64,
     pub library_id: i64,
+    /// Titre affiché : le titre des métadonnées, sinon le nom tiré du dossier.
     pub name: String,
+    /// Pour la recherche : titres alternatifs et noms des auteurs.
+    pub alt_titles: Vec<String>,
+    pub authors: Vec<String>,
     pub volume_count: usize,
     /// Tomes de la série dont la dernière page a été atteinte.
     pub read_count: usize,
@@ -43,7 +50,7 @@ pub struct SeriesSummary {
     pub created_at: String,
     /// Dernière page enregistrée dans un tome de la série.
     pub last_read_at: Option<String>,
-    /// Page 0 du premier tome de la série.
+    /// Page choisie comme couverture, sinon page 0 du premier tome de la série.
     pub cover_page_id: Option<String>,
     /// Tome qu'ouvre « Lire » : voir [`resume`].
     pub resume_volume_id: Option<String>,
@@ -84,8 +91,12 @@ pub struct ContinueItem {
 pub struct SeriesDetail {
     pub id: i64,
     pub library_id: i64,
+    /// Comme dans [`SeriesSummary`].
     pub name: String,
     pub folder: Option<String>,
+    pub metadata: SeriesMetadata,
+    /// Champs édités à la main, que les sources ne remplacent plus.
+    pub locked: Vec<String>,
     pub publication_status: Option<PublicationStatus>,
     pub settings: ReadingSettings,
     /// Tome qu'ouvre « Lire » : même règle que dans [`SeriesSummary`].
@@ -125,6 +136,9 @@ pub struct VolumeDetail {
     /// Réglages de sa série (la première par chemin), défaut d'une bibliothèque de manga sinon.
     pub settings: ReadingSettings,
     pub progress: Option<Progress>,
+    pub metadata: VolumeMetadata,
+    /// Comme dans [`SeriesDetail`].
+    pub locked: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -348,8 +362,9 @@ impl Db {
     // shortcut: liste complète sans pagination (recherche et filtres côté client), suffisant pour quelques milliers de séries ; paginer et filtrer côté serveur au-delà.
     async fn summaries(&self, library: Option<i64>) -> Result<Vec<SeriesSummary>, Error> {
         let series = sqlx::query(
-            "SELECT id, library_id, name, publication_status, created_at FROM series
-             WHERE ?1 IS NULL OR library_id = ?1",
+            "SELECT s.id, s.library_id, s.name, s.publication_status, s.created_at, m.merged
+             FROM series s LEFT JOIN series_metadata m ON m.series_id = s.id
+             WHERE ?1 IS NULL OR s.library_id = ?1",
         )
         .bind(library)
         .fetch_all(&self.pool)
@@ -370,6 +385,9 @@ impl Db {
             .iter()
             .map(|s| {
                 let id: i64 = s.get("id");
+                let meta: SeriesMetadata =
+                    serde_json::from_str(s.get::<Option<&str>, _>("merged").unwrap_or("{}"))
+                        .map_err(|e| Error::Decode(Box::new(e)))?;
                 let vols = volumes.get(&id).map_or(&[][..], Vec::as_slice);
                 let read_count = vols.iter().filter(|v| finished(&progress, v)).count();
                 let (pages_read, page_count) = pages(vols, &progress);
@@ -386,7 +404,9 @@ impl Db {
                 Ok(SeriesSummary {
                     id,
                     library_id: s.get("library_id"),
-                    name: s.get("name"),
+                    name: meta.title.unwrap_or_else(|| s.get("name")),
+                    alt_titles: meta.alt_titles,
+                    authors: meta.authors.into_iter().map(|a| a.name).collect(),
                     volume_count: vols.len(),
                     read_count,
                     page_count,
@@ -398,7 +418,9 @@ impl Db {
                         .transpose()?,
                     created_at: s.get("created_at"),
                     last_read_at: read_at.cloned(),
-                    cover_page_id: vols.first().and_then(|r| r.volume.cover_page_id.clone()),
+                    cover_page_id: meta
+                        .cover_page_id
+                        .or_else(|| vols.first().and_then(|r| r.volume.cover_page_id.clone())),
                     resume_volume_id: resume(vols, &progress),
                 })
             })
@@ -418,7 +440,8 @@ impl Db {
             };
         }
         let series = sqlx::query(concat!(
-            "SELECT id, name, library_id FROM series WHERE id IN ",
+            "SELECT s.id, COALESCE(json_extract(m.merged, '$.title'), s.name) AS name, s.library_id
+             FROM series s LEFT JOIN series_metadata m ON m.series_id = s.id WHERE s.id IN ",
             started!()
         ))
         .fetch_all(&self.pool)
@@ -458,20 +481,6 @@ impl Db {
         Ok(out)
     }
 
-    /// Change le statut de publication d'une série ; `false` si elle n'existe pas.
-    pub async fn set_publication_status(
-        &self,
-        series: i64,
-        status: Option<PublicationStatus>,
-    ) -> Result<bool, Error> {
-        let done = sqlx::query("UPDATE series SET publication_status = ? WHERE id = ?")
-            .bind(status.as_ref().map(to_db))
-            .bind(series)
-            .execute(&self.pool)
-            .await?;
-        Ok(done.rows_affected() > 0)
-    }
-
     pub async fn series_detail(&self, id: i64) -> Result<Option<SeriesDetail>, Error> {
         let Some(series) = sqlx::query(concat!(
             "SELECT s.library_id, s.name, s.folder, s.publication_status, ",
@@ -496,11 +505,14 @@ impl Db {
         let all: Vec<&Located> = rows.iter().collect();
         let resume_volume_id = resume(&all, &progress);
         let (pages_read, page_count) = pages(&all, &progress);
+        let (metadata, locked) = self.series_metadata(id).await?;
         Ok(Some(SeriesDetail {
             id,
             library_id: series.get("library_id"),
-            name: series.get("name"),
+            name: metadata.title.clone().unwrap_or_else(|| series.get("name")),
             folder: series.get("folder"),
+            metadata,
+            locked,
             publication_status: series
                 .get::<Option<&str>, _>("publication_status")
                 .map(from_db)
@@ -563,6 +575,7 @@ impl Db {
         .collect::<Result<_, Error>>()?;
         let settings = self.volume_settings(&id).await?;
         let progress = self.progress(volume).await?;
+        let (metadata, locked) = self.volume_metadata(&id).await?;
         Ok(Some(VolumeDetail {
             id,
             size: v.get("size"),
@@ -574,6 +587,8 @@ impl Db {
             issues,
             settings,
             progress,
+            metadata,
+            locked,
         }))
     }
 
