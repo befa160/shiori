@@ -244,7 +244,10 @@ fn mangadex_search_and_fetch_are_normalized() {
         ],
         summaries: vec![
             text(Some("en"), "A boy and his crew."),
-            text(Some("fr"), "Un garçon et son équipage."),
+            text(
+                Some("fr"),
+                "Un garçon et son équipage.\n\nSite officiel · [lien cassé",
+            ),
         ],
         authors: vec![author("Oda Eiichirou", true, true)],
         genres: vec!["Action".into()],

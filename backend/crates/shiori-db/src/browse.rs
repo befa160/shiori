@@ -97,6 +97,8 @@ pub struct SeriesDetail {
     pub metadata: SeriesMetadata,
     /// Champs édités à la main, que les sources ne remplacent plus.
     pub locked: Vec<String>,
+    /// Sources web de la série : liées, à confirmer ou en échec.
+    pub sources: Vec<crate::SourceState>,
     pub publication_status: Option<PublicationStatus>,
     pub settings: ReadingSettings,
     /// Tome qu'ouvre « Lire » : même règle que dans [`SeriesSummary`].
@@ -513,6 +515,7 @@ impl Db {
             folder: series.get("folder"),
             metadata,
             locked,
+            sources: self.source_states(id).await?,
             publication_status: series
                 .get::<Option<&str>, _>("publication_status")
                 .map(from_db)

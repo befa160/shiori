@@ -15,7 +15,7 @@ use axum::extract::{Path, Query, Request, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{delete, get, patch, post};
+use axum::routing::{delete, get, patch, post, put};
 use axum::{Json, Router};
 use clap::Args;
 use serde::{Deserialize, Serialize};
@@ -25,6 +25,7 @@ use shiori_db::{
     Db, EditError, Edited, Language, LibraryError, LibraryKind, PageFile, PageLayout, PageSource,
     PageTurn, ReadingMode, RunFilter, RunStatus, SaveProgress, SettingsChange,
 };
+use shiori_meta::{FetchError, Source, SourceId, WebMetadata};
 use tokio::net::TcpListener;
 use tokio::sync::Semaphore;
 use tower_http::compression::CompressionLayer;
@@ -32,6 +33,7 @@ use tower_http::trace::TraceLayer;
 
 use crate::cache::Images;
 use crate::job::{ScanRequest, Scanner, StartError};
+use crate::meta::{IdentifyStatus, MetaError, Metadata, web_sources};
 use crate::render::{self, Format, RENDER_VERSION, WIDTHS};
 
 #[derive(Args)]
@@ -61,18 +63,34 @@ pub struct App {
     pub db: Arc<Db>,
     pub images: Images,
     pub scanner: Scanner,
+    pub metadata: Arc<Metadata>,
     /// Décoder et encoder coûte du CPU et de la mémoire : nombre de rendus simultanés borné.
     renders: Semaphore,
 }
 
 impl App {
     pub fn new(db: Arc<Db>, images: Images) -> Self {
+        let cores = std::thread::available_parallelism().map_or(1, |n| n.get());
+        Self::build(db, images, cores, 30, web_sources())
+    }
+
+    /// `jobs` fichiers scannés en parallèle, passes gardées `log_days` jours, `sources` web
+    /// (de faux serveurs dans les tests).
+    pub fn build(
+        db: Arc<Db>,
+        images: Images,
+        jobs: usize,
+        log_days: u32,
+        sources: Vec<Arc<dyn Source>>,
+    ) -> Self {
         // shortcut: 4 rendus au plus (machine de 4 Gio) ; à rendre réglable si un serveur plus gros le demande.
         let cores = std::thread::available_parallelism().map_or(1, |n| n.get());
+        let metadata = Arc::new(Metadata::new(db.clone(), sources));
         Self {
             db,
             images,
-            scanner: Scanner::new(cores, 30),
+            scanner: Scanner::new(jobs, log_days).with_metadata(metadata.clone()),
+            metadata,
             renders: Semaphore::new(cores.min(4)),
         }
     }
@@ -107,10 +125,13 @@ pub async fn run(
         .jobs
         .or_else(|| std::thread::available_parallelism().ok())
         .map_or(1, NonZeroUsize::get);
-    let app = App {
-        scanner: Scanner::new(jobs, args.scan_log_days),
-        ..App::new(Arc::new(db), images)
-    };
+    let app = App::build(
+        Arc::new(db),
+        images,
+        jobs,
+        args.scan_log_days,
+        web_sources(),
+    );
     serve(listener, Arc::new(app), shutdown).await
 }
 
@@ -125,6 +146,7 @@ pub async fn serve(
         .await?;
     // Le scan en cours est annulé et sa passe close `cancelled`, jamais laissée `running`.
     app.scanner.shutdown().await;
+    // shortcut: une identification en cours finit sa requête (jusqu'à 10 s d'attente du débit + 15 s de délai réseau, fils bloquants non interruptibles) avant que le processus s'arrête ; ajouter un drapeau d'arrêt lu avant chaque appel si cette attente gêne.
     Ok(())
 }
 
@@ -140,6 +162,14 @@ pub fn router(app: Arc<App>, local_only: bool) -> Router {
         .route("/api/series/{id}", get(series).patch(patch_series))
         .route("/api/continue", get(continue_reading))
         .route("/api/series/{id}/settings", patch(series_settings))
+        .route("/api/series/{id}/metadata/search", get(search_metadata))
+        .route(
+            "/api/series/{id}/metadata/links/{source}",
+            put(link_source).delete(unlink_source),
+        )
+        .route("/api/series/{id}/metadata/refresh", post(refresh_metadata))
+        .route("/api/admin/metadata", get(metadata_status))
+        .route("/api/admin/metadata/identify", post(identify))
         .route("/api/volumes/{id}", get(volume).patch(patch_volume))
         .route(
             "/api/volumes/{id}/progress",
@@ -292,6 +322,12 @@ struct NewSettings {
     /// Absent : inchangé ; jamais `null` (ce réglage a toujours une valeur).
     #[serde(default, deserialize_with = "present")]
     page_turn: Option<Option<PageTurn>>,
+    /// Absent : inchangé ; jamais `null`.
+    #[serde(default, deserialize_with = "present")]
+    metadata_online: Option<Option<bool>>,
+    /// Absent : inchangé ; `null` : ordre d'après la langue ; sinon sources sans doublon.
+    #[serde(default, deserialize_with = "present")]
+    metadata_sources: Option<Option<Vec<SourceId>>>,
 }
 
 async fn save_settings(
@@ -299,15 +335,26 @@ async fn save_settings(
     body: Result<Json<NewSettings>, JsonRejection>,
 ) -> ApiResult<shiori_db::Settings> {
     let Json(new) = body.map_err(invalid_body)?;
+    let bad = |msg: &str| ApiError::new(StatusCode::BAD_REQUEST, "invalid_body", msg);
     if new.page_turn == Some(None) {
-        return Err(ApiError::new(
-            StatusCode::BAD_REQUEST,
-            "invalid_body",
-            "page_turn ne peut pas être null",
+        return Err(bad("page_turn ne peut pas être null"));
+    }
+    if new.metadata_online == Some(None) {
+        return Err(bad("metadata_online ne peut pas être null"));
+    }
+    if let Some(Some(sources)) = &new.metadata_sources
+        && (sources.is_empty() || (1..sources.len()).any(|i| sources[..i].contains(&sources[i])))
+    {
+        return Err(bad(
+            "metadata_sources : au moins une source, chacune une fois",
         ));
     }
     // Un corps vide est une erreur, jamais une remise à zéro silencieuse.
-    if new.language.is_none() && new.page_turn.is_none() {
+    if new.language.is_none()
+        && new.page_turn.is_none()
+        && new.metadata_online.is_none()
+        && new.metadata_sources.is_none()
+    {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
             "invalid_body",
@@ -319,6 +366,12 @@ async fn save_settings(
     }
     if let Some(Some(turn)) = new.page_turn {
         app.db.set_page_turn(turn).await?;
+    }
+    if let Some(Some(online)) = new.metadata_online {
+        app.db.set_metadata_online(online).await?;
+    }
+    if let Some(sources) = new.metadata_sources {
+        app.db.set_metadata_sources(sources).await?;
     }
     Ok(Json(app.db.settings().await?))
 }
@@ -479,6 +532,141 @@ async fn volume(
 }
 
 /// Modifie les métadonnées d'un tome, comme [`patch_series`].
+impl From<MetaError> for ApiError {
+    fn from(e: MetaError) -> Self {
+        let message = e.to_string();
+        match e {
+            MetaError::Disabled => {
+                ApiError::new(StatusCode::CONFLICT, "metadata_disabled", message)
+            }
+            MetaError::UnknownSource => ApiError::not_found("source"),
+            MetaError::AlreadyRunning => {
+                ApiError::new(StatusCode::CONFLICT, "already_running", message)
+            }
+            MetaError::Fetch(f) => {
+                let status = match f {
+                    FetchError::NotFound => StatusCode::NOT_FOUND,
+                    FetchError::RateLimited(_) => StatusCode::SERVICE_UNAVAILABLE,
+                    _ => StatusCode::BAD_GATEWAY,
+                };
+                ApiError::new(status, f.code(), message)
+            }
+            MetaError::Db(e) => e.into(),
+        }
+    }
+}
+
+/// Source nommée dans l'adresse (`anilist`, `mangadex`).
+fn source_id(name: &str) -> Result<SourceId, ApiError> {
+    serde_json::from_value(json!(name)).map_err(|_| ApiError::not_found("source"))
+}
+
+/// Détail d'une série, ou 404.
+async fn series_or_404(app: &App, id: i64) -> Result<shiori_db::SeriesDetail, ApiError> {
+    app.db
+        .series_detail(id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("série"))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MetadataSearch {
+    source: SourceId,
+    q: String,
+}
+
+/// Fiches d'une source pour identifier une série à la main (fenêtre « Identifier »).
+async fn search_metadata(
+    State(app): State<Arc<App>>,
+    Path(id): Path<String>,
+    query: Result<Query<MetadataSearch>, QueryRejection>,
+) -> ApiResult<Vec<WebMetadata>> {
+    let id = int_id(&id)?;
+    let Query(q) = query.map_err(invalid_query)?;
+    let text = q.q.trim().to_owned();
+    if text.is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "invalid_query",
+            "q : un titre à chercher",
+        ));
+    }
+    series_or_404(&app, id).await?;
+    Ok(Json(app.metadata.search(q.source, text).await?))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct NewLink {
+    external_id: String,
+}
+
+/// Lie une série à la fiche choisie et renvoie son détail.
+async fn link_source(
+    State(app): State<Arc<App>>,
+    Path((id, source)): Path<(String, String)>,
+    body: Result<Json<NewLink>, JsonRejection>,
+) -> ApiResult<shiori_db::SeriesDetail> {
+    let (id, source) = (int_id(&id)?, source_id(&source)?);
+    let Json(link) = body.map_err(invalid_body)?;
+    series_or_404(&app, id).await?;
+    app.metadata.link(id, source, link.external_id).await?;
+    Ok(Json(series_or_404(&app, id).await?))
+}
+
+/// Délie une source (ses données ne comptent plus) et renvoie le détail de la série.
+async fn unlink_source(
+    State(app): State<Arc<App>>,
+    Path((id, source)): Path<(String, String)>,
+) -> ApiResult<shiori_db::SeriesDetail> {
+    let (id, source) = (int_id(&id)?, source_id(&source)?);
+    series_or_404(&app, id).await?;
+    app.db.unlink_source(id, source).await?;
+    Ok(Json(series_or_404(&app, id).await?))
+}
+
+/// Relit les fiches liées d'une série et renvoie son détail.
+async fn refresh_metadata(
+    State(app): State<Arc<App>>,
+    Path(id): Path<String>,
+) -> ApiResult<shiori_db::SeriesDetail> {
+    let id = int_id(&id)?;
+    series_or_404(&app, id).await?;
+    app.metadata.refresh(id).await?;
+    Ok(Json(series_or_404(&app, id).await?))
+}
+
+#[derive(Serialize)]
+struct MetadataOverview {
+    online: bool,
+    /// Ordre appliqué des sources.
+    sources: Vec<SourceId>,
+    identify: IdentifyStatus,
+    /// Sources à confirmer ou en échec.
+    issues: Vec<shiori_db::SourceIssue>,
+}
+
+async fn metadata_status(State(app): State<Arc<App>>) -> ApiResult<MetadataOverview> {
+    let settings = app.db.settings().await?;
+    Ok(Json(MetadataOverview {
+        online: settings.metadata_online,
+        sources: settings.source_order(),
+        identify: app.metadata.status(),
+        issues: app.db.source_issues().await?,
+    }))
+}
+
+/// Lance l'identification des séries pas encore liées (202) ; 409 si le réseau est désactivé
+/// ou si une identification tourne déjà.
+async fn identify(State(app): State<Arc<App>>) -> Result<StatusCode, ApiError> {
+    if !app.db.settings().await?.metadata_online {
+        return Err(MetaError::Disabled.into());
+    }
+    app.metadata.identify()?;
+    Ok(StatusCode::ACCEPTED)
+}
+
 async fn patch_volume(
     State(app): State<Arc<App>>,
     Path(id): Path<String>,

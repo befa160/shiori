@@ -2,7 +2,7 @@
  {"id":"a1c7c817-4e59-43b7-9365-09675a149a6f","type":"manga","attributes":{
    "title":{"ja-ro":"One Piece"},
    "altTitles":[{"ja":"ワンピース"},{"fr":"One Piece"},{"en":"Wan Pīsu"}],
-   "description":{"en":"A boy and his crew.","fr":"Un garçon et son équipage.","es":"  "},
+   "description":{"en":"A boy and his crew.","fr":"**Un garçon** et son équipage.\n\n---\n[Site officiel](https://exemple.org) · [lien cassé","es":"  "},
    "year":1997,"status":"ongoing","originalLanguage":"ja",
    "tags":[{"attributes":{"name":{"en":"Action"},"group":"genre"}},{"attributes":{"name":{"en":"Monsters"},"group":"theme"}},{"attributes":{"name":{"en":"Award Winning"},"group":"format"}}]},
   "relationships":[

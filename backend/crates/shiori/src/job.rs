@@ -59,6 +59,8 @@ pub struct Scanner {
     jobs: usize,
     log_days: u32,
     running: Mutex<Option<Running>>,
+    /// Identification des nouvelles séries à la fin d'une passe complète.
+    metadata: Option<Arc<crate::meta::Metadata>>,
 }
 
 enum Target {
@@ -74,6 +76,16 @@ impl Scanner {
             jobs: jobs.max(1),
             log_days,
             running: Mutex::new(None),
+            metadata: None,
+        }
+    }
+
+    /// À la fin de chaque passe terminée, les séries pas encore identifiées le sont (si le
+    /// réseau est activé).
+    pub fn with_metadata(self, metadata: Arc<crate::meta::Metadata>) -> Self {
+        Self {
+            metadata: Some(metadata),
+            ..self
         }
     }
 
@@ -122,6 +134,7 @@ impl Scanner {
             jobs: self.jobs,
             progress: progress.clone(),
             cancel: cancel.clone(),
+            metadata: self.metadata.clone(),
         };
         let log_days = self.log_days;
         let handle = tokio::spawn(async move { pass.run(target, log_days).await });
@@ -197,6 +210,7 @@ struct Pass {
     jobs: usize,
     progress: Arc<RwLock<Progress>>,
     cancel: Arc<AtomicBool>,
+    metadata: Option<Arc<crate::meta::Metadata>>,
 }
 
 impl Pass {
@@ -218,6 +232,12 @@ impl Pass {
         }
         if let Err(e) = self.db.purge_runs(log_days).await {
             tracing::warn!("purge des anciens scans : {e}");
+        }
+        // Déjà en cours : les nouvelles séries attendront la prochaine identification.
+        if status == RunStatus::Completed
+            && let Some(metadata) = &self.metadata
+        {
+            let _ = metadata.identify();
         }
     }
 
