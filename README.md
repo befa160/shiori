@@ -11,7 +11,7 @@
 
 Lecteur de mangas, BD et webtoons auto-hébergé. Un seul binaire Rust sert la bibliothèque et une application web installable (PWA), pensée d'abord pour la lecture sur tablette.
 
-> **État : en développement (fin de la phase 4).** Utilisables aujourd'hui : `shiori scan` (scan d'intégrité des archives CBZ et CBR), `shiori serve` et **l'application web** : bibliothèque en couvertures avec « Continuer la lecture », recherche et filtres, page de chaque série, lecteur manga (droite à gauche), BD (gauche à droite) et webtoon (défilement vertical) avec double page, zoom et reprise de la lecture, et une **administration** pour créer les bibliothèques, lancer et suivre les scans et lire leurs journaux. En français et en anglais. Les métadonnées en ligne arrivent en phase 5. L'avancement détaillé est dans [ROADMAP.md](ROADMAP.md).
+> **État : en développement (fin de la phase 5).** Utilisables aujourd'hui : `shiori scan` (scan d'intégrité des archives CBZ et CBR), `shiori serve` et **l'application web** : bibliothèque en couvertures avec « Continuer la lecture », recherche et filtres, page de chaque série, lecteur manga (droite à gauche), BD (gauche à droite) et webtoon (défilement vertical) avec double page, zoom et reprise de la lecture, et une **administration** pour créer les bibliothèques, lancer et suivre les scans et lire leurs journaux. Les **métadonnées** viennent de vos fichiers (ComicInfo.xml, `index.json`) et, si vous l'autorisez, d'AniList et de MangaDex (identification automatique ou façon Plex, couvertures) ; tout se modifie à la main, champ par champ, sans être écrasé ensuite. En français et en anglais. L'avancement détaillé est dans [ROADMAP.md](ROADMAP.md).
 
 ## Pourquoi
 
@@ -32,7 +32,7 @@ Shiori est conçu pour que ces défauts soient impossibles :
 | **Lecteur** | Gauche→droite, droite→gauche (manga), vertical continu (webtoon) ; page simple ou double ; découpage des doubles pages ; reprise exacte de la lecture |
 | **Webtoons** | Défilement vertical continu, chargement paresseux, aucun saut de mise en page (place de chaque page réservée d'après le scan) |
 | **Bibliothèque** | Grille d'affiches, séries, « Continuer la lecture », recherche, filtres par statut de publication et de lecture |
-| **Métadonnées** | ComicInfo.xml, AniList, MangaDex, MangaUpdates, Comic Vine… ; édition manuelle avec verrouillage par champ |
+| **Métadonnées** | ComicInfo.xml, `index.json`, AniList et MangaDex (fait, phase 5) ; MangaUpdates, Comic Vine plus tard ; édition manuelle avec verrouillage par champ (fait) |
 | **Formats** | CBZ (zip, zip64) et CBR (RAR 4 et 5, solid compris, en Rust pur). Images jpg, png, webp, avif, servies redimensionnées en AVIF (pages) et JPEG (miniatures) |
 | **Déploiement** | Image Docker et binaires autonomes Linux et Windows |
 

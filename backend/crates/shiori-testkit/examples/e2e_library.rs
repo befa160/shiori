@@ -84,6 +84,20 @@ fn main() {
     write_zip(&strip, "E2E Strip T01.cbz", &files);
     manifest.push(("E2E Strip T01.cbz", 60));
 
+    // Métadonnées (phase 5) : un tome avec ComicInfo.xml, hors des bibliothèques du setup ; le
+    // parcours `metadata.spec.ts` en fait sa propre bibliothèque. Titre de série différent du
+    // dossier, pour voir qu'il l'emporte.
+    let meta = root.join("meta/E2E Meta");
+    fs::create_dir_all(&meta).unwrap();
+    let info = "<ComicInfo><Series>Série Méta E2E</Series><Writer>Autrice E2E</Writer>\
+        <Summary>Résumé venu du fichier.</Summary><Genre>Aventure</Genre></ComicInfo>";
+    let cover = png(600, 900, color(0));
+    let files = [
+        ("001.png", cover.as_slice(), DEFLATED),
+        ("ComicInfo.xml", info.as_bytes(), DEFLATED),
+    ];
+    write_zip(&meta, "E2E Meta T01.cbz", &files);
+
     let mut json = String::from("{");
     for (k, (name, count)) in manifest.iter().enumerate() {
         let colors: Vec<String> = (0..*count).map(|i| format!("{:?}", color(i))).collect();
