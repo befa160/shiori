@@ -5,6 +5,7 @@ import { Link } from 'react-router'
 import { pageImageUrl } from '@/api/client'
 import type { ContinueItem, SeriesSummary } from '@/api/types'
 import { volumeLabel } from '@/browse/labels'
+import { cn } from '@/lib/utils'
 import { titleHue } from './titleHue'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -29,7 +30,7 @@ export function FallbackCover({ title }: { title: string }) {
 }
 
 /** Miniature JPEG du serveur ; couverture de repli si elle manque ou ne se charge pas. */
-function Cover({ pageId, title, eager }: { pageId: string | null; title: string; eager: boolean }) {
+export function Cover({ pageId, title, eager }: { pageId: string | null; title: string; eager: boolean }) {
   const [failed, setFailed] = useState(false)
   if (pageId === null || failed) return <FallbackCover title={title} />
   return (
@@ -54,14 +55,17 @@ export interface CoverCardProps {
   /** Barre ambre en bas de la couverture, de 0 à 1 ; absente si `null`. */
   progress: number | null
   progressLabel?: string
-  badge?: string
+  /** Pastille en haut à gauche ; `error` sur fond rouge foncé (le mot porte le sens). */
+  badge?: { text: string; tone?: 'error' }
+  /** Menu d'actions en haut à droite de la couverture, toujours visible (toucher). */
+  actions?: ReactNode
   /** Bouton « Lire » au survol (bureau) et au clavier. */
   quickRead?: { to: string; label: string }
   /** Couvertures du premier écran : chargées tout de suite. */
   eager?: boolean
 }
 
-export function CoverCard({ to, title, subtitle, coverPageId, progress, progressLabel, badge, quickRead, eager = false }: CoverCardProps) {
+export function CoverCard({ to, title, subtitle, coverPageId, progress, progressLabel, badge, actions, quickRead, eager = false }: CoverCardProps) {
   return (
     <div className="group relative">
       {/* Texte d'abord dans le DOM (le lecteur d'écran annonce le titre en premier), couverture
@@ -77,8 +81,14 @@ export function CoverCard({ to, title, subtitle, coverPageId, progress, progress
           {/* `key` : une autre couverture repart sans l'échec de la précédente. */}
           <Cover key={coverPageId} pageId={coverPageId} title={title} eager={eager} />
           {badge && (
-            <span className="absolute top-2 left-2 rounded-full bg-black/80 px-2 py-0.5 text-xs font-medium text-foreground">
-              {badge}
+            <span
+              className={cn(
+                // Tronquée avant le menu d'actions (en haut à droite) sur une carte étroite.
+                'absolute top-2 left-2 max-w-[calc(100%-3.5rem)] truncate rounded-full px-2 py-0.5 text-xs font-medium',
+                badge.tone === 'error' ? 'bg-destructive-fill text-white' : 'bg-black/80 text-foreground',
+              )}
+            >
+              {badge.text}
             </span>
           )}
           {progress !== null && (
@@ -95,6 +105,7 @@ export function CoverCard({ to, title, subtitle, coverPageId, progress, progress
           )}
         </div>
       </Link>
+      {actions && <div className="absolute top-1 right-1">{actions}</div>}
       {quickRead && (
         // Calque de la taille de la couverture, pour poser le bouton en bas à droite de l'image.
         <div className="pointer-events-none absolute inset-x-0 top-0 aspect-[2/3]">
@@ -157,7 +168,7 @@ export function SeriesCard({ series, eager }: { series: SeriesSummary; eager?: b
       coverPageId={series.cover_page_id}
       progress={series.reading_status === 'in_progress' ? series.read_count / Math.max(series.volume_count, 1) : null}
       progressLabel={t('library.readCount', { count: series.read_count, total: series.volume_count })}
-      badge={series.reading_status === 'read' ? t('volume.read') : undefined}
+      badge={series.reading_status === 'read' ? { text: t('volume.read') } : undefined}
       quickRead={resume ? { to: `/read/${resume}`, label: t('library.readNamed', { name: series.name }) } : undefined}
       eager={eager}
     />
@@ -178,7 +189,7 @@ export function ContinueCard({ item, eager }: { item: ContinueItem; eager?: bool
       coverPageId={volume.cover_page_id}
       progress={progress ? (progress.ordinal + 1) / progress.page_count : null}
       progressLabel={t('volume.progress', { label })}
-      badge={progress ? undefined : t('home.next')}
+      badge={progress ? undefined : { text: t('home.next') }}
       eager={eager}
     />
   )

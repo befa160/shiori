@@ -4,6 +4,7 @@ import type {
   Library,
   PageInfo,
   Progress,
+  PublicationStatus,
   ReadingSettings,
   SeriesDetail,
   SeriesSummary,
@@ -62,6 +63,9 @@ export const api = {
   pages: (volumeId: string, init?: RequestInit) => must<PageInfo[]>(`/volumes/${volumeId}/pages`, init),
   saveProgress: (volumeId: string, pageId: string, init?: RequestInit) =>
     must<Progress>(`/volumes/${volumeId}/progress`, { ...init, method: 'PUT', body: JSON.stringify({ page_id: pageId }) }),
+  clearProgress: (volumeId: string) => request<null>(`/volumes/${volumeId}/progress`, { method: 'DELETE' }),
+  patchSeries: (seriesId: number, patch: { publication_status: PublicationStatus | null }) =>
+    must<SeriesDetail>(`/series/${seriesId}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   saveSeriesSettings: (seriesId: number, patch: SettingsPatch) =>
     must<ReadingSettings>(`/series/${seriesId}/settings`, { method: 'PATCH', body: JSON.stringify(patch) }),
 }

@@ -101,6 +101,8 @@ export interface SeriesDetail {
   folder: string | null
   publication_status: PublicationStatus | null
   settings: ReadingSettings
+  /** Tome qu'ouvre « Lire » (même règle que dans `SeriesSummary`). */
+  resume_volume_id: string | null
   /** Déjà dans l'ordre de lecture de la série. */
   volumes: SeriesVolume[]
 }
