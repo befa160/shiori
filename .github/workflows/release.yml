@@ -1,13 +1,13 @@
 name: Release
 
-# Binaires publiés sur un tag `v*` (Q37). Une PR qui modifie ce fichier construit toutes les
-# cibles sans rien publier, pour essayer la release avant de poser un tag.
+# Binaires (Q37) et image Docker (Q36) publiés sur un tag `v*`. Une PR qui modifie ce fichier,
+# le Dockerfile ou les dépendances Rust construit tout sans rien publier.
 on:
   push:
     tags: ['v*']
   pull_request:
     # Les dépendances Rust aussi : une crate qui ne compile plus en musl se voit dans sa PR.
-    paths: [.github/workflows/release.yml, backend/Cargo.lock]
+    paths: [.github/workflows/release.yml, Dockerfile, backend/Cargo.lock]
 
 permissions:
   contents: read
@@ -101,7 +101,8 @@ jobs:
           path: dist/*
 
   publish:
-    needs: build
+    # Pas de release sans son image : un test Docker raté arrête tout.
+    needs: [build, docker]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
@@ -123,3 +124,66 @@ jobs:
             --generate-notes "${pre[@]}" shiori-* SHA256SUMS
         env:
           GH_TOKEN: ${{ github.token }}
+
+  # Image multi-architecture à partir des binaires musl, essayée avant d'être poussée.
+  docker:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          pattern: '*-unknown-linux-musl'
+          merge-multiple: true
+      - name: Context
+        run: |
+          mkdir -p ctx/amd64 ctx/arm64 ctx/empty
+          tar xzf artifacts/*-x86_64-unknown-linux-musl.tar.gz -C ctx/amd64 --strip-components=1 --wildcards '*/shiori'
+          tar xzf artifacts/*-aarch64-unknown-linux-musl.tar.gz -C ctx/arm64 --strip-components=1 --wildcards '*/shiori'
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        with:
+          context: ctx
+          file: Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: shiori:test
+      - name: Smoke test
+        run: |
+          docker run -d --name shiori -p 127.0.0.1:7878:7878 shiori:test
+          for _ in $(seq 30); do curl -sf localhost:7878/api/health && break; sleep 1; done
+          curl -sf localhost:7878/ | grep -q '<title>Shiori</title>'
+          # Parade au DNS rebinding active dans le conteneur.
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: evil.example' localhost:7878/api/health)" = 403
+          # `docker stop` envoie SIGTERM : arrêt propre (0), pas tué au bout du délai (137).
+          docker stop -t 5 shiori
+          docker logs shiori
+          test "$(docker inspect -f '{{.State.ExitCode}}' shiori)" = 0
+      - if: startsWith(github.ref, 'refs/tags/v')
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - id: meta
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository }}
+          # 0.1.0 et 0.1 ; latest seulement pour une version finale (pas v0.1.0-rc.1).
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+      - if: startsWith(github.ref, 'refs/tags/v')
+        uses: docker/build-push-action@v7
+        with:
+          context: ctx
+          file: Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

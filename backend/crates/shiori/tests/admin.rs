@@ -32,7 +32,7 @@ impl Fixture {
         let db = Arc::new(Db::open(&dir.path().join("t.db")).await.unwrap());
         let images = Images::open(dir.path().join("cache"), u64::MAX).unwrap();
         let state = Arc::new(App::new(db, images));
-        let app = server::router(state.clone(), false);
+        let app = server::router(state.clone(), None);
         let mut f = Self {
             _dir: dir,
             root,

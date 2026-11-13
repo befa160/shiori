@@ -48,7 +48,7 @@ async fn fixture(kind: Option<&str>) -> Fixture {
     let manga = fixtures::manga(&folder);
     let db = Arc::new(Db::open(&dir.path().join("t.db")).await.unwrap());
     let images = Images::open(dir.path().join("cache"), u64::MAX).unwrap();
-    let app = server::router(Arc::new(App::new(db.clone(), images)), false);
+    let app = server::router(Arc::new(App::new(db.clone(), images)), None);
     let mut body = json!({ "name": "Lib", "root": root });
     if let Some(kind) = kind {
         body["kind"] = json!(kind);

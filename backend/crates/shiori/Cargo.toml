@@ -25,7 +25,7 @@ shiori-core.workspace = true
 shiori-db.workspace = true
 shiori-meta.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["rt-multi-thread", "sync", "net", "signal"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "sync", "net", "signal", "macros"] }
 tower-http.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true

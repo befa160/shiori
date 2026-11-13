@@ -158,7 +158,7 @@ async fn fixture(delay: Duration) -> Fixture {
     let sources: Vec<Arc<dyn Source>> = vec![anilist.clone()];
     // Un fichier à la fois : les séries reçoivent leurs ids dans l'ordre des dossiers.
     let state = Arc::new(App::build(db, images, 1, 30, sources));
-    let app = server::router(state.clone(), false);
+    let app = server::router(state.clone(), None);
     Fixture {
         _dir: dir,
         state,

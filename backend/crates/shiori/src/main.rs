@@ -50,10 +50,7 @@ fn main() -> ExitCode {
                 match cli.command {
                     Command::Scan(args) => scan::run(args, cli.quiet).await,
                     Command::Serve(args) => {
-                        let ctrl_c = async {
-                            let _ = tokio::signal::ctrl_c().await;
-                        };
-                        server::run(args, cli.quiet, ctrl_c).await?;
+                        server::run(args, cli.quiet, stop_signal()).await?;
                         Ok(ExitCode::SUCCESS)
                     }
                 }
@@ -66,4 +63,24 @@ fn main() -> ExitCode {
             ExitCode::from(2)
         }
     }
+}
+
+/// Ctrl-C, et SIGTERM sous Unix (`docker stop`, systemd) : sans lui, le conteneur est tué au
+/// bout de 10 s, scan en cours compris.
+async fn stop_signal() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{SignalKind, signal};
+        match signal(SignalKind::terminate()) {
+            Ok(mut term) => tokio::select! {
+                _ = tokio::signal::ctrl_c() => {}
+                _ = term.recv() => {}
+            },
+            Err(_) => {
+                let _ = tokio::signal::ctrl_c().await;
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = tokio::signal::ctrl_c().await;
 }
