@@ -178,6 +178,10 @@ Quand la série n'a pas de couverture **ou** que l'image échoue (`onError`), m�
 - Champ piloté par un état local, jamais directement par l'adresse : React Router change l'adresse dans une transition, et un champ piloté par une transition prend du retard sur un appareil lent.
 - Champ verrouillé (édité à la main, lot 5.4) : à droite du libellé, cadenas ambre + « Modifié à la main » en `text-muted-foreground`, puis un bouton fantôme « Rétablir » de 44 px dont le libellé accessible nomme le champ (« Rendre « Résumé » aux fichiers ») ; seuls les champs changés partent à l'enregistrement. Texte multiligne : `Textarea` shadcn, dans un formulaire `min-w-0` (un long texte n'élargit pas la fenêtre).
 
+### Listes réordonnables (lot 5.7a)
+
+Boutons « Monter » et « Descendre » de 44 px à droite de chaque élément (libellé accessible qui nomme l'élément, désactivés aux extrémités), numéro d'ordre à gauche ; jamais le glisser-déposer comme seul moyen (WCAG 2.2, mouvements de glissement).
+
 ### Métadonnées d'une série (lot 5.4)
 
 - Sous le titre et les actions, dans `max-w-prose` : auteurs en `text-muted-foreground`, repères (année · éditeur · statut · public) en `text-sm text-muted-foreground`, résumé replié sur 4 lignes au-delà de 240 caractères (« Lire la suite », `aria-expanded`), genres et tags en puces `rounded-full bg-card px-3 py-1 text-sm` (tronquées seulement si elles dépassent la ligne), autres titres, liens.
