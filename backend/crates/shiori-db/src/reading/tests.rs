@@ -109,8 +109,10 @@ async fn the_library_kind_gives_the_default_reading_mode() {
             ReadingSettings {
                 reading_mode: mode,
                 page_layout: PageLayout::Auto,
+                page_turn: PageTurn::Reading,
                 reading_mode_override: None,
                 page_layout_override: None,
+                page_turn_override: None,
             }
         );
         assert_eq!(f.db.libraries().await.unwrap()[0].kind, kind);
@@ -126,6 +128,7 @@ async fn series_settings_change_one_field_at_a_time_and_reset() {
     let change = |reading_mode, page_layout| SettingsChange {
         reading_mode,
         page_layout,
+        page_turn: None,
     };
     let s =
         f.db.change_series_settings(f.series, change(Some(Some(ReadingMode::Vertical)), None))

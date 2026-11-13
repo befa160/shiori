@@ -25,7 +25,7 @@ const series: SeriesSummary[] = [
   { ...summary, id: 7, name: 'Toriko', volume_count: 1 },
   { ...summary, id: 8, name: longName, volume_count: 3 },
 ]
-const settings = { reading_mode: 'rtl', page_layout: 'auto', reading_mode_override: null, page_layout_override: null } as const
+const settings = { reading_mode: 'rtl', page_layout: 'auto', page_turn: 'reading', reading_mode_override: null, page_layout_override: null, page_turn_override: null } as const
 const detail: SeriesDetail = {
   id: 7,
   library_id: 1,

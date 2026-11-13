@@ -27,7 +27,7 @@ const volume: VolumeDetail = {
   scanned_at: '',
   locations: [{ path: '/w/Leviathan/webtoon.cbz', library_id: 1, series_id: null }],
   issues: [],
-  settings: { reading_mode: 'vertical', page_layout: 'auto', reading_mode_override: null, page_layout_override: null },
+  settings: { reading_mode: 'vertical', page_layout: 'auto', page_turn: 'reading', reading_mode_override: null, page_layout_override: null, page_turn_override: null },
   progress: null,
 }
 

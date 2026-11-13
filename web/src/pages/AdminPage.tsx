@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { AdminLibraries } from '@/admin/Libraries'
+import { PageTurnSetting } from '@/admin/PageTurnSetting'
 import { CurrentScan } from '@/admin/scans'
 import { Button } from '@/components/ui/button'
 import { LanguageSelect } from './LanguageSelect'
@@ -24,6 +25,12 @@ export function AdminPage() {
         <CurrentScan />
       </section>
       <AdminLibraries />
+      <section aria-labelledby="admin-reading" className="max-w-prose space-y-3 rounded-md bg-card p-4">
+        <h2 id="admin-reading" className="text-lg font-semibold">
+          {t('admin.reading')}
+        </h2>
+        <PageTurnSetting />
+      </section>
       <section aria-labelledby="admin-language" className="max-w-prose space-y-3 rounded-md bg-card p-4">
         <h2 id="admin-language" className="text-lg font-semibold">
           {t('admin.language')}

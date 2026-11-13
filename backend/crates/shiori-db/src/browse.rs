@@ -13,6 +13,7 @@ use shiori_core::{
 use sqlx::Row;
 use sqlx::sqlite::SqliteRow;
 
+use crate::reading::settings_columns;
 use crate::{Db, Error, LibraryKind, Progress, ReadingSettings, from_db, stamp, to_db};
 
 #[derive(Debug, Serialize)]
@@ -472,11 +473,11 @@ impl Db {
     }
 
     pub async fn series_detail(&self, id: i64) -> Result<Option<SeriesDetail>, Error> {
-        let Some(series) = sqlx::query(
-            "SELECT s.library_id, s.name, s.folder, s.publication_status, s.reading_mode,
-                    s.page_layout, b.kind
-             FROM series s JOIN libraries b ON b.id = s.library_id WHERE s.id = ?",
-        )
+        let Some(series) = sqlx::query(concat!(
+            "SELECT s.library_id, s.name, s.folder, s.publication_status, ",
+            settings_columns!(),
+            " FROM series s JOIN libraries b ON b.id = s.library_id WHERE s.id = ?"
+        ))
         .bind(id)
         .fetch_optional(&self.pool)
         .await?

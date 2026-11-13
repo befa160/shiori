@@ -15,16 +15,25 @@ export type PageLayout = 'single' | 'double' | 'auto'
 export type ReadingStatus = 'unread' | 'in_progress' | 'read'
 export type PublicationStatus = 'ongoing' | 'completed' | 'hiatus' | 'cancelled'
 
-/** Réglages appliqués, et ce que la série impose elle-même (`null` = défaut de la bibliothèque). */
+/** Sens des taps, du balayage, des flèches et du curseur, séparé du sens de lecture (qui garde
+ * l'ordre des doubles pages) : `reading` comme lui, `ltr` toucher à droite avance, `rtl` à gauche. */
+export type PageTurn = 'reading' | 'ltr' | 'rtl'
+
+/** Réglages appliqués, et ce que la série impose elle-même (`null` = défaut de la bibliothèque,
+ * ou défaut global pour `page_turn`). */
 export interface ReadingSettings {
   reading_mode: ReadingMode
   page_layout: PageLayout
+  page_turn: PageTurn
   reading_mode_override: ReadingMode | null
   page_layout_override: PageLayout | null
+  page_turn_override: PageTurn | null
 }
 
-/** Réglages qu'une série impose ; champ absent = inchangé. */
-export type SettingsPatch = Partial<Pick<ReadingSettings, 'reading_mode' | 'page_layout'>>
+/** Réglages qu'une série impose ; champ absent = inchangé, `null` = retour au défaut. */
+export type SettingsPatch = Partial<Pick<ReadingSettings, 'reading_mode' | 'page_layout'>> & {
+  page_turn?: PageTurn | null
+}
 
 export interface Progress {
   page_id: string
@@ -38,6 +47,8 @@ export interface Progress {
 export interface Settings {
   /** `null` : personne n'a choisi, l'interface suit la langue du navigateur. */
   language: 'fr' | 'en' | null
+  /** Sens par défaut pour tourner les pages ; une série peut avoir le sien. */
+  page_turn: PageTurn
 }
 
 export interface Health {

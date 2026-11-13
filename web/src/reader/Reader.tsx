@@ -6,7 +6,7 @@ import { Link, useParams, useSearchParams } from 'react-router'
 import { toast } from 'sonner'
 import { api } from '@/api/client'
 import { usePages, useSeries, useVolume } from '@/api/queries'
-import type { PageInfo, ReadingMode, SettingsPatch } from '@/api/types'
+import type { PageInfo, PageTurn, ReadingMode, SettingsPatch } from '@/api/types'
 import { volumeLabel } from '@/browse/labels'
 import { QueryState } from '@/browse/parts'
 import { Button } from '@/components/ui/button'
@@ -117,6 +117,8 @@ function Reader({ volumeId }: { volumeId: string }) {
               direction={mode === 'ltr' ? 'ltr' : 'rtl'}
               layout={settings?.page_layout ?? 'auto'}
               onLayout={(layout) => change({ page_layout: layout })}
+              pageTurn={settings?.page_turn ?? 'reading'}
+              onPageTurn={(turn) => change({ page_turn: turn })}
             />
           )
         }}
@@ -134,12 +136,20 @@ function Pages({
   direction,
   layout,
   onLayout,
+  pageTurn,
+  onPageTurn,
   onMode,
   title,
   back,
   resume,
   next,
-}: ReaderProps & { direction: Direction; layout: Layout; onLayout: (layout: Layout) => void }) {
+}: ReaderProps & {
+  direction: Direction
+  layout: Layout
+  onLayout: (layout: Layout) => void
+  pageTurn: PageTurn
+  onPageTurn: (turn: PageTurn) => void
+}) {
   const { t, i18n } = useTranslation()
   const number = new Intl.NumberFormat(i18n.language)
   const view = useViewport()
@@ -153,6 +163,10 @@ function Pages({
   const [offset, setOffset] = useState(false)
   const [split, setSplit] = useState(true)
   const shown = effectiveLayout(layout, view)
+  // Sens des taps, du balayage, des flèches et du curseur (lot 4.11) ; `direction` (le sens de
+  // lecture) garde l'ordre des pages dans les vues : en manga, une double page se lit toujours
+  // de droite à gauche, même en tournant les pages de gauche à droite.
+  const turn: Direction = pageTurn === 'reading' ? direction : pageTurn
   const views = useMemo(
     () => buildViews(pages, { layout: shown, direction, offset, split }),
     [pages, shown, direction, offset, split],
@@ -175,7 +189,7 @@ function Pages({
   const goToPage = (ordinal: number) => go(viewOfPage(views, pages[ordinal].id))
 
   useChromeKeys(chrome, setChrome, (event) => {
-    const move = keyMove(event.key, event.shiftKey, direction)
+    const move = keyMove(event.key, event.shiftKey, turn)
     if (move) {
       event.preventDefault()
       go(move)
@@ -238,7 +252,7 @@ function Pages({
     const width = event.currentTarget.clientWidth
     if (Math.hypot(to.x - from.x, to.y - from.y) > 10) {
       // Zoomé, glisser déplace la page (défilement natif) : jamais un changement de page.
-      const swipe = zoomed ? null : swipeAction(from, to, width, direction)
+      const swipe = zoomed ? null : swipeAction(from, to, width, turn)
       if (swipe) go(swipe)
       return
     }
@@ -251,7 +265,7 @@ function Pages({
       setZoom(zoomed ? null : { index, x: to.x / (width || 1), y: to.y / height })
       return
     }
-    const tap = tapAction(to.x, width, direction)
+    const tap = tapAction(to.x, width, turn)
     // Sur les côtés, la page tourne sans attendre ; le double tap ne s'y amorce que zoomé.
     if (tap === 'toggle' || zoomed) lastTap.current = { time: now, ...to }
     if (tap === 'toggle') toggleTimer.current = window.setTimeout(() => setChrome((shown) => !shown), DOUBLE_TAP)
@@ -265,7 +279,7 @@ function Pages({
       : first === last
         ? t('reader.pageOf', { current: first.ordinal + 1, total })
         : t('reader.pagesOf', { first: first.ordinal + 1, last: last.ordinal + 1, total })
-  const [left, right] = direction === 'rtl' ? (['next', 'previous'] as const) : (['previous', 'next'] as const)
+  const [left, right] = turn === 'rtl' ? (['next', 'previous'] as const) : (['previous', 'next'] as const)
   return (
     <>
       <main
@@ -308,6 +322,13 @@ function Pages({
         display={
           <DisplayOptions mode={direction} onMode={onMode}>
             <Choice
+              legend={t('reader.pageTurn')}
+              value={pageTurn}
+              options={(['reading', 'ltr', 'rtl'] as const).map((p) => [p, t(`reader.pageTurns.${p}`)])}
+              onChange={onPageTurn}
+              vertical
+            />
+            <Choice
               legend={t('reader.layout')}
               value={layout}
               options={(['single', 'double', 'auto'] as const).map((l) => [l, t(`reader.layouts.${l}`)])}
@@ -335,7 +356,7 @@ function Pages({
           <ChevronLeft aria-hidden />
         </Button>
         <PageSlider
-          dir={direction}
+          dir={turn}
           total={total}
           value={first.ordinal}
           onCommit={goToPage}
