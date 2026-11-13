@@ -48,6 +48,78 @@ fn overlaps(a: &str, b: &str) -> bool {
     a == b || relative(a, b).is_some() || relative(b, a).is_some()
 }
 
+/// La série `old` perd les tomes `lost` dans la passe `run`. Si elle n'a plus d'autre
+/// fichier, que ceux revus l'ont été dans une seule autre série et que celle-ci n'a que
+/// des tomes venus de `old`, c'est un renommage : `old` prend ses fichiers, son dossier et
+/// son nom, l'autre disparaît. Une série existante qui reçoit ces tomes (fusion), un
+/// déplacement partiel ou un éclatement en plusieurs dossiers laissent les séries telles quelles.
+async fn adopt_renamed(
+    tx: &mut sqlx::SqliteConnection,
+    library: i64,
+    run: i64,
+    old: i64,
+    lost: &[String],
+) -> Result<(), Error> {
+    let remaining: i64 =
+        sqlx::query("SELECT COUNT(*) AS n FROM file_locations WHERE series_id = ?")
+            .bind(old)
+            .fetch_one(&mut *tx)
+            .await?
+            .get("n");
+    if remaining as usize != lost.len() {
+        return Ok(());
+    }
+    let volumes = serde_json::to_string(lost).expect("une liste de chaînes se sérialise");
+    // Seule une série née pendant cette passe peut être le nouveau nom : une copie déjà
+    // connue (et peut-être réglée à la main) garde son identité quand l'original disparaît.
+    let targets = sqlx::query(
+        "SELECT DISTINCT l.series_id FROM file_locations l JOIN series s ON s.id = l.series_id
+         WHERE l.last_seen_run = ? AND l.series_id != ? AND l.library_id = ?
+           AND s.created_at >= (SELECT started_at FROM scan_runs WHERE id = ?)
+           AND l.volume_id IN (SELECT value FROM json_each(?))",
+    )
+    .bind(run)
+    .bind(old)
+    .bind(library)
+    .bind(run)
+    .bind(&volumes)
+    .fetch_all(&mut *tx)
+    .await?;
+    let [target] = targets.as_slice() else {
+        return Ok(());
+    };
+    let new: i64 = target.get("series_id");
+    let foreign: i64 = sqlx::query(
+        "SELECT COUNT(*) AS n FROM file_locations
+         WHERE series_id = ? AND volume_id NOT IN (SELECT value FROM json_each(?))",
+    )
+    .bind(new)
+    .bind(&volumes)
+    .fetch_one(&mut *tx)
+    .await?
+    .get("n");
+    if foreign > 0 {
+        return Ok(());
+    }
+    sqlx::query("UPDATE file_locations SET series_id = ? WHERE series_id = ?")
+        .bind(old)
+        .bind(new)
+        .execute(&mut *tx)
+        .await?;
+    // Supprimée avant de renommer : les index uniques portent sur le dossier et le nom.
+    let row = sqlx::query("DELETE FROM series WHERE id = ? RETURNING folder, name")
+        .bind(new)
+        .fetch_one(&mut *tx)
+        .await?;
+    sqlx::query("UPDATE series SET folder = ?, name = ? WHERE id = ?")
+        .bind(row.get::<Option<String>, _>("folder"))
+        .bind(row.get::<String, _>("name"))
+        .bind(old)
+        .execute(&mut *tx)
+        .await?;
+    Ok(())
+}
+
 fn root_key(root: &Path) -> String {
     location_key(root).trim_end_matches('/').to_owned()
 }
@@ -199,6 +271,10 @@ impl Db {
     /// Supprime les emplacements de la bibliothèque situés sous `under` que la passe `run`
     /// n'a pas vus. Renvoie leur nombre. On compare des numéros de passe et non des
     /// horodatages : deux passes peuvent tomber dans la même milliseconde.
+    ///
+    /// Avant, une série dont tous les fichiers ont été déplacés vers une autre série faite
+    /// seulement de ces tomes (dossier renommé) reprend leurs emplacements : elle garde son
+    /// id, donc ses réglages et ses métadonnées.
     pub async fn remove_missing(
         &self,
         library: &Library,
@@ -206,6 +282,29 @@ impl Db {
         run: i64,
     ) -> Result<u64, Error> {
         let prefix = root_key(under) + "/";
+        let mut tx = self.pool.begin_with("BEGIN IMMEDIATE").await?;
+        let stale = sqlx::query(
+            "SELECT volume_id, series_id FROM file_locations
+             WHERE library_id = ? AND substr(path, 1, length(?)) = ?
+               AND last_seen_run IS NOT ? AND series_id IS NOT NULL",
+        )
+        .bind(library.id)
+        .bind(&prefix)
+        .bind(&prefix)
+        .bind(run)
+        .fetch_all(&mut *tx)
+        .await?;
+        let mut lost: HashMap<i64, Vec<String>> = HashMap::new();
+        for row in &stale {
+            lost.entry(row.get("series_id"))
+                .or_default()
+                .push(row.get("volume_id"));
+        }
+        let mut ids: Vec<i64> = lost.keys().copied().collect();
+        ids.sort_unstable();
+        for old in ids {
+            adopt_renamed(&mut tx, library.id, run, old, &lost[&old]).await?;
+        }
         let done = sqlx::query(
             "DELETE FROM file_locations
              WHERE library_id = ? AND substr(path, 1, length(?)) = ?
@@ -215,8 +314,9 @@ impl Db {
         .bind(&prefix)
         .bind(&prefix)
         .bind(run)
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await?;
+        tx.commit().await?;
         Ok(done.rows_affected())
     }
 

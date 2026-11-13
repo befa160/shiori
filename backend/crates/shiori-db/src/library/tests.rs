@@ -359,3 +359,204 @@ async fn existing_series_get_their_library_date() {
     );
     assert_eq!(row.get::<Option<String>, _>("publication_status"), None);
 }
+
+/// Passe complète sur `files` (déjà sur le disque), retrait des disparus et noms recalculés.
+async fn full_pass(db: &Db, library: &Library, files: &[PathBuf]) {
+    let run = scan_all(db, library, files).await;
+    db.remove_missing(library, Path::new(&library.root), run)
+        .await
+        .unwrap();
+    db.refresh_series(library).await.unwrap();
+}
+
+/// (id, dossier, statut de publication) par série, triés par dossier.
+async fn identities(db: &Db, library: &Library) -> Vec<(i64, Option<String>, Option<String>)> {
+    sqlx::query(
+        "SELECT id, folder, publication_status FROM series WHERE library_id = ? ORDER BY folder",
+    )
+    .bind(library.id)
+    .fetch_all(db.pool())
+    .await
+    .unwrap()
+    .iter()
+    .map(|r| (r.get("id"), r.get("folder"), r.get("publication_status")))
+    .collect()
+}
+
+fn rename(root: &Path, from: &str, to: &str) -> PathBuf {
+    let to = root.join(to);
+    std::fs::create_dir_all(to.parent().unwrap()).unwrap();
+    std::fs::rename(root.join(from), &to).unwrap();
+    to
+}
+
+#[tokio::test]
+async fn a_renamed_folder_keeps_its_series_and_settings() {
+    let (_dir, db, library) = setup().await;
+    let root = PathBuf::from(&library.root);
+    let files = [
+        cbz(&root, "Blue Lock/Blue Lock T01.cbz", 1),
+        cbz(&root, "Blue Lock/Blue Lock T02.cbz", 2),
+    ];
+    full_pass(&db, &library, &files).await;
+    let [(id, ..)] = identities(&db, &library).await[..] else {
+        panic!("une série attendue");
+    };
+    db.set_publication_status(id, Some(crate::PublicationStatus::Completed))
+        .await
+        .unwrap();
+
+    let moved = [
+        rename(
+            &root,
+            "Blue Lock/Blue Lock T01.cbz",
+            "Blue Lock (2018)/Blue Lock T01.cbz",
+        ),
+        rename(
+            &root,
+            "Blue Lock/Blue Lock T02.cbz",
+            "Blue Lock (2018)/Blue Lock T02.cbz",
+        ),
+    ];
+    full_pass(&db, &library, &moved).await;
+    assert_eq!(
+        identities(&db, &library).await,
+        [(
+            id,
+            Some("Blue Lock (2018)".to_owned()),
+            Some("completed".to_owned())
+        )]
+    );
+    assert_eq!(
+        series(&db, &library).await,
+        [(
+            Some("Blue Lock (2018)".to_owned()),
+            "Blue Lock".to_owned(),
+            2
+        )]
+    );
+}
+
+#[tokio::test]
+async fn a_rename_with_a_volume_deleted_is_still_a_rename() {
+    let (_dir, db, library) = setup().await;
+    let root = PathBuf::from(&library.root);
+    let files = [
+        cbz(&root, "Gigant/Gigant 01.cbz", 1),
+        cbz(&root, "Gigant/Gigant 02.cbz", 2),
+    ];
+    full_pass(&db, &library, &files).await;
+    let id = identities(&db, &library).await[0].0;
+    std::fs::remove_file(&files[1]).unwrap();
+    let moved = rename(&root, "Gigant/Gigant 01.cbz", "GIGANT/Gigant 01.cbz");
+    full_pass(&db, &library, &[moved]).await;
+    assert_eq!(
+        identities(&db, &library).await,
+        [(id, Some("GIGANT".to_owned()), None)]
+    );
+}
+
+#[tokio::test]
+async fn partial_moves_splits_and_merges_are_not_renames() {
+    let (_dir, db, library) = setup().await;
+    let root = PathBuf::from(&library.root);
+    let a = [
+        cbz(&root, "A/A 01.cbz", 1),
+        cbz(&root, "A/A 02.cbz", 2),
+        cbz(&root, "A/A 03.cbz", 3),
+        cbz(&root, "A/A 04.cbz", 4),
+    ];
+    let b = cbz(&root, "B/B 01.cbz", 5);
+    let c = cbz(&root, "C/C 01.cbz", 6);
+    let d = cbz(&root, "D/D 01.cbz", 7);
+    full_pass(&db, &library, &[a.to_vec(), vec![b, c, d]].concat()).await;
+    let before = identities(&db, &library).await;
+    let id = |folder: &str| {
+        before
+            .iter()
+            .find(|s| s.1.as_deref() == Some(folder))
+            .unwrap()
+            .0
+    };
+    let (id_a, id_b) = (id("A"), id("B"));
+
+    // A : un tome reste, un autre part ailleurs (déplacement partiel).
+    // B reçoit un tome de A (B existait : sa série reste la sienne).
+    // C et D se réunissent dans un nouveau dossier E (fusion de deux séries).
+    let files = [
+        a[0].clone(),
+        rename(&root, "A/A 02.cbz", "B/A 02.cbz"),
+        root.join("B/B 01.cbz"),
+        rename(&root, "C/C 01.cbz", "E/C 01.cbz"),
+        rename(&root, "D/D 01.cbz", "E/D 01.cbz"),
+        // Le reste de A éclaté dans deux nouveaux dossiers.
+        rename(&root, "A/A 03.cbz", "F/A 03.cbz"),
+        rename(&root, "A/A 04.cbz", "G/A 04.cbz"),
+    ];
+    full_pass(&db, &library, &files).await;
+    let after = identities(&db, &library).await;
+    let folders: Vec<_> = after.iter().map(|s| s.1.clone().unwrap()).collect();
+    assert_eq!(folders, ["A", "B", "E", "F", "G"]);
+    assert_eq!((after[0].0, after[1].0), (id_a, id_b));
+    let old: Vec<i64> = before.iter().map(|s| s.0).collect();
+    assert!(after[2..].iter().all(|s| !old.contains(&s.0)), "{after:?}");
+
+    // Éclatement complet : H part vers I et J, aucune des deux ne prend sa place.
+    let h = [cbz(&root, "H/H 01.cbz", 8), cbz(&root, "H/H 02.cbz", 9)];
+    full_pass(&db, &library, &[files.to_vec(), h.to_vec()].concat()).await;
+    let id_h = identities(&db, &library)
+        .await
+        .iter()
+        .find(|s| s.1.as_deref() == Some("H"))
+        .unwrap()
+        .0;
+    let split = [
+        rename(&root, "H/H 01.cbz", "I/H 01.cbz"),
+        rename(&root, "H/H 02.cbz", "J/H 02.cbz"),
+    ];
+    full_pass(&db, &library, &[files.to_vec(), split.to_vec()].concat()).await;
+    assert!(identities(&db, &library).await.iter().all(|s| s.0 != id_h));
+
+    // Fusion complète : tout K part dans B, qui existait ; B garde son id, K disparaît.
+    let kept = [files.to_vec(), split.to_vec()].concat();
+    let k = cbz(&root, "K/K 01.cbz", 10);
+    full_pass(&db, &library, &[kept.clone(), vec![k]].concat()).await;
+    let merged = rename(&root, "K/K 01.cbz", "B/K 01.cbz");
+    full_pass(&db, &library, &[kept, vec![merged]].concat()).await;
+    let after = identities(&db, &library).await;
+    assert!(after.iter().all(|s| s.1.as_deref() != Some("K")));
+    assert_eq!(
+        after
+            .iter()
+            .find(|s| s.1.as_deref() == Some("B"))
+            .unwrap()
+            .0,
+        id_b
+    );
+}
+
+#[tokio::test]
+async fn a_known_copy_keeps_its_identity_when_the_original_goes() {
+    let (_dir, db, library) = setup().await;
+    let root = PathBuf::from(&library.root);
+    let original = cbz(&root, "One Piece/One Piece T01.cbz", 1);
+    let copy = root.join("One Piece (copie)/One Piece T01.cbz");
+    std::fs::create_dir_all(copy.parent().unwrap()).unwrap();
+    std::fs::copy(&original, &copy).unwrap();
+    full_pass(&db, &library, &[original.clone(), copy.clone()]).await;
+    let id_copy = identities(&db, &library).await[1].0;
+    db.set_publication_status(id_copy, Some(crate::PublicationStatus::Hiatus))
+        .await
+        .unwrap();
+
+    std::fs::remove_file(&original).unwrap();
+    full_pass(&db, &library, &[copy]).await;
+    assert_eq!(
+        identities(&db, &library).await,
+        [(
+            id_copy,
+            Some("One Piece (copie)".to_owned()),
+            Some("hiatus".to_owned())
+        )]
+    );
+}
