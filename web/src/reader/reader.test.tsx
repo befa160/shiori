@@ -2,7 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PageInfo, SeriesDetail, VolumeDetail } from '@/api/types'
-import { json, mockApi, renderAt } from '@/test/render'
+import { json, mockApi, renderAt, NO_METADATA } from '@/test/render'
 
 // Le lecteur est une route `lazy` : chargé à froid (transformé, instrumenté pour la couverture),
 // il dépassait parfois le délai d'attente du premier test sur une machine chargée.
@@ -41,6 +41,8 @@ const series: SeriesDetail = {
   name: 'Toriko',
   folder: 'Toriko',
   publication_status: null,
+  metadata: NO_METADATA,
+  locked: [],
   resume_volume_id: null,
   page_count: 3,
   pages_read: 0,
@@ -473,6 +475,20 @@ describe('progression, réglages de la série, tome suivant', () => {
     await waitFor(() => expect(fetch.mock.calls.filter(([url]) => url === `/api/volumes/${VOLUME}`).length).toBeGreaterThan(asked))
     await userEvent.keyboard('{Escape}{Escape}{ArrowLeft}')
     expect(screen.getByRole('img', { name: /^Page 2 sur 3/ })).toBeInTheDocument()
+  })
+
+  it('fait de la page affichée la couverture de la série, et le dit', async () => {
+    const fetch = serve({}, { '/api/series/7': (init?: RequestInit) => json(init?.method === 'PATCH' ? { ...twoVolumes, metadata: { ...NO_METADATA, cover_page_id: 'p1' } } : twoVolumes) })
+    renderAt(`/read/${VOLUME}`)
+    await screen.findByRole('img', { name: 'Page 1 sur 3' })
+    // Plein écran, sans barre d'onglets : les notifications ne s'en écartent pas.
+    expect(document.querySelector('[data-reader]')).not.toBeNull()
+    await showControls()
+    await userEvent.click(screen.getByRole('button', { name: 'Affichage' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Utiliser comme couverture' }))
+    expect(await screen.findByText('Couverture de la série changée')).toBeInTheDocument()
+    const patch = fetch.mock.calls.find(([url, init]) => url === '/api/series/7' && init?.method === 'PATCH')
+    expect(JSON.parse(String(patch?.[1]?.body))).toEqual({ cover_page_id: 'p1' })
   })
 
   it('après la dernière page, les commandes proposent le tome suivant', async () => {

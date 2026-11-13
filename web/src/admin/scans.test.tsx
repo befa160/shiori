@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Library, LogLine, RunSummary, ScanProgress } from '@/api/types'
-import { json, mockApi, renderAt } from '@/test/render'
+import { json, mockApi, renderAt, NO_METADATA } from '@/test/render'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -232,6 +232,8 @@ describe('lien vers un tome', () => {
           name: 'A',
           folder: 'A',
           publication_status: null,
+          metadata: NO_METADATA,
+          locked: [],
           resume_volume_id: 'v1',
           settings: { reading_mode: 'rtl', page_layout: 'auto', page_turn: 'reading', reading_mode_override: null, page_layout_override: null, page_turn_override: null },
           volumes: [

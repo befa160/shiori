@@ -1,7 +1,7 @@
 // Crochets partagés par les deux modes du lecteur : taille de l'écran, touches Échap / Tab,
 // enregistrement de la progression.
 import { useQueryClient } from '@tanstack/react-query'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { api } from '@/api/client'
 import i18n from '@/i18n'
@@ -22,27 +22,31 @@ export function useViewport() {
  * le clavier atteint tout sans piège). Les autres touches vont à `onKey`, sauf dans le panneau
  * Affichage ou dans la barre, où elles appartiennent au bouton ou au curseur qui a le focus. */
 export function useChromeKeys(chrome: boolean, setChrome: (shown: boolean) => void, onKey?: (event: KeyboardEvent) => void) {
-  useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement
-      if (target.closest('[data-radix-popper-content-wrapper]')) return
-      if (event.key === 'Escape') {
-        // Le focus quitte la barre qui devient invisible : les touches retournent aux pages.
-        if (target.closest('[role="toolbar"]')) target.blur()
-        return setChrome(false)
-      }
-      if (event.key === 'Tab' && !chrome) {
-        event.preventDefault()
-        setChrome(true)
-        requestAnimationFrame(() => document.querySelector<HTMLElement>('[role="toolbar"] a, [role="toolbar"] button')?.focus())
-        return
-      }
-      if (target.closest('[role="toolbar"]')) return
-      onKey?.(event)
+  // Lue au moment de la touche, avec l'état affiché : un écouteur réabonné après chaque rendu
+  // (`useEffect`, après l'affichage) gardait entre les deux l'état d'avant, et une flèche
+  // juste après « Fin » repartait de l'ancienne page (test e2e « tome suivant », lot 5.4).
+  const handle = useEffectEvent((event: KeyboardEvent) => {
+    const target = event.target as HTMLElement
+    if (target.closest('[data-radix-popper-content-wrapper]')) return
+    if (event.key === 'Escape') {
+      // Le focus quitte la barre qui devient invisible : les touches retournent aux pages.
+      if (target.closest('[role="toolbar"]')) target.blur()
+      return setChrome(false)
     }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
+    if (event.key === 'Tab' && !chrome) {
+      event.preventDefault()
+      setChrome(true)
+      requestAnimationFrame(() => document.querySelector<HTMLElement>('[role="toolbar"] a, [role="toolbar"] button')?.focus())
+      return
+    }
+    if (target.closest('[role="toolbar"]')) return
+    onKey?.(event)
   })
+  useEffect(() => {
+    const listener = (event: KeyboardEvent) => handle(event)
+    window.addEventListener('keydown', listener)
+    return () => window.removeEventListener('keydown', listener)
+  }, [])
 }
 
 /** Enregistre sur le serveur la page lue : 1 s après le dernier changement (feuilleter n'envoie

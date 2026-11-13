@@ -2,7 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PageInfo, VolumeDetail } from '@/api/types'
-import { json, mockApi, renderAt } from '@/test/render'
+import { NO_METADATA, json, mockApi, renderAt } from '@/test/render'
 
 // Le lecteur est une route `lazy` : chargé à froid (transformé, instrumenté pour la couverture),
 // il dépassait parfois le délai d'attente du premier test sur une machine chargée.
@@ -113,6 +113,28 @@ describe('mode webtoon', () => {
     await waitFor(() => expect(scrollTo).toHaveBeenCalledWith({ top: 98 * 1280 + 1200 }))
     await userEvent.keyboard('{Escape}')
     expect(toolbar).toHaveClass('invisible')
+  })
+
+  it('fait de la bande en haut de l’écran la couverture de la série', async () => {
+    const inSeries = { ...volume, locations: [{ ...volume.locations[0], series_id: 7 }] }
+    const series = { id: 7, library_id: 1, name: 'Leviathan', folder: 'Leviathan', publication_status: null, metadata: NO_METADATA, locked: [], settings: volume.settings, resume_volume_id: null, page_count: 100, pages_read: 0, volumes: [] }
+    const fetch = mockApi({
+      [`/api/volumes/${VOLUME}`]: () => json(inSeries),
+      [`/api/volumes/${VOLUME}/pages`]: () => json(strips),
+      [`/api/volumes/${VOLUME}/progress`]: () => json({}),
+      '/api/series/7': () => json(series),
+    })
+    renderAt(`/read/${VOLUME}`)
+    await screen.findByRole('img', { name: 'Page 1 sur 100' })
+    // La 3e bande en haut de l'écran.
+    act(() => scrollWindow(2 * 1280 + 10))
+    fireEvent.click(screen.getByRole('main'))
+    await userEvent.click(screen.getByRole('button', { name: 'Affichage' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Utiliser comme couverture' }))
+    await waitFor(() => {
+      const patch = fetch.mock.calls.find(([url, init]) => url === '/api/series/7' && init?.method === 'PATCH')
+      expect(JSON.parse(String(patch?.[1]?.body))).toEqual({ cover_page_id: 's3' })
+    })
   })
 
   it('reprend à la bande lue, et marque le tome terminé quand le bas de la dernière bande est à l’écran', async () => {

@@ -16,6 +16,8 @@ const base: SeriesSummary = {
   last_read_at: null,
   cover_page_id: null,
   resume_volume_id: null,
+  alt_titles: [],
+  authors: [],
 }
 // Dans l'ordre du serveur (par nom).
 const series: SeriesSummary[] = [
@@ -48,6 +50,14 @@ describe('filtres de séries', () => {
     expect(ids(applyFilters(series, filters('q=piece%20one')))).toEqual([3])
     expect(ids(applyFilters(series, filters('q=%20%20')))).toEqual([1, 2, 3, 4])
     expect(ids(applyFilters(series, filters('q=zorro')))).toEqual([])
+  })
+
+  it('cherche aussi dans les autres titres et les auteurs', () => {
+    const more = [{ ...series[0], alt_titles: ['アキラ'], authors: ['Katsuhiro Ōtomo'] }, ...series.slice(1)]
+    expect(ids(applyFilters(more, filters('q=otomo')))).toEqual([1])
+    expect(ids(applyFilters(more, filters('q=アキラ')))).toEqual([1])
+    // Les mots peuvent venir de champs différents.
+    expect(ids(applyFilters(more, filters('q=akira%20katsuhiro')))).toEqual([1])
   })
 
   it('filtre par lecture, publication (inconnue comprise) et bibliothèque', () => {

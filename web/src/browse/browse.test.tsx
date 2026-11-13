@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Library, SeriesDetail, SeriesSummary } from '@/api/types'
-import { json, mockApi, renderAt } from '@/test/render'
+import { json, mockApi, renderAt, NO_METADATA } from '@/test/render'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -20,6 +20,8 @@ const summary = {
   last_read_at: null,
   cover_page_id: null,
   resume_volume_id: null,
+  alt_titles: [] as string[],
+  authors: [] as string[],
 } as const
 const series: SeriesSummary[] = [
   { ...summary, id: 7, name: 'Toriko', volume_count: 1 },
@@ -32,6 +34,8 @@ const detail: SeriesDetail = {
   name: 'Toriko',
   folder: 'Toriko',
   publication_status: null,
+  metadata: NO_METADATA,
+  locked: [],
   resume_volume_id: 'b',
   page_count: 392,
   pages_read: 245,
@@ -102,7 +106,6 @@ describe('page d’une série', () => {
     expect(main().getByText(/^3 tomes · 1 tome lu sur 3 · 62\s%$/)).toBeInTheDocument()
     expect(main().getByRole('progressbar', { name: /^62\s%\slu$/ })).toBeInTheDocument()
     expect(main().getByRole('link', { name: 'Reprendre · Tome 2' })).toHaveAttribute('href', '/read/b')
-    expect(main().getByRole('combobox', { name: 'Statut de publication' })).toHaveTextContent('Statut inconnu')
 
     const titles = within(main().getByRole('region', { name: 'Tomes' }))
       .getAllByRole('listitem')
@@ -142,28 +145,105 @@ describe('page d’une série', () => {
     expect(await main().findByRole('link', { name: 'Lire · Tome 1' })).toBeInTheDocument()
   })
 
-  it('change le statut de publication, et le dit si le serveur refuse', async () => {
+  it('montre les métadonnées : auteurs, repères, résumé repliable, genres, autres titres, liens web seulement', async () => {
+    const metadata = {
+      ...NO_METADATA,
+      authors: [{ name: 'Mitsutoshi Shimabukuro', story: true, art: true }],
+      year: 2008,
+      publisher: 'Kana',
+      publication_status: 'completed' as const,
+      summary: 'Toriko, chasseur gourmet, parcourt le monde. '.repeat(10),
+      genres: ['Action', 'Aventure'],
+      tags: ['Aventure', 'Cuisine'],
+      alt_titles: ['トリコ'],
+      links: ['https://example.org/toriko', 'javascript:alert(1)', 'pas une adresse'],
+    }
+    mockApi({ '/api/series/7': () => json({ ...detail, metadata }) })
+    renderAt('/series/7')
+    expect(await main().findByText('Mitsutoshi Shimabukuro', { selector: 'p' })).toBeInTheDocument()
+    expect(main().getByText('2008 · Kana · Publication terminée')).toBeInTheDocument()
+    const chips = within(main().getByRole('list', { name: 'Genres et tags' })).getAllByRole('listitem')
+    expect(chips.map((li) => li.textContent)).toEqual(['Action', 'Aventure', 'Cuisine'])
+    expect(main().getByText('Autres titres : トリコ')).toBeInTheDocument()
+    const links = main().getAllByRole('link', { name: /example\.org/ })
+    expect(links.map((a) => a.getAttribute('href'))).toEqual(['https://example.org/toriko'])
+    expect(links[0]).toHaveAttribute('rel', 'noreferrer noopener')
+    expect(main().queryByRole('link', { name: /alert/ })).not.toBeInTheDocument()
+    const more = main().getByRole('button', { name: 'Lire la suite' })
+    expect(more).toHaveAttribute('aria-expanded', 'false')
+    await userEvent.click(more)
+    expect(main().getByRole('button', { name: 'Réduire' })).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  it('modifie une série : seuls les champs changés partent, « Rétablir » rend un champ aux fichiers, un refus se dit', async () => {
     let fail = false
+    const oda = { name: 'Oda', story: true, art: true }
+    const metadata = { ...NO_METADATA, summary: 'Mon résumé', year: 2008, authors: [oda] }
     const fetch = mockApi({
       '/api/series/7': (init) => {
-        if (init?.method !== 'PATCH') return json(detail)
-        if (fail) return json({ code: 'internal', message: 'erreur' }, 500)
-        return json({ ...detail, ...JSON.parse(String(init.body)) })
+        if (init?.method !== 'PATCH') return json({ ...detail, metadata, locked: ['summary'] })
+        if (fail) return json({ code: 'invalid_body', message: 'refusé' }, 400)
+        const patch = JSON.parse(String(init.body))
+        if (patch.unlock) return json({ ...detail, metadata: { ...metadata, summary: 'Résumé des fichiers' }, locked: [] })
+        return json({ ...detail, name: patch.title ?? detail.name, metadata: { ...metadata, ...patch }, locked: ['summary', ...Object.keys(patch)] })
       },
     })
     renderAt('/series/7')
-    const select = await main().findByRole('combobox', { name: 'Statut de publication' })
-    await userEvent.click(select)
-    await userEvent.click(await screen.findByRole('option', { name: 'En pause' }))
-    await waitFor(() => expect(select).toHaveTextContent('En pause'))
-    const patch = fetch.mock.calls.find(([, init]) => init?.method === 'PATCH')
-    expect(JSON.parse(String(patch?.[1]?.body))).toEqual({ publication_status: 'hiatus' })
+    await userEvent.click(await main().findByRole('button', { name: 'Modifier' }))
+    const dialog = within(await screen.findByRole('dialog', { name: 'Modifier « Toriko »' }))
+    const patches = () => fetch.mock.calls.filter(([, init]) => init?.method === 'PATCH').map(([, init]) => JSON.parse(String(init?.body)))
+
+    // Un champ modifié à la main se signale et se rétablit.
+    expect(dialog.getByText('Modifié à la main')).toBeInTheDocument()
+    await userEvent.click(dialog.getByRole('button', { name: 'Rendre « Résumé » aux fichiers' }))
+    await waitFor(() => expect(dialog.getByLabelText('Résumé')).toHaveValue('Résumé des fichiers'))
+    expect(patches()).toEqual([{ unlock: ['summary'] }])
+
+    // Année invalide : l'erreur est sous le champ et l'enregistrement attend.
+    await userEvent.type(dialog.getByLabelText('Titre'), '  Toriko (Kana)  ')
+    await userEvent.clear(dialog.getByLabelText('Année'))
+    await userEvent.type(dialog.getByLabelText('Année'), 'vingt')
+    expect(dialog.getByRole('alert')).toHaveTextContent('Une année entre 1 et 9999.')
+    expect(dialog.getByLabelText('Année')).toHaveAttribute('aria-invalid', 'true')
+    expect(dialog.getByRole('button', { name: 'Enregistrer' })).toBeDisabled()
 
     fail = true
-    await userEvent.click(select)
-    await userEvent.click(await screen.findByRole('option', { name: 'Statut inconnu' }))
-    expect(await screen.findByText('Statut non enregistré')).toBeInTheDocument()
-    expect(select).toHaveTextContent('En pause')
+    await userEvent.clear(dialog.getByLabelText('Année'))
+    await userEvent.type(dialog.getByLabelText('Année'), '2009')
+    await userEvent.click(dialog.getByRole('button', { name: 'Enregistrer' }))
+    expect(await dialog.findByRole('alert')).toHaveTextContent('Modifications non enregistrées')
+
+    fail = false
+    // Listes : une par ligne (un auteur connu garde ses rôles), genres séparés par des virgules ;
+    // statut choisi dans la liste.
+    await userEvent.type(dialog.getByLabelText('Auteurs'), '{Enter}Nouvel auteur{Enter}')
+    await userEvent.type(dialog.getByLabelText('Genres'), 'Action, , Cuisine ')
+    await userEvent.type(dialog.getByLabelText('Liens'), 'https://example.org')
+    await userEvent.type(dialog.getByLabelText('Autres titres'), 'トリコ')
+    await userEvent.type(dialog.getByLabelText('Éditeur'), '   ')
+    await userEvent.click(dialog.getByLabelText('Statut de publication'))
+    await userEvent.click(await screen.findByRole('option', { name: 'En pause' }))
+    await userEvent.click(dialog.getByRole('button', { name: 'Enregistrer' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(patches().at(-1)).toEqual({
+      title: 'Toriko (Kana)',
+      year: 2009,
+      authors: [oda, { name: 'Nouvel auteur', story: false, art: false }],
+      genres: ['Action', 'Cuisine'],
+      links: ['https://example.org'],
+      alt_titles: ['トリコ'],
+      publisher: null,
+      publication_status: 'hiatus',
+    })
+    expect(await screen.findByText('Modifications enregistrées')).toBeInTheDocument()
+    expect(main().getByRole('heading', { level: 1, name: 'Toriko (Kana)' })).toBeInTheDocument()
+
+    // Rien de changé : la fenêtre se ferme sans requête.
+    const before = patches().length
+    await userEvent.click(main().getByRole('button', { name: 'Modifier' }))
+    await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Enregistrer' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(patches()).toHaveLength(before)
   })
 
   it('marque un tome lu (dernière page) ou non lu, depuis son menu', async () => {

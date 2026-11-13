@@ -15,24 +15,26 @@ const THUMBS = [160, 320, 480] as const
 // Largeur affichée : la moitié de l'écran sur mobile (deux colonnes), 12 rem au plus ailleurs.
 const SIZES = '(min-width: 640px) 12rem, 45vw'
 
-/** Couverture générée : dégradé sombre (16 % de luminosité au plus, contraste vérifié) et titre. */
-export function FallbackCover({ title }: { title: string }) {
+/** Couverture générée : dégradé sombre (16 % de luminosité au plus, contraste vérifié), titre
+ * et auteur dessous. */
+export function FallbackCover({ title, author }: { title: string; author?: string }) {
   return (
     <div
       aria-hidden
       data-testid="fallback-cover"
-      className="flex size-full items-center justify-center p-3"
+      className="flex size-full flex-col items-center justify-center gap-1 p-3 text-center break-words"
       style={{ background: `linear-gradient(to bottom, hsl(${titleHue(title)} 35% 16%), #121212)` }}
     >
-      <span className="line-clamp-4 text-center font-semibold break-words text-foreground">{title}</span>
+      <span className="line-clamp-4 font-semibold text-foreground">{title}</span>
+      {author && <span className="line-clamp-2 text-sm text-muted-foreground">{author}</span>}
     </div>
   )
 }
 
 /** Miniature JPEG du serveur ; couverture de repli si elle manque ou ne se charge pas. */
-export function Cover({ pageId, title, eager }: { pageId: string | null; title: string; eager: boolean }) {
+export function Cover({ pageId, title, author, eager }: { pageId: string | null; title: string; author?: string; eager: boolean }) {
   const [failed, setFailed] = useState(false)
-  if (pageId === null || failed) return <FallbackCover title={title} />
+  if (pageId === null || failed) return <FallbackCover title={title} author={author} />
   return (
     <img
       src={pageImageUrl(pageId, { width: 320, format: 'jpeg' })}
@@ -51,6 +53,8 @@ export interface CoverCardProps {
   to: string
   title: string
   subtitle: string
+  /** Sous le titre de la couverture de repli. */
+  author?: string
   coverPageId: string | null
   /** Barre ambre en bas de la couverture, de 0 à 1 ; absente si `null`. */
   progress: number | null
@@ -66,7 +70,7 @@ export interface CoverCardProps {
   eager?: boolean
 }
 
-export function CoverCard({ to, title, subtitle, coverPageId, progress, progressLabel, badges = [], actions, quickRead, eager = false }: CoverCardProps) {
+export function CoverCard({ to, title, subtitle, author, coverPageId, progress, progressLabel, badges = [], actions, quickRead, eager = false }: CoverCardProps) {
   return (
     <div className="group relative">
       {/* Texte d'abord dans le DOM (le lecteur d'écran annonce le titre en premier), couverture
@@ -80,7 +84,7 @@ export function CoverCard({ to, title, subtitle, coverPageId, progress, progress
         </div>
         <div className="relative aspect-[2/3] overflow-hidden rounded-md bg-card ring-1 ring-transparent transition-shadow group-hover:ring-white/15">
           {/* `key` : une autre couverture repart sans l'échec de la précédente. */}
-          <Cover key={coverPageId} pageId={coverPageId} title={title} eager={eager} />
+          <Cover key={coverPageId} pageId={coverPageId} title={title} author={author} eager={eager} />
           {badges.length > 0 && (
             // Tronquées avant le menu d'actions (en haut à droite) sur une carte étroite.
             <div className="absolute top-2 left-2 flex max-w-[calc(100%-3.5rem)] flex-col items-start gap-1">
@@ -166,11 +170,14 @@ export function CoverSkeletons({ grid = false }: { grid?: boolean }) {
 export function SeriesCard({ series, eager }: { series: SeriesSummary; eager?: boolean }) {
   const { t } = useTranslation()
   const resume = series.resume_volume_id
+  const authors = series.authors.join(', ')
   return (
     <CoverCard
       to={`/series/${series.id}`}
       title={series.name}
-      subtitle={t('counts.volumes', { count: series.volume_count })}
+      // Auteur ou, à défaut, nombre de tomes (DESIGN_SYSTEM.md, « Carte de couverture »).
+      subtitle={authors || t('counts.volumes', { count: series.volume_count })}
+      author={authors}
       coverPageId={series.cover_page_id}
       // Avancement en pages : un webtoon d'un seul tome, commencé, a aussi sa barre.
       progress={series.reading_status === 'in_progress' ? series.pages_read / Math.max(series.page_count, 1) : null}

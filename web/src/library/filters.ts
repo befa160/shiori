@@ -38,6 +38,8 @@ export function fold(text: string): string {
   return text.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase()
 }
 
+/** Ce que la recherche parcourt : titre affiché, autres titres et auteurs, sans accents. */
+const searchable = (s: SeriesSummary) => fold([s.name, ...s.alt_titles, ...s.authors].join('\n'))
 const statusOf = (s: SeriesSummary): StatusFilter => s.publication_status ?? 'unknown'
 // Dates ISO : l'ordre des chaînes est l'ordre chronologique.
 const newestFirst = (a: string | null, b: string | null) => (b ?? '').localeCompare(a ?? '')
@@ -50,7 +52,7 @@ export function applyFilters(series: SeriesSummary[], f: Filters): SeriesSummary
       (f.read === null || s.reading_status === f.read) &&
       (f.status === null || statusOf(s) === f.status) &&
       (f.library === null || s.library_id === f.library) &&
-      words.every((word) => fold(s.name).includes(word)),
+      words.every((word) => searchable(s).includes(word)),
   )
   // `sort` est stable : à égalité, l'ordre par nom du serveur reste.
   if (f.sort === 'last_read') return kept.sort((a, b) => newestFirst(a.last_read_at, b.last_read_at))

@@ -2,6 +2,7 @@ import { QueryClient } from '@tanstack/react-query'
 import { render } from '@testing-library/react'
 import { createMemoryRouter } from 'react-router'
 import { vi } from 'vitest'
+import type { SeriesMetadata } from '@/api/types'
 import { App } from '@/App'
 import { routes } from '@/routes'
 
@@ -32,4 +33,21 @@ export function mockApi(answers: Record<string, (init?: RequestInit) => Response
 
 export function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
+}
+
+/** Métadonnées d'une série dont les fichiers ne disent rien. */
+export const NO_METADATA: SeriesMetadata = {
+  title: null,
+  alt_titles: [],
+  summary: null,
+  authors: [],
+  genres: [],
+  tags: [],
+  year: null,
+  publisher: null,
+  age_rating: null,
+  publication_status: null,
+  links: [],
+  cover_page_id: null,
+  right_to_left: null,
 }
