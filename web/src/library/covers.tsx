@@ -55,8 +55,9 @@ export interface CoverCardProps {
   /** Barre ambre en bas de la couverture, de 0 à 1 ; absente si `null`. */
   progress: number | null
   progressLabel?: string
-  /** Pastille en haut à gauche ; `error` sur fond rouge foncé (le mot porte le sens). */
-  badge?: { text: string; tone?: 'error' }
+  /** Pastilles en haut à gauche, les unes sous les autres (« Avertissement » et « Lu » ensemble) ;
+   * `error` sur fond rouge foncé (le mot porte le sens). */
+  badges?: { text: string; tone?: 'error' }[]
   /** Menu d'actions en haut à droite de la couverture, toujours visible (toucher). */
   actions?: ReactNode
   /** Bouton « Lire » au survol (bureau) et au clavier. */
@@ -65,7 +66,7 @@ export interface CoverCardProps {
   eager?: boolean
 }
 
-export function CoverCard({ to, title, subtitle, coverPageId, progress, progressLabel, badge, actions, quickRead, eager = false }: CoverCardProps) {
+export function CoverCard({ to, title, subtitle, coverPageId, progress, progressLabel, badges = [], actions, quickRead, eager = false }: CoverCardProps) {
   return (
     <div className="group relative">
       {/* Texte d'abord dans le DOM (le lecteur d'écran annonce le titre en premier), couverture
@@ -80,16 +81,21 @@ export function CoverCard({ to, title, subtitle, coverPageId, progress, progress
         <div className="relative aspect-[2/3] overflow-hidden rounded-md bg-card ring-1 ring-transparent transition-shadow group-hover:ring-white/15">
           {/* `key` : une autre couverture repart sans l'échec de la précédente. */}
           <Cover key={coverPageId} pageId={coverPageId} title={title} eager={eager} />
-          {badge && (
-            <span
-              className={cn(
-                // Tronquée avant le menu d'actions (en haut à droite) sur une carte étroite.
-                'absolute top-2 left-2 max-w-[calc(100%-3.5rem)] truncate rounded-full px-2 py-0.5 text-xs font-medium',
-                badge.tone === 'error' ? 'bg-destructive-fill text-white' : 'bg-black/80 text-foreground',
-              )}
-            >
-              {badge.text}
-            </span>
+          {badges.length > 0 && (
+            // Tronquées avant le menu d'actions (en haut à droite) sur une carte étroite.
+            <div className="absolute top-2 left-2 flex max-w-[calc(100%-3.5rem)] flex-col items-start gap-1">
+              {badges.map((badge) => (
+                <span
+                  key={badge.text}
+                  className={cn(
+                    'max-w-full truncate rounded-full px-2 py-0.5 text-xs font-medium',
+                    badge.tone === 'error' ? 'bg-destructive-fill text-white' : 'bg-black/80 text-foreground',
+                  )}
+                >
+                  {badge.text}
+                </span>
+              ))}
+            </div>
           )}
           {progress !== null && (
             <div
@@ -166,9 +172,10 @@ export function SeriesCard({ series, eager }: { series: SeriesSummary; eager?: b
       title={series.name}
       subtitle={t('counts.volumes', { count: series.volume_count })}
       coverPageId={series.cover_page_id}
-      progress={series.reading_status === 'in_progress' ? series.read_count / Math.max(series.volume_count, 1) : null}
-      progressLabel={t('library.readCount', { count: series.read_count, total: series.volume_count })}
-      badge={series.reading_status === 'read' ? { text: t('volume.read') } : undefined}
+      // Avancement en pages : un webtoon d'un seul tome, commencé, a aussi sa barre.
+      progress={series.reading_status === 'in_progress' ? series.pages_read / Math.max(series.page_count, 1) : null}
+      progressLabel={t('library.percentRead', { percent: series.pages_read / Math.max(series.page_count, 1) })}
+      badges={series.reading_status === 'read' ? [{ text: t('volume.read') }] : undefined}
       quickRead={resume ? { to: `/read/${resume}`, label: t('library.readNamed', { name: series.name }) } : undefined}
       eager={eager}
     />
@@ -189,7 +196,7 @@ export function ContinueCard({ item, eager }: { item: ContinueItem; eager?: bool
       coverPageId={volume.cover_page_id}
       progress={progress ? (progress.ordinal + 1) / progress.page_count : null}
       progressLabel={t('volume.progress', { label })}
-      badge={progress ? undefined : { text: t('home.next') }}
+      badges={progress ? undefined : [{ text: t('home.next') }]}
       eager={eager}
     />
   )

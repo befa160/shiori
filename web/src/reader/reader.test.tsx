@@ -41,6 +41,8 @@ const series: SeriesDetail = {
   folder: 'Toriko',
   publication_status: null,
   resume_volume_id: null,
+  page_count: 3,
+  pages_read: 0,
   settings: settings('rtl'),
   volumes: [
     { volume_id: VOLUME, kind: 'volume', number: 16, number_end: null, status: 'ok', page_count: 3, cover_page_id: null, file_name: 'Toriko T16.cbz' },

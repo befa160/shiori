@@ -33,6 +33,10 @@ pub struct SeriesSummary {
     pub volume_count: usize,
     /// Tomes de la série dont la dernière page a été atteinte.
     pub read_count: usize,
+    /// Pages de tous ses tomes, et pages lues : un tome fini compte en entier, un tome en cours
+    /// jusqu'à la page atteinte. Donne l'avancement de la série, même d'un seul tome (webtoon).
+    pub page_count: i64,
+    pub pages_read: i64,
     pub reading_status: ReadingStatus,
     pub publication_status: Option<PublicationStatus>,
     pub created_at: String,
@@ -85,6 +89,9 @@ pub struct SeriesDetail {
     pub settings: ReadingSettings,
     /// Tome qu'ouvre « Lire » : même règle que dans [`SeriesSummary`].
     pub resume_volume_id: Option<String>,
+    /// Comme dans [`SeriesSummary`].
+    pub page_count: i64,
+    pub pages_read: i64,
     pub volumes: Vec<SeriesVolume>,
 }
 
@@ -261,6 +268,20 @@ fn up_next<'a>(
         .map(|v| (*v, p.updated_at.clone()))
 }
 
+/// Pages lues et pages en tout : un tome fini compte en entier, un tome en cours jusqu'à la
+/// page atteinte. Une seule règle pour la liste des séries et leur détail.
+fn pages(volumes: &[&Located], progress: &HashMap<String, Progress>) -> (i64, i64) {
+    volumes.iter().fold((0, 0), |(read, total), v| {
+        let n = v.volume.page_count;
+        let done = match progress.get(&v.volume.volume_id) {
+            Some(p) if p.finished => n,
+            Some(p) => p.ordinal + 1,
+            None => 0,
+        };
+        (read + done, total + n)
+    })
+}
+
 /// Tome qu'ouvre « Lire » : la suite de la lecture, sinon le premier tome ni lu ni en erreur,
 /// sinon (tout est lu) le premier tome, pour relire.
 fn resume(volumes: &[&Located], progress: &HashMap<String, Progress>) -> Option<String> {
@@ -350,6 +371,7 @@ impl Db {
                 let id: i64 = s.get("id");
                 let vols = volumes.get(&id).map_or(&[][..], Vec::as_slice);
                 let read_count = vols.iter().filter(|v| finished(&progress, v)).count();
+                let (pages_read, page_count) = pages(vols, &progress);
                 let read_at = vols
                     .iter()
                     .filter_map(|v| progress.get(&v.volume.volume_id))
@@ -366,6 +388,8 @@ impl Db {
                     name: s.get("name"),
                     volume_count: vols.len(),
                     read_count,
+                    page_count,
+                    pages_read,
                     reading_status,
                     publication_status: s
                         .get::<Option<&str>, _>("publication_status")
@@ -468,7 +492,9 @@ impl Db {
             .map(located)
             .collect::<Result<Vec<_>, _>>()?;
         let rows = in_series_order(rows);
-        let resume_volume_id = resume(&rows.iter().collect::<Vec<_>>(), &progress);
+        let all: Vec<&Located> = rows.iter().collect();
+        let resume_volume_id = resume(&all, &progress);
+        let (pages_read, page_count) = pages(&all, &progress);
         Ok(Some(SeriesDetail {
             id,
             library_id: series.get("library_id"),
@@ -480,6 +506,8 @@ impl Db {
                 .transpose()?,
             settings: ReadingSettings::of(&series)?,
             resume_volume_id,
+            page_count,
+            pages_read,
             volumes: rows
                 .into_iter()
                 .map(|r| SeriesVolume {

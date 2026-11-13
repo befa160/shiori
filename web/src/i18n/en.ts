@@ -100,6 +100,8 @@ export const en: Translations = {
   },
   library: {
     readNamed: 'Read {{name}}',
+    percent: '{{percent, number(style: percent; maximumFractionDigits: 0; roundingMode: floor)}}',
+    percentRead: '{{percent, number(style: percent; maximumFractionDigits: 0; roundingMode: floor)}} read',
     readCount_one: '{{count, number}} of {{total, number}} volumes read',
     readCount_other: '{{count, number}} of {{total, number}} volumes read',
     fallbackName: 'Library',
