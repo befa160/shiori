@@ -11,7 +11,7 @@
 
 Lecteur de mangas, BD et webtoons auto-hébergé. Un seul binaire Rust sert la bibliothèque et une application web installable (PWA), pensée d'abord pour la lecture sur tablette.
 
-> **État : en développement (fin de la phase 3).** Utilisables aujourd'hui : `shiori scan` (scan d'intégrité des archives CBZ et CBR), `shiori serve` (API JSON et images) et **le lecteur web** : bibliothèques, séries, lecture manga (droite à gauche), BD (gauche à droite) et webtoon (défilement vertical), double page, zoom, reprise de la lecture, en français et en anglais. La création des bibliothèques se fait encore par l'API (l'interface d'administration arrive en phase 4). L'avancement détaillé est dans [ROADMAP.md](ROADMAP.md).
+> **État : en développement (fin de la phase 4).** Utilisables aujourd'hui : `shiori scan` (scan d'intégrité des archives CBZ et CBR), `shiori serve` et **l'application web** : bibliothèque en couvertures avec « Continuer la lecture », recherche et filtres, page de chaque série, lecteur manga (droite à gauche), BD (gauche à droite) et webtoon (défilement vertical) avec double page, zoom et reprise de la lecture, et une **administration** pour créer les bibliothèques, lancer et suivre les scans et lire leurs journaux. En français et en anglais. Les métadonnées en ligne arrivent en phase 5. L'avancement détaillé est dans [ROADMAP.md](ROADMAP.md).
 
 ## Pourquoi
 
@@ -85,21 +85,11 @@ cd web && npm ci && npm run build
 cd backend && cargo run --release -p shiori -- serve
 ```
 
-Puis, en attendant l'interface d'administration (phase 4), déclarer une bibliothèque (un dossier par série ; `kind` : `manga`, `comics` ou `webtoon`, qui donne le sens de lecture par défaut) et la scanner :
+puis ouvrir <http://localhost:7878> : **Administration → Ajouter une bibliothèque**, avec le chemin complet du dossier (un sous-dossier par série) et son type (manga, BD ou webtoon, qui donne le sens de lecture par défaut). Le scan démarre aussitôt ; son avancement, son historique et ses journaux sont dans **Administration → Historique et options**.
 
-```bash
-curl -X POST localhost:7878/api/libraries -H 'content-type: application/json' -d '{"name":"Manga","root":"/chemin/vers/mes/mangas","kind":"manga"}'
-```
+Dans le lecteur : tap sur les côtés ou flèches pour tourner les pages, tap au centre (ou Tab) pour les commandes, double tap pour zoomer ; le panneau « Affichage » règle le sens de lecture et la disposition, retenus pour la série.
 
-```bash
-curl -X POST localhost:7878/api/admin/scans -H 'content-type: application/json' -d '{"library_id":1}'
-```
-
-(`1` : l'`id` renvoyé par la commande précédente, à adapter pour chaque bibliothèque.)
-
-et ouvrir <http://localhost:7878>. Dans le lecteur : tap sur les côtés ou flèches pour tourner les pages, tap au centre (ou Tab) pour les commandes, double tap pour zoomer ; le panneau « Affichage » règle le sens de lecture et la disposition, retenus pour la série.
-
-Tests du front : `npm test` (Vitest) et `npm run e2e` (le lecteur dans Chromium contre un vrai serveur, sur une bibliothèque générée ; une fois : `npx playwright install chromium`).
+Tests du front : `npm test` (Vitest) et `npm run e2e` (dans Chromium contre un vrai serveur, sur une bibliothèque générée : le lecteur, et le parcours complet de la création d'une bibliothèque à la lecture ; une fois : `npx playwright install chromium`).
 
 Toute modification passe par une branche et une pull request. La CI vérifie le format, clippy et les tests sous Linux, Windows et macOS, le build du front, le lecteur de bout en bout dans Chromium, et une couverture de tests d'au moins 80 % des lignes et des branches. Les règles complètes sont dans [CLAUDE.md](CLAUDE.md).
 

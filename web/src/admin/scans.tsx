@@ -27,15 +27,19 @@ const ALL = 'all'
 export function ScanWatcher() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const { data } = useCurrentScan()
+  const { data, dataUpdatedAt } = useCurrentScan()
   const running = useRef<number | null>(null)
+  // À chaque réponse du serveur (et pas seulement quand elle change : « rien », puis un scan
+  // lancé et déjà fini, puis « rien » ne change pas la valeur).
   useEffect(() => {
     if (data === undefined) return
+    const started = queryClient.getQueryData<number>(['scans', 'started'])
+    queryClient.removeQueries({ queryKey: ['scans', 'started'], exact: true })
     if (data !== null) {
       running.current = data.run
       return
     }
-    const run = running.current
+    const run = running.current ?? started ?? null
     if (run === null) return
     running.current = null
     for (const queryKey of [['libraries'], ['series'], ['continue'], ['volumes'], ['scans', 'history'], ['scans', 'run', run], ['scans', 'logs', run]]) {
@@ -45,7 +49,7 @@ export function ScanWatcher() {
       .scan(run)
       .then((summary) => toast(t(`scans.ended.${summary.status}`), { description: countsText(summary.counts, t) }))
       .catch(() => toast(t('scans.ended.completed')))
-  }, [data, queryClient, t])
+  }, [data, dataUpdatedAt, queryClient, t])
   return null
 }
 

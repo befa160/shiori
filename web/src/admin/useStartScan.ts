@@ -13,8 +13,12 @@ export function useStartScan() {
   return useMutation({
     mutationFn: ({ library, options }: { library: Pick<Library, 'id' | 'name'>; options?: { deep?: boolean; rehash?: boolean } }) =>
       api.startScan(library.id, options),
-    onSuccess: (_, { library }) => {
+    onSuccess: ({ run }, { library }) => {
       toast.success(t('admin.scanStarted', { name: library.name }))
+      // Le suivi apprend tout de suite la passe lancée (lue par `ScanWatcher`) : un scan plus
+      // court qu'un aller-retour finirait sinon avant d'être vu, sans notification de fin ni
+      // listes rafraîchies.
+      queryClient.setQueryData(['scans', 'started'], run)
       void queryClient.invalidateQueries({ queryKey: ['scans', 'current'] })
     },
     onError: (error) => toast.error(t('admin.scanNotStarted'), { description: errorText(error, t) }),
