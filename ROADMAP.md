@@ -10,7 +10,7 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 | 2 | API axum + streaming/redimensionnement des images + parseur de noms + job de scan + API d'administration des scans + CBR | ✅ |
 | 3 | Lecteur web (sens de lecture, webtoon, doubles pages) + front embarqué + progression de lecture | ✅ |
 | 4 | Bibliothèque façon Plex + statuts/filtres + menu d'administration (scans, journaux) + DESIGN_SYSTEM.md | ✅ |
-| 5 | Métadonnées web + édition manuelle | 🚧 |
+| 5 | Métadonnées web + édition manuelle | ✅ |
 | 6 | Distribution : image Docker, PWA finalisée, binaires Linux/Windows en release, Dependabot, documentation (technique, installation, fonctionnelle), mode clair de l'interface | ⏳ |
 
 ## Méthode de travail
@@ -972,7 +972,7 @@ Pour chaque lot d'interface : skill UI/UX Pro Max avant de coder et en contrôle
 - **Q26 Statistiques** ✅ : reportées, pas d’entrée dans la sidebar en attendant.
 - **Q27 Tri « Récemment ajoutés »** ✅ : oui, `series.created_at` dans la migration 0006.
 
-## Phase 5 : métadonnées web et édition manuelle (plan validé le 2026-11-13)
+## Phase 5 : métadonnées web et édition manuelle (plan validé le 2026-11-13, terminée le 2026-11-13)
 
 ### Objectif
 
@@ -1035,7 +1035,7 @@ Restent des séries distinctes : déplacement partiel, fusion dans une série ex
 - ✅ **5.6 `feat/external-covers`** : migration 0011 : table `covers` (couvertures téléchargées gardées **dans la base**, persistantes et sauvegardées avec elle, identifiées par le hash BLAKE3 de leur contenu ; JPEG, PNG ou WebP seulement) ; chaque source télécharge ses images en `https` depuis ses **seuls hôtes** (`*.anilist.co`, `uploads.mangadex.org`), sans identifiants ni port, **aucune redirection suivie**, 8 Mio au plus, 4 096 px de côté au plus (SSRF, image piégée) ; `GET /api/metadata/thumbnail/{source}/{id}` relaie la vignette d'un résultat, candidat ou fiche liée (gardée un jour par le navigateur) ; `POST /api/series/{id}/metadata/cover {source}` prend la couverture de la fiche liée (champ édité `cover_image_id`, exclusif avec `cover_page_id`, validé) ; `GET /api/covers/{id}?w=&f=` sert l'originale ou un rendu aux largeurs fixes, URL immuable, ETag/304 (rendu à la demande, sans cache disque : couvertures de 500 px au plus). Listes : `cover_image_id`. Essai réel : vignette AniList de Berserk relayée, couverture MangaDex de One Piece gardée et servie en 320 px.
 - ✅ **5.7a `feat/web-metadata-admin`** (UI) : section « Métadonnées web » de l'administration : case d'activation avec l'explication de ce qui part (le titre seul, client générique), ordre des sources réglable aux boutons Monter/Descendre (pas de glisser-déposer, WCAG 2.2) et retour à l'ordre par défaut, « Identifier les séries » avec progression et raison d'un arrêt (`rate_limited`, `offline`), liste « À vérifier » menant à chaque série, **crédits AniList et MangaDex** ; couvertures des sources affichées sur les cartes et la page série (`cover_image_id`) ; codes d'erreur des sources traduits ; le client lit une réponse sans corps (202) sans erreur (défaut trouvé au lancement de l'identification).
 - ✅ **5.7b `feat/web-metadata-match`** (UI) : bouton « Identifier » sur la page série (réseau activé) ; fenêtre façon Plex : liste déroulante de la source (celle qui a des fiches à confirmer d'abord, sinon celle de la langue), titre à chercher, **grille de vignettes relayées** des candidats (bouton entier, couverture de repli si la vignette manque), message avec une piste quand rien ne correspond, erreur traduite ; pour une source liée : comment elle l'a été, lien vers sa fiche, dernier échec, « Actualiser », « Utiliser sa couverture », « Délier » ; crédits. « Source principale » dans « Modifier » (sources liées seulement, `main_source` éditable côté serveur) : elle passe devant l'ordre réglé pour la série, et son titre et son résumé l'emportent sur la préférence de langue (les autres fiches en repli). Une source principale déliée cesse de l'être et ne pèse plus. **Fiches pour adultes exclues par défaut** des recherches et identifications (AniList `isAdult: false`, MangaDex `safe` + `suggestive`), case « Inclure les fiches pour adultes » dans l'administration (migration 0012 `app_settings.metadata_adult`) ; contrôlé en réel : sur « monster », 0 fiche pour adultes sur 10 avec le filtre, 4 sans. Défaut trouvé à ce contrôle et corrigé : `isAdult: null` vidait la recherche AniList, l'argument est omis quand les fiches pour adultes sont permises.
-- ⏳ **5.8 `chore/phase5`** : bilan, parcours de bout en bout, captures.
+- ✅ **5.8 `chore/phase5`** : bilan, parcours de bout en bout des métadonnées (`e2e/metadata.spec.ts`), README.
 
 ### Dépendances prévues (dernière version vérifiée au lot)
 
@@ -1048,6 +1048,26 @@ Restent des séries distinctes : déplacement partiel, fusion dans une série ex
 - **Bout en bout** : modifier un champ puis rescanner (valeur gardée), renommer un dossier (réglages et métadonnées gardés), ComicInfo affiché. Aucun appel réseau en CI.
 - **Lots d'interface** : UI/UX Pro Max, MCP shadcn, captures aux quatre tailles (titres très longs, résumés vides, couvertures absentes).
 
+### Bilan de la phase 5
+
+- Livré :
+  - **Métadonnées des fichiers** : `ComicInfo.xml` et `index.json` lus pendant le scan (RAR solid compris), normalisés, gardés par tome ; fichier illisible = avertissement, jamais une erreur de tome.
+  - **Édition manuelle avec verrouillage par champ** : fenêtre « Modifier » (cadenas, « Rétablir »), fusion fichiers → web → éditions, titre selon Q34, liens `http(s)` seulement, n'importe quelle page comme couverture ; édition d'un tome par l'API.
+  - **Séries qui survivent au renommage de leur dossier** (même id, réglages et métadonnées gardés).
+  - **Sources web** (désactivées par défaut) : clients AniList et MangaDex (`shiori-meta`, ureq + rustls/ring), débit sous les limites, `Retry-After` respecté, rien de personnel envoyé ; identification automatique après chaque scan (lien seulement si une correspondance unique), fenêtre « Identifier » façon Plex, source principale par série, ordre des sources réglable (défaut selon la langue), fiches pour adultes exclues par défaut, crédits.
+  - **Couvertures des sources** : téléchargées depuis les seuls hôtes connus (aucune redirection, SSRF), gardées en base, servies redimensionnées ; vignettes des candidats relayées par le serveur.
+  - **Interface** : page série enrichie, auteur sur les cartes et la couverture de repli, recherche par auteur et titre alternatif, section « Métadonnées web » de l'administration.
+- Validé : vrais fichiers (webtoon de 2 Go et son `index.json`, tome Shangri-la Frontier et son ComicInfo, deux vrais CBR) ; vraies sources (One Piece, Berserk, Kingdom… liés tout seuls, homonymes à confirmer, filtre adultes contrôlé) ; parcours de bout en bout (ComicInfo, modification, rescan, renommage, retour aux fichiers) ; captures aux quatre tailles à chaque lot d'interface.
+- Qualité : 242 tests Rust, 170 tests Vitest, 9 tests de bout en bout ; 9 PR (#49 à #57), chacune passée en review Ponytail.
+- Défauts trouvés et corrigés en route : `<Web>` d'un vrai ComicInfo pris pour des liens ; parodie « Wan Piece » qui bloquait le rapprochement de « One Piece » ; résumés MangaDex en Markdown ; série supprimée qui arrêtait l'identification ; redirections qui contournaient la liste blanche des hôtes ; image piégée trop grande ; **test e2e « tome suivant » : un vrai défaut du lecteur** (touche traitée avec l'ancienne page) ; notification du lecteur trop haute sur mobile ; réponse 202 sans corps mal lue ; source principale déliée encore active ; `isAdult: null` qui vidait la recherche AniList.
+- Reste ouvert pour la suite :
+  - édition d'un tome dans l'interface (l'API existe) ; titres de tome venus de ComicInfo non affichés dans la liste des tomes ;
+  - MangaUpdates et Comic Vine ; actualisation périodique des fiches liées ;
+  - `shortcut:` notés : couvertures abandonnées jamais purgées, rendus de couvertures sans cache disque, mémoire des vignettes de recherche bornée à 1 000 adresses, arrêt du serveur qui attend la requête d'identification en cours (≈ 25 s au pire) ;
+  - des liens enregistrés au lot 5.2 peuvent contenir autre chose que des adresses (filtrés à l'affichage, corrigés au prochain rescan complet) ;
+  - un passage local de la couverture Vitest a eu 5 échecs (machine chargée, probablement des délais), vert ensuite et en CI ;
+  - de la phase 4 : registre shadcn et le paquet `cn`, journal d'un scan en cours non rafraîchi, essai sur la tablette réelle ; vérifier `:root:has()` (notification du lecteur) sur un vrai Safari iOS.
+
 ### Questions de la phase 5 (résolues le 2026-11-13)
 
 - **Q28 Sources et priorité** ✅ : sources locales, AniList et MangaDex en phase 5 (MangaUpdates et Comic Vine plus tard). Priorité par champ : manuel (verrou) > fichiers locaux > sources web dans l'ordre choisi. L'ordre se règle dans Administration → Métadonnées ; par défaut il suit la langue de l'interface : anglais → AniList d'abord, français → MangaDex d'abord. Une série peut imposer sa source principale (liste déroulante dans « Modifier »).
@@ -1057,10 +1077,6 @@ Restent des séries distinctes : déplacement partiel, fusion dans une série ex
 - **Q32 Couvertures** ✅ : page 0 du premier tome par défaut ; au choix, n'importe quelle page ou une couverture de source, stockée de façon persistante.
 - **Q33 Réseau et vie privée** ✅ : désactivé par défaut, activé dans l'administration avec une explication de ce qui est envoyé ; agent générique ; débit sous les limites publiées ; hors ligne = état visible, jamais bloquant ; miniatures relayées. Conditions relues le 2026-11-13 (lot 5.5a) : AniList 90 requêtes/min, **30 en ce moment** (confirmé par `X-RateLimit-Limit`), 1 min de blocage au-delà avec `Retry-After`, ni collecte massive ni usage comme stockage, gratuit sous 150 $/mois de revenus ; MangaDex environ 5 requêtes/s par IP, agent honnête obligatoire, pas de lien direct vers ses images, **créditer MangaDex** (lot 5.7), pas de publicité.
 - **Q34 Titre affiché** ✅ (précisé le 2026-11-13) : titre édité, sinon celui des fichiers (`index.json`, puis `ComicInfo.xml`), sinon celui des métadonnées web, sinon le nom du dossier. La langue ne sert qu'à choisir parmi les titres d'une source web : celui de la langue de l'interface s'il existe, sinon romaji. Les autres titres (nom du dossier compris) restent cherchables comme titres alternatifs.
-
-### Reste ouvert de la phase 4
-
-Voir « Bilan de la phase 4 » (registre shadcn et le paquet `cn`, journal d'un scan en cours non rafraîchi, essai sur la tablette réelle) ; la notification haute du lecteur et le test e2e « tome suivant » (vrai défaut du lecteur) sont corrigés au lot 5.4.
 
 ## Fonctionnalités ajoutées en cours de route
 
@@ -1105,3 +1121,4 @@ L'ordre de lecture ne dépend jamais de l'ordre dans l'archive : le lecteur reç
 - 2026-11-13 : plan de la phase 5 validé (Q28 à Q34) : sources locales + AniList + MangaDex, ordre réglable (par défaut selon la langue de l'interface), source principale par série, identification façon Plex, réseau désactivé par défaut ; une série renommée garde son identité (lot 5.1).
 - 2026-11-13 : résumés des sources web en texte brut (le Markdown de MangaDex est retiré, pas de moteur de rendu dans l'interface).
 - 2026-11-13 : fiches pour adultes exclues par défaut des recherches web, une case de l'administration les permet.
+- 2026-11-13 : phase 5 terminée (métadonnées des fichiers et du web, édition manuelle avec verrouillage par champ, séries qui survivent au renommage, identification façon Plex, couvertures des sources).
