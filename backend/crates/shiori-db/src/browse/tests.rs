@@ -30,6 +30,9 @@ struct Fixture {
 
 impl Fixture {
     async fn read(&self, tome: u8, page: usize) {
+        // Dates à la milliseconde : deux lectures dans la même milliseconde seraient à égalité,
+        // ce qu'un vrai lecteur ne fait jamais (test instable en CI sans cette pause).
+        tokio::time::sleep(std::time::Duration::from_millis(3)).await;
         let volume = self.volumes[&tome].parse().unwrap();
         self.db
             .save_progress(&volume, &self.pages[&tome][page])
