@@ -11,7 +11,7 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 | 3 | Lecteur web (sens de lecture, webtoon, doubles pages) + front embarqué + progression de lecture | ✅ |
 | 4 | Bibliothèque façon Plex + statuts/filtres + menu d'administration (scans, journaux) + DESIGN_SYSTEM.md | ✅ |
 | 5 | Métadonnées web + édition manuelle | ⏳ |
-| 6 | Distribution : image Docker, PWA finalisée, binaires Linux/Windows en release, Dependabot, documentation (technique, installation, fonctionnelle) | ⏳ |
+| 6 | Distribution : image Docker, PWA finalisée, binaires Linux/Windows en release, Dependabot, documentation (technique, installation, fonctionnelle), mode clair de l'interface | ⏳ |
 
 ## Méthode de travail
 
@@ -971,6 +971,36 @@ Pour chaque lot d'interface : skill UI/UX Pro Max avant de coder et en contrôle
 - **Q26 Statistiques** ✅ : reportées, pas d’entrée dans la sidebar en attendant.
 - **Q27 Tri « Récemment ajoutés »** ✅ : oui, `series.created_at` dans la migration 0006.
 
+## Phase 5 : métadonnées web et édition manuelle (à planifier)
+
+Notes de passation du 2026-11-13, pour la session qui préparera le plan détaillé (à valider avant de coder, comme pour chaque phase).
+
+### Objectif (README, « Fonctionnalités prévues »)
+
+Métadonnées des séries et des tomes depuis ComicInfo.xml, AniList, MangaDex, MangaUpdates, Comic Vine… ; édition manuelle, avec verrouillage par champ (une valeur éditée n'est jamais écrasée par une source).
+
+### Ce qui existe déjà et s'y raccorde
+
+- `series.publication_status`, réglé à la main (Q23), et `PATCH /api/series/{id}`, prévu pour s'étendre aux autres métadonnées (lot 4.3).
+- La couverture de repli prévoit l'auteur sous le titre (DESIGN_SYSTEM.md, contraste vérifié) ; la carte de série a une ligne secondaire qui l'attend.
+- Le scan reconnaît déjà `ComicInfo.xml` dans une archive (code `ignored_entry`, info) sans le lire.
+- Un `index.json` d'outil de téléchargement (titre, auteurs, description, URL) existe à côté du webtoon réel : source locale possible (lot 1.4).
+- Le tri, la recherche et les filtres sont côté client (`web/src/library/filters.ts`) : chercher aussi par auteur ou par titre alternatif se branche là.
+
+### Questions à trancher au début de la phase
+
+- **Sources et priorité** : lesquelles en premier (ComicInfo.xml local, AniList, MangaDex, MangaUpdates, Comic Vine qui exige une clé d'API), et laquelle l'emporte quand elles diffèrent.
+- **Identité des séries** : renommer le dossier d'une série crée aujourd'hui une nouvelle série (phase 2, « à revoir en phase 5 ») ; des métadonnées éditées à la main ne doivent pas être perdues pour autant.
+- **Rapprochement** : automatique (par titre), à confirmer par l'utilisateur, ou les deux ; que faire d'une correspondance ambiguë.
+- **Niveau** : métadonnées par série seulement, ou aussi par tome (numéro, titre de tome, date) ; ce qui reste du ressort du scan (identité, ordre, pages : principe 3).
+- **Couvertures externes** : télécharger une couverture de la source, la mettre en cache, la choisir à la place de la page 0.
+- **Réseau et vie privée** : rien de personnel envoyé (client générique, aucun nom ni chemin), fonctionnement hors ligne sans erreur, limites de débit et conditions d'utilisation de chaque API, désactivable.
+- **Langues** : titres en plusieurs langues (original, romaji, français, anglais) et lequel afficher selon la langue de l'interface.
+
+### Reste ouvert de la phase 4
+
+Voir « Bilan de la phase 4 » ci-dessus (registre shadcn et le paquet `cn`, notification haute dans le lecteur sur mobile, journal d'un scan en cours non rafraîchi, test e2e « tome suivant » instable une fois en CI, essai sur la tablette réelle).
+
 ## Fonctionnalités ajoutées en cours de route
 
 ### Menu d'administration des scans (demandé le 2026-11-11)
@@ -1010,3 +1040,4 @@ L'ordre de lecture ne dépend jamais de l'ordre dans l'archive : le lecteur reç
 - 2026-11-12 : interface bilingue français / anglais (lot 3.4b) ; langue enregistrée côté serveur, traduction par l'interface d'après les codes stables de l'API.
 - 2026-11-12 : plan de la phase 4 validé : breakpoint `lg` (Q18), statut de publication manuel (Q23), « Continuer la lecture » avec tome suivant (Q24), chemin en champ texte (Q25), statistiques reportées (Q26), tri « Récemment ajoutés » (Q27).
 - 2026-11-13 : phase 4 terminée (bibliothèque façon Plex, navigation définitive, administration des bibliothèques et des scans, DESIGN_SYSTEM.md) ; l'accent de l'interface reste ambre, les couleurs du logo lui sont réservées.
+- 2026-11-13 : mode clair de l'interface reporté en phase 6 ; plan de la phase 5 préparé dans une nouvelle session (notes de passation dans « Phase 5 »).
