@@ -4,6 +4,7 @@ import { Link } from 'react-router'
 import { useAllSeries, useContinue, useLibraries } from '@/api/queries'
 import type { Library, SeriesSummary } from '@/api/types'
 import { QueryState } from '@/browse/parts'
+import { Button } from '@/components/ui/button'
 import { ContinueCard, CoverSkeletons, SeriesCard, Shelf } from './covers'
 
 // Séries par étagère : au-delà, « Tout voir » mène à la grille de la bibliothèque.
@@ -43,10 +44,12 @@ export function HomePage() {
         isEmpty={(list) => list.length === 0}
         loading={<CoverSkeletons />}
         empty={
-          <>
+          <div className="space-y-3">
             <p>{t('libraries.empty')}</p>
-            <p className="mt-2 text-sm">{t('libraries.emptyHelp', { route: 'POST /api/libraries' })}</p>
-          </>
+            <Button asChild>
+              <Link to="/admin">{t('admin.add')}</Link>
+            </Button>
+          </div>
         }
       >
         {(list) => (

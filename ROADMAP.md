@@ -897,7 +897,14 @@ Pour chaque lot d'interface : skill UI/UX Pro Max avant de coder et en contrôle
   - Captures aux quatre tailles (série au titre très long, tome 67 en RAR solid, tome sans image en erreur, menu, fenêtre). Corrigé grâce à elles : le retour au nom de bibliothèque très long élargissait la page en 390 px (tronqué désormais), le badge « Avertissement » chevauchait le menu sur une carte étroite, le nom du fichier était coupé au milieu d'un mot.
   - `mockApi` transmet la requête à la réponse simulée (GET, PATCH et DELETE sur une même adresse dans les tests).
   - 130 tests Vitest, 99 % des lignes, 95,5 % des branches ; e2e verts.
-- [ ] **4.7** `feat/admin-libraries` : liste, création (Dialog : nom, chemin en champ texte validé par le serveur (Q25), type ; `invalid_root` et doublon traduits), suppression (AlertDialog : fichiers et progression conservés), « Scanner » par bibliothèque.
+- [x] **4.7** `feat/admin-libraries` : liste, création (Dialog : nom, chemin en champ texte validé par le serveur (Q25), type ; `invalid_root` et doublon traduits), suppression (AlertDialog : fichiers et progression conservés), « Scanner » par bibliothèque.
+  - Section « Bibliothèques » de `/admin` (une page d'administration à sections plutôt qu'une route `/admin/libraries` : moins d'écrans, même accès) : nom, type, nombre de séries et de tomes, dossier en entier. « Scanner » par bibliothèque (`POST /api/admin/scans`), résultat dit par une notification (`scan_already_running` traduit).
+  - Création dans une fenêtre : nom, dossier (champ texte validé par le serveur, Q25, aide avec un exemple de chemin), type (qui donne le sens de lecture). Libellés visibles ; erreurs du serveur traduites sous le champ concerné (`invalid_name`, `name_taken` sous le nom ; `invalid_root`, `root_overlaps` sous le dossier, reliées par `aria-describedby` et `aria-invalid`), les autres en tête ; bouton occupé pendant l'envoi. **Le scan démarre dès la création** (une bibliothèque neuve est vide tant qu'elle n'est pas scannée).
+  - Suppression après confirmation (AlertDialog shadcn par le MCP, réduit) qui dit ce qui est conservé : fichiers intacts, progression gardée.
+  - Accueil sans bibliothèque : bouton « Ajouter une bibliothèque » vers l'administration (le texte renvoyait à l'API).
+  - Captures aux quatre tailles (liste, fenêtre avec une erreur de dossier, confirmation). Parcours réel dans Chromium : chevauchement refusé et dit sous le champ, création sur un vrai dossier, scan lancé, une série trouvée, suppression.
+  - Le paquet `cn` est encore revenu avec AlertDialog (retiré).
+  - 136 tests Vitest, 99,1 % des lignes, 95,3 % des branches.
 - [ ] **4.8** `feat/admin-scans` : passe en cours (interrogée chaque seconde tant qu'elle tourne, progression, fichier courant, annuler), options `deep` / `rehash` expliquées, historique filtrable (statut, bibliothèque), détail et journaux paginés (filtre de niveau, codes traduits, lien vers le tome en erreur), jointure des journaux côté API, listes de séries rafraîchies en fin de scan.
 - [ ] **4.9** `chore/phase4-wrap` : e2e du parcours complet par l'interface, bilan de phase, README, `graphify update`, scratchpad vidé.
 
