@@ -12,6 +12,8 @@ const longName =
 const summary = {
   library_id: 1,
   read_count: 0,
+  page_count: 30,
+  pages_read: 0,
   reading_status: 'unread',
   publication_status: null,
   created_at: '2026-11-12T00:00:00.000Z',
@@ -31,6 +33,8 @@ const detail: SeriesDetail = {
   folder: 'Toriko',
   publication_status: null,
   resume_volume_id: 'b',
+  page_count: 392,
+  pages_read: 245,
   settings,
   volumes: [
     { volume_id: 'a', kind: 'volume', number: 1, number_end: null, status: 'ok', page_count: 200, cover_page_id: null, file_name: 'Toriko T01.cbz', progress: { page_id: 'p', ordinal: 199, page_count: 200, finished: true, updated_at: '' } },
@@ -42,7 +46,7 @@ const detail: SeriesDetail = {
 describe('séries d’une bibliothèque', () => {
   it('montre les séries en grille de couvertures', async () => {
     const read = { ...series[0], reading_status: 'read', read_count: 1, cover_page_id: 'c7', resume_volume_id: 'v7' } as const
-    const reading = { ...series[1], reading_status: 'in_progress', read_count: 1 } as const
+    const reading = { ...series[1], reading_status: 'in_progress', read_count: 1, pages_read: 10 } as const
     mockApi({ '/api/libraries': () => json([library]), '/api/libraries/1/series': () => json([read, reading]) })
     renderAt('/libraries/1')
     const main = within(screen.getByRole('main'))
@@ -54,10 +58,17 @@ describe('séries d’une bibliothèque', () => {
     expect(main.getByRole('link', { name: 'Lire Toriko' })).toHaveAttribute('href', '/read/v7')
     const long = main.getByRole('link', { name: new RegExp(longName.slice(0, 20)) })
     expect(within(long).getByTitle(longName)).toHaveClass('line-clamp-2')
-    expect(within(long).getByRole('progressbar', { name: '1 tome lu sur 3' })).toHaveAttribute('aria-valuenow', '33')
+    expect(within(long).getByRole('progressbar', { name: /^33\s%\slu$/ })).toHaveAttribute('aria-valuenow', '33')
     // Sans couverture : couverture générée ; sans tome à reprendre : pas de bouton « Lire ».
     expect(within(long).getByTestId('fallback-cover')).toHaveTextContent(longName)
     expect(main.queryByRole('link', { name: `Lire ${longName}` })).toBeNull()
+  })
+
+  it('n’affiche « 100 % » que pour une série finie', async () => {
+    const almost = { ...series[0], reading_status: 'in_progress', page_count: 12_760, pages_read: 12_700 } as const
+    mockApi({ '/api/libraries': () => json([library]), '/api/libraries/1/series': () => json([almost]) })
+    renderAt('/libraries/1')
+    expect(await within(screen.getByRole('main')).findByRole('progressbar', { name: /^99\s%\slu$/ })).toBeInTheDocument()
   })
 
   it("revient à l'accueil et signale une bibliothèque vide", async () => {
@@ -87,8 +98,9 @@ describe('page d’une série', () => {
     mockApi({ '/api/series/7': () => json(detail) })
     const { router } = renderAt('/series/7')
     expect(await main().findByRole('heading', { level: 1, name: 'Toriko' })).toBeInTheDocument()
-    expect(main().getByText('3 tomes · 1 tome lu sur 3')).toBeInTheDocument()
-    expect(main().getByRole('progressbar', { name: '1 tome lu sur 3' })).toBeInTheDocument()
+    // En pages : tome 1 fini (200), tome 2 à la page 45 (sur 180), tome 3 jamais ouvert (12) : 245 / 392, 62,5 % arrondi vers le bas.
+    expect(main().getByText(/^3 tomes · 1 tome lu sur 3 · 62\s%$/)).toBeInTheDocument()
+    expect(main().getByRole('progressbar', { name: /^62\s%\slu$/ })).toBeInTheDocument()
     expect(main().getByRole('link', { name: 'Reprendre · Tome 2' })).toHaveAttribute('href', '/read/b')
     expect(main().getByRole('combobox', { name: 'Statut de publication' })).toHaveTextContent('Statut inconnu')
 
@@ -107,6 +119,15 @@ describe('page d’une série', () => {
     // Sans la liste des bibliothèques (non fournie ici), le retour s'appelle « Bibliothèque ».
     await userEvent.click(main().getByRole('link', { name: 'Bibliothèque' }))
     expect(router.state.location.pathname).toBe('/libraries/1')
+  })
+
+  it('montre « Avertissement » et « Lu » ensemble sur un tome lu qui a un problème de scan', async () => {
+    const warned = { ...detail.volumes[1], progress: { page_id: 'q', ordinal: 179, page_count: 180, finished: true, updated_at: '' } }
+    mockApi({ '/api/series/7': () => json({ ...detail, volumes: [warned] }) })
+    renderAt('/series/7')
+    const tome = (await main().findByRole('link', { name: /^Tome 2/ })).closest('li') as HTMLElement
+    expect(within(tome).getByText('Avertissement')).toBeInTheDocument()
+    expect(within(tome).getByText('Lu')).toBeInTheDocument()
   })
 
   it('propose de relire une série lue, de lire une série jamais ouverte', async () => {

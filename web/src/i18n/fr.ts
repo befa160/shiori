@@ -100,6 +100,9 @@ export const fr = {
   },
   library: {
     readNamed: 'Lire {{name}}',
+    // Arrondi vers le bas : « 100 % » veut dire « fini », jamais « presque ».
+    percent: '{{percent, number(style: percent; maximumFractionDigits: 0; roundingMode: floor)}}',
+    percentRead: '{{percent, number(style: percent; maximumFractionDigits: 0; roundingMode: floor)}} lu',
     readCount_one: '{{count, number}} tome lu sur {{total, number}}',
     readCount_other: '{{count, number}} tomes lus sur {{total, number}}',
     fallbackName: 'Bibliothèque',

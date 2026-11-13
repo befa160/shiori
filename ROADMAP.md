@@ -920,6 +920,15 @@ Pour chaque lot d'interface : skill UI/UX Pro Max avant de coder et en contrôle
   - **Défaut trouvé par ce test** : un scan plus court qu'un aller-retour (une petite bibliothèque se scanne en quelques dizaines de millisecondes) finissait avant que le suivi le voie en cours : ni notification de fin, ni listes rafraîchies. Le lancement dépose désormais le numéro de la passe dans le cache, et le suivi réagit à chaque réponse du serveur, pas seulement aux changements de valeur. Test Vitest qui échoue sans le correctif.
   - README à jour (état de la phase 4, création des bibliothèques par l'administration au lieu de l'API), DESIGN_SYSTEM.md (composants ajoutés pendant la phase), graphe Graphify mis à jour, scratchpad vidé.
 
+- [x] **4.10** `feat/series-progress` (ajouté le 2026-11-13, retours de l'utilisateur après un premier essai) : avancement en pages, badges cumulés, scan depuis la sidebar.
+  - Serveur : résumé et détail d'une série gagnent `page_count` et `pages_read` (un tome fini compte en entier, un tome en cours jusqu'à la page atteinte), une seule fonction pour les deux. Testé.
+  - Barre des cartes de série en pages, pourcentage sur la page série (« 1 tome lu sur 2 · 40 % »), arrondi vers le bas : « 100 % » veut dire « fini » (à la bande 12 700 sur 12 760, « 99 % »). Un webtoon d'un seul tome, commencé, a désormais sa barre, y compris dans la recherche.
+  - Badges cumulés sur un tome : « Avertissement » (ou « Erreur ») et « Lu » ensemble, empilés.
+  - Bouton « Scanner » à côté de chaque bibliothèque dans la sidebar (44 px, nom accessible), la fin étant annoncée par le suivi des scans.
+  - Captures aux quatre tailles (recherche filtrée sur « en cours », page du webtoon à 40 %, sidebar). Review Ponytail, corrigé : la règle de comptage était écrite deux fois (serveur et page série) ; un « 100 % » s'affichait avant la fin.
+  - 151 tests Vitest, 98,6 % des lignes, 93,9 % des branches.
+- [ ] **4.11** `feat/page-turn` (ajouté le 2026-11-13) : réglage « Tourner les pages » séparé du sens de lecture : comme le sens de lecture, de gauche à droite, de droite à gauche (trois choix, utile aux gauchers). Il pilote les zones de tap, le balayage, les flèches du clavier et le sens du curseur ; le sens de lecture garde l'ordre des doubles pages et des moitiés coupées. Valeur par défaut globale dans l'administration (comme la langue, par compte plus tard), réglage par série qui l'emporte (panneau « Affichage »).
+
 ### Bilan de la phase 4
 
 - Livré :

@@ -15,6 +15,8 @@ const summary = {
   library_id: 1,
   volume_count: 2,
   read_count: 0,
+  page_count: 30,
+  pages_read: 0,
   reading_status: 'unread',
   publication_status: null,
   last_read_at: null,

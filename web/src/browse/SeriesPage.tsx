@@ -77,6 +77,8 @@ function SeriesHeader({ series }: { series: SeriesDetail }) {
   const { t, i18n } = useTranslation()
   const total = series.volumes.length
   const read = series.volumes.filter((v) => v.progress?.finished).length
+  // Avancement en pages, calculé par le serveur (même règle que la liste des séries).
+  const ratio = series.pages_read / Math.max(series.page_count, 1)
   const resume = series.volumes.find((v) => v.volume_id === series.resume_volume_id)
   const cover = series.volumes[0]?.cover_page_id ?? null
   return (
@@ -91,9 +93,10 @@ function SeriesHeader({ series }: { series: SeriesDetail }) {
         {total > 0 && (
           <div className="max-w-sm space-y-2">
             <p className="text-sm text-muted-foreground">
-              {t('counts.volumes', { count: total })} · {t('library.readCount', { count: read, total })}
+              {t('counts.volumes', { count: total })} · {t('library.readCount', { count: read, total })} ·{' '}
+              {t('library.percent', { percent: ratio })}
             </p>
-            <Progress aria-label={t('library.readCount', { count: read, total })} value={(read / total) * 100} className="h-1" />
+            <Progress aria-label={t('library.percentRead', { percent: ratio })} value={ratio * 100} className="h-1" />
           </div>
         )}
         {resume && (
@@ -159,14 +162,12 @@ function VolumeCard({ volume, eager }: { volume: SeriesVolume; eager: boolean })
   const label = volumeLabel(volume, t, i18n.language)
   const p = volume.progress
   const reading = p !== undefined && !p.finished
-  const badge =
-    volume.status === 'error'
-      ? { text: t('volume.statusError'), tone: 'error' as const }
-      : volume.status === 'warning'
-        ? { text: t('volume.statusWarning') }
-        : p?.finished
-          ? { text: t('volume.read') }
-          : undefined
+  // Problème du scan et « Lu » ensemble : l'un n'efface pas l'autre.
+  const badges = [
+    ...(volume.status === 'error' ? [{ text: t('volume.statusError'), tone: 'error' as const }] : []),
+    ...(volume.status === 'warning' ? [{ text: t('volume.statusWarning') }] : []),
+    ...(p?.finished ? [{ text: t('volume.read') }] : []),
+  ]
   return (
     <CoverCard
       to={`/read/${volume.volume_id}`}
@@ -177,7 +178,7 @@ function VolumeCard({ volume, eager }: { volume: SeriesVolume; eager: boolean })
       coverPageId={volume.cover_page_id}
       progress={reading ? (p.ordinal + 1) / p.page_count : null}
       progressLabel={t('volume.progress', { label })}
-      badge={badge}
+      badges={badges}
       actions={<VolumeMenu volume={volume} label={label} />}
       eager={eager}
     />

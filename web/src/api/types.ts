@@ -61,6 +61,9 @@ export interface SeriesSummary {
   volume_count: number
   /** Tomes lus jusqu'au bout. */
   read_count: number
+  /** Pages de tous les tomes, et pages lues (tome fini en entier, tome en cours jusqu'à la page). */
+  page_count: number
+  pages_read: number
   reading_status: ReadingStatus
   /** `null` : inconnu. */
   publication_status: PublicationStatus | null
@@ -103,6 +106,9 @@ export interface SeriesDetail {
   settings: ReadingSettings
   /** Tome qu'ouvre « Lire » (même règle que dans `SeriesSummary`). */
   resume_volume_id: string | null
+  /** Comme dans `SeriesSummary`. */
+  page_count: number
+  pages_read: number
   /** Déjà dans l'ordre de lecture de la série. */
   volumes: SeriesVolume[]
 }

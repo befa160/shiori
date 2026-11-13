@@ -134,6 +134,8 @@ async fn summaries_follow_the_reading() {
     // Tome 1 commencé : on le reprend.
     f.read(1, 1).await;
     let s = f.series("Série").await;
+    // 4 tomes : trois de 3 pages, un sans page (en erreur) ; page 2 du tome 1 atteinte.
+    assert_eq!((s.pages_read, s.page_count), (2, 9));
     assert_eq!(
         (s.read_count, s.reading_status),
         (0, ReadingStatus::InProgress)
@@ -145,6 +147,7 @@ async fn summaries_follow_the_reading() {
     f.read(1, 2).await;
     f.read(2, 2).await;
     let s = f.series("Série").await;
+    assert_eq!(s.pages_read, 6);
     assert_eq!(
         (s.read_count, s.reading_status),
         (2, ReadingStatus::InProgress)
@@ -153,6 +156,10 @@ async fn summaries_follow_the_reading() {
     // Le détail de la série suit la même règle.
     let detail = f.db.series_detail(s.id).await.unwrap().unwrap();
     assert_eq!(detail.resume_volume_id, s.resume_volume_id);
+    assert_eq!(
+        (detail.pages_read, detail.page_count),
+        (s.pages_read, s.page_count)
+    );
 
     // Tout ce qui se lit est lu, sauf le tome en erreur : la série n'est pas « lue ».
     f.read(4, 2).await;

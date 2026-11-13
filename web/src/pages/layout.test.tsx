@@ -42,6 +42,15 @@ describe('cadre de navigation', () => {
     expect(within(sidebarNav()).getByRole('link', { name: 'Administration' })).toHaveAttribute('aria-current', 'page')
   })
 
+  it('rescanne une bibliothèque depuis la sidebar', async () => {
+    const fetch = mockApi({ '/api/libraries': () => json(libraries), '/api/admin/scans': () => json({ run: 3 }, 202) })
+    renderAt('/')
+    await userEvent.click(await within(sidebarNav()).findByRole('button', { name: 'Scanner Webtoons' }))
+    expect(await screen.findByText('Scan de « Webtoons » lancé')).toBeInTheDocument()
+    const post = fetch.mock.calls.find(([url, init]) => url === '/api/admin/scans' && init?.method === 'POST')
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({ library_id: 2 })
+  })
+
   it('propose d’aller directement au contenu', () => {
     mockApi({ '/api/libraries': () => json([]) })
     renderAt('/')

@@ -1,7 +1,9 @@
-import { BookCopy, House, Search, Settings } from 'lucide-react'
+import { BookCopy, House, Loader2, RefreshCw, Search, Settings } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link, NavLink, Outlet } from 'react-router'
 import { useLibraries } from '@/api/queries'
+import type { Library } from '@/api/types'
+import { useStartScan } from '@/admin/useStartScan'
 import {
   Sidebar,
   SidebarContent,
@@ -92,12 +94,13 @@ function AppSidebar() {
               <SidebarGroupLabel>{t('nav.libraries')}</SidebarGroupLabel>
               <SidebarMenuSub>
                 {libraries.data.map((library) => (
-                  <li key={library.id}>
-                    <SidebarMenuSubButton>
+                  <li key={library.id} className="flex items-center gap-1">
+                    <SidebarMenuSubButton className="min-w-0 flex-1">
                       <NavLink to={`/libraries/${library.id}`} title={library.name}>
                         <span>{library.name}</span>
                       </NavLink>
                     </SidebarMenuSubButton>
+                    <ScanButton library={library} />
                   </li>
                 ))}
               </SidebarMenuSub>
@@ -114,6 +117,24 @@ function AppSidebar() {
         <LanguageSelect />
       </SidebarFooter>
     </Sidebar>
+  )
+}
+
+/** Rescanner une bibliothèque sans passer par l'administration ; la fin est annoncée par le suivi. */
+function ScanButton({ library }: { library: Library }) {
+  const { t } = useTranslation()
+  const scan = useStartScan()
+  return (
+    <button
+      type="button"
+      aria-label={t('admin.scanNamed', { name: library.name })}
+      title={t('admin.scanNamed', { name: library.name })}
+      disabled={scan.isPending}
+      onClick={() => scan.mutate({ library })}
+      className="flex size-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground disabled:opacity-50"
+    >
+      {scan.isPending ? <Loader2 aria-hidden className="size-4 animate-spin" /> : <RefreshCw aria-hidden className="size-4" />}
+    </button>
   )
 }
 

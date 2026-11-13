@@ -8,6 +8,8 @@ const base: SeriesSummary = {
   name: '',
   volume_count: 1,
   read_count: 0,
+  page_count: 30,
+  pages_read: 0,
   reading_status: 'unread',
   publication_status: null,
   created_at: '2026-01-01T00:00:00.000Z',
