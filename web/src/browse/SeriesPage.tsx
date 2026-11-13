@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
-import { useSeries } from '@/api/queries'
+import { useLibraries, useSeries } from '@/api/queries'
 import type { SeriesVolume } from '@/api/types'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
@@ -11,10 +11,16 @@ export function SeriesPage({ id }: { id: number }) {
   const { t } = useTranslation()
   const series = useSeries(id)
   const name = series.data?.name ?? t('series.fallbackName')
+  // Retour vers la bibliothèque de la série, nommée (souvent déjà en cache) ; l'accueil sinon.
+  const libraryId = series.data?.library_id
+  const libraryName = useLibraries().data?.find((l) => l.id === libraryId)?.name ?? t('library.fallbackName')
   return (
     <section className="space-y-4">
       <title>{`${name} · Shiori`}</title>
-      <BackLink to={series.data ? `/libraries/${series.data.library_id}` : '/'} label={t('series.back')} />
+      <BackLink
+        to={libraryId === undefined ? '/' : `/libraries/${libraryId}`}
+        label={libraryId === undefined ? t('home.title') : libraryName}
+      />
       <h1 className="line-clamp-2 text-2xl font-semibold break-words">{name}</h1>
       <QueryState
         query={series}

@@ -1,4 +1,4 @@
-import { House, Settings } from 'lucide-react'
+import { BookCopy, House, Search, Settings } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link, NavLink, Outlet } from 'react-router'
 import { useLibraries } from '@/api/queries'
@@ -24,6 +24,8 @@ import { LanguageSelect } from './LanguageSelect'
 // Destinations principales : sidebar à partir de `lg`, barre d'onglets en dessous (4 au plus).
 const NAV = [
   { to: '/', label: 'nav.home', icon: House },
+  { to: '/series', label: 'nav.series', icon: BookCopy },
+  { to: '/search', label: 'nav.search', icon: Search },
   { to: '/admin', label: 'nav.admin', icon: Settings },
 ] as const
 
@@ -76,7 +78,9 @@ function AppSidebar() {
         <SidebarContent>
           <SidebarGroup>
             <SidebarMenu>
-              <NavItem {...NAV[0]} />
+              {NAV.slice(0, 3).map((item) => (
+                <NavItem key={item.to} {...item} />
+              ))}
             </SidebarMenu>
           </SidebarGroup>
           {/* Liste des bibliothèques : masquée une fois réduite (l'accueil les liste aussi) ; en
@@ -99,7 +103,7 @@ function AppSidebar() {
           )}
           <SidebarGroup className="mt-auto">
             <SidebarMenu>
-              <NavItem {...NAV[1]} />
+              <NavItem {...NAV[3]} />
             </SidebarMenu>
           </SidebarGroup>
         </SidebarContent>
