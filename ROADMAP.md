@@ -10,7 +10,7 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 | 2 | API axum + streaming/redimensionnement des images + parseur de noms + job de scan + API d'administration des scans + CBR | ✅ |
 | 3 | Lecteur web (sens de lecture, webtoon, doubles pages) + front embarqué + progression de lecture | ✅ |
 | 4 | Bibliothèque façon Plex + statuts/filtres + menu d'administration (scans, journaux) + DESIGN_SYSTEM.md | ✅ |
-| 5 | Métadonnées web + édition manuelle | ⏳ |
+| 5 | Métadonnées web + édition manuelle | 🚧 |
 | 6 | Distribution : image Docker, PWA finalisée, binaires Linux/Windows en release, Dependabot, documentation (technique, installation, fonctionnelle), mode clair de l'interface | ⏳ |
 
 ## Méthode de travail
@@ -321,7 +321,7 @@ CREATE INDEX file_locations_series ON file_locations(series_id);
 
 - `library_id` NULL = fichier scanné par la CLI hors de toute bibliothèque (comportement actuel conservé).
 - Suppression d'une bibliothèque : ses emplacements et séries disparaissent, **les tomes et pages restent** (progression future préservée, principe 8) et réapparaissent si le fichier est rescanné ailleurs.
-- Identité des séries : (bibliothèque, nom). Renommer le dossier d'une série crée une nouvelle série ; acceptable tant qu'il n'y a pas de métadonnées éditées (phase 5 à revoir).
+- Identité des séries : (bibliothèque, dossier). Renommer le dossier d'une série la fait reprendre par le nouveau dossier, avec ses réglages et ses métadonnées (lot 5.1).
 
 **`0003_scan_jobs.sql`**
 
@@ -971,35 +971,90 @@ Pour chaque lot d'interface : skill UI/UX Pro Max avant de coder et en contrôle
 - **Q26 Statistiques** ✅ : reportées, pas d’entrée dans la sidebar en attendant.
 - **Q27 Tri « Récemment ajoutés »** ✅ : oui, `series.created_at` dans la migration 0006.
 
-## Phase 5 : métadonnées web et édition manuelle (à planifier)
+## Phase 5 : métadonnées web et édition manuelle (plan validé le 2026-11-13)
 
-Notes de passation du 2026-11-13, pour la session qui préparera le plan détaillé (à valider avant de coder, comme pour chaque phase).
+### Objectif
 
-### Objectif (README, « Fonctionnalités prévues »)
+Métadonnées des séries et des tomes depuis les fichiers (ComicInfo.xml, `index.json`) et le web (AniList, MangaDex), édition manuelle avec verrouillage par champ, identification façon Plex (choix de la source, grille de couvertures des candidats), couvertures externes, et séries qui survivent au renommage de leur dossier.
 
-Métadonnées des séries et des tomes depuis ComicInfo.xml, AniList, MangaDex, MangaUpdates, Comic Vine… ; édition manuelle, avec verrouillage par champ (une valeur éditée n'est jamais écrasée par une source).
+Hors périmètre : MangaUpdates et Comic Vine (clé d'API, usage non commercial), à ajouter plus tard derrière le même trait `Source` ; actualisation périodique automatique.
 
-### Ce qui existe déjà et s'y raccorde
+### Principes
 
-- `series.publication_status`, réglé à la main (Q23), et `PATCH /api/series/{id}`, prévu pour s'étendre aux autres métadonnées (lot 4.3).
-- La couverture de repli prévoit l'auteur sous le titre (DESIGN_SYSTEM.md, contraste vérifié) ; la carte de série a une ligne secondaire qui l'attend.
-- Le scan reconnaît déjà `ComicInfo.xml` dans une archive (code `ignored_entry`, info) sans le lire.
-- Un `index.json` d'outil de téléchargement (titre, auteurs, description, URL) existe à côté du webtoon réel : source locale possible (lot 1.4).
-- Le tri, la recherche et les filtres sont côté client (`web/src/library/filters.ts`) : chercher aussi par auteur ou par titre alternatif se branche là.
+1. **Le scan reste hors ligne et rapide** : il ne lit que les sources locales. Le web passe par une tâche à part, jamais pendant un scan.
+2. **Verrouillage par champ** : éditer un champ le verrouille, aucune source ne l'écrase ; le déverrouiller recalcule la valeur depuis les sources. Chaque source garde sa dernière réponse en base : refusionner (verrou retiré, ordre ou langue changés) ne fait aucun appel réseau.
+3. **Le scan garde l'identité, l'ordre, le numéro et les pages des tomes** (principe 3) : un `Number` ComicInfo différent est affiché, jamais utilisé pour réordonner.
+4. **Rien de personnel envoyé** : seul le titre cherché part ; aucun chemin, nom de fichier ni nom d'utilisateur ; agent HTTP `Shiori/<version>`.
 
-### Questions à trancher au début de la phase
+### Existant réutilisé
 
-- **Sources et priorité** : lesquelles en premier (ComicInfo.xml local, AniList, MangaDex, MangaUpdates, Comic Vine qui exige une clé d'API), et laquelle l'emporte quand elles diffèrent.
-- **Identité des séries** : renommer le dossier d'une série crée aujourd'hui une nouvelle série (phase 2, « à revoir en phase 5 ») ; des métadonnées éditées à la main ne doivent pas être perdues pour autant.
-- **Rapprochement** : automatique (par titre), à confirmer par l'utilisateur, ou les deux ; que faire d'une correspondance ambiguë.
-- **Niveau** : métadonnées par série seulement, ou aussi par tome (numéro, titre de tome, date) ; ce qui reste du ressort du scan (identité, ordre, pages : principe 3).
-- **Couvertures externes** : télécharger une couverture de la source, la mettre en cache, la choisir à la place de la page 0.
-- **Réseau et vie privée** : rien de personnel envoyé (client générique, aucun nom ni chemin), fonctionnement hors ligne sans erreur, limites de débit et conditions d'utilisation de chaque API, désactivable.
-- **Langues** : titres en plusieurs langues (original, romaji, français, anglais) et lequel afficher selon la langue de l'interface.
+- `series.publication_status` (Q23) et `PATCH /api/series/{id}` (lot 4.3), étendus aux autres champs.
+- La couverture de repli et la carte de série prévoient déjà la ligne auteur (DESIGN_SYSTEM.md).
+- Le scan voit déjà `ComicInfo.xml` (code `ignored_entry`) ; l'`index.json` d'une application de téléchargement est **dans** l'archive du webtoon réel (titre, titres alternatifs, auteurs, description, état, tags, entrée de couverture).
+- Recherche et filtres côté client (`web/src/library/filters.ts`).
+
+### Identité des séries (lot 5.1, sans migration)
+
+Avant de retirer les emplacements disparus d'une passe, une série S est **reprise** par la série N où ses tomes sont réapparus si : S n'a plus aucun autre fichier, ses tomes revus le sont tous dans la seule série N, N est née pendant cette passe et n'a que des tomes venus de S. S prend les fichiers, le dossier et le nom de N (N est supprimée) : même `series.id`, donc réglages, métadonnées et verrous conservés. Les tomes se reconnaissent par leur hash (principe 8), sans heuristique sur les noms.
+
+Restent des séries distinctes : déplacement partiel, fusion dans une série existante, réunion de deux séries dans un nouveau dossier, éclatement en plusieurs dossiers, copie déjà connue dont l'original disparaît (elle garde ses propres réglages), renommage accompagné de l'ajout d'un nouveau tome dans la même passe (limite connue). Un renommage se reprend au scan complet de la bibliothèque : un scan limité au nouveau dossier crée une nouvelle série (limite connue).
+
+### Base (une migration par lot qui s'en sert)
+
+- **0008 (lot 5.2)** : `series_metadata` (titres par langue, résumé par langue, auteurs avec rôle, genres, tags, année, éditeur, âge, liens, couverture choisie, source principale de la série, `locked`), `series_sources` (dernière réponse normalisée de chaque source, identifiant externe, `matched_by` local / auto / user, `last_error` en code stable), `volume_metadata` (titre, résumé, date, auteurs, ComicInfo brut, `locked`, `read_at` pour rattraper les tomes déjà scannés).
+- **0009 (lot 5.5)** : `metadata_candidates` (correspondances à confirmer) ; `app_settings.metadata_online` (désactivé par défaut) et `metadata_sources` (ordre choisi, `NULL` = ordre par défaut selon la langue).
+
+### Routes
+
+| Méthode | Route | Rôle |
+|---|---|---|
+| GET | `/api/series/{id}` | bloc `metadata` : champs, `locked`, sources liées, dernière erreur par source |
+| GET | `/api/series`, `/api/libraries/{id}/series` | titre affiché, auteurs, titres alternatifs (recherche), `cover_url` |
+| PATCH | `/api/series/{id}` | tout champ éditable (le verrouille) ; `{"unlock": [...]}` ; source principale de la série |
+| GET / PATCH | `/api/volumes/{id}` | métadonnées du tome, même verrouillage |
+| GET | `/api/series/{id}/metadata/search?source=&q=` | candidats d'une source |
+| PUT / DELETE | `/api/series/{id}/metadata/links/{source}` | lier un candidat (récupère et fusionne) / délier |
+| POST | `/api/series/{id}/metadata/refresh` | actualiser les sources liées |
+| GET | `/api/metadata/thumbnail?source=&id=` | miniature de candidat relayée (hôtes en liste blanche, taille plafonnée) : le navigateur ne contacte aucun CDN |
+| GET | `/api/covers/{hash}?w=&f=` | couverture externe stockée, redimensionnée, URL immuable |
+| GET / POST | `/api/admin/metadata`, `/api/admin/metadata/refresh` | état (à confirmer, erreurs, dernière tâche) ; tout identifier ou tout actualiser |
+| PUT | `/api/settings` | `metadata_online`, `metadata_sources` |
+
+### Lots (une branche + une PR chacun)
+
+- ✅ **5.1 `feat/series-identity`** : reprise d'une série dont le dossier est renommé ; plan de la phase dans ROADMAP.md.
+- ⏳ **5.2 `feat/local-metadata`** : migration 0008 ; fusion avec verrous (fonction pure) ; ComicInfo.xml (quick-xml, taille plafonnée, XML invalide = avertissement `metadata_invalid`, jamais une erreur de tome) et `index.json` lus pendant le scan ; rattrapage des tomes déjà scannés ; `Manga=YesAndRightToLeft` propose le sens de lecture sans l'imposer.
+- ⏳ **5.3 `feat/metadata-api`** : GET / PATCH séries et tomes, verrous, déverrouillage ; n'importe quelle page comme couverture.
+- ⏳ **5.4 `feat/web-metadata-edit`** (UI) : page série (auteurs, résumé repliable, genres, titres alternatifs, liens) ; fenêtre « Modifier » avec cadenas par champ et liste déroulante « Source principale » ; auteur sur les cartes et la couverture de repli ; recherche par auteur et titre alternatif ; choix de la couverture ; **correctif** de la notification trop haute de 56 px dans le lecteur sur mobile.
+- ⏳ **5.5 `feat/online-sources`** : migration 0009 ; crate `shiori-meta` (trait `Source`, AniList GraphQL, MangaDex REST, normalisation, débit limité par source, délais, `Retry-After`, hors ligne = code stocké) ; recherche, liaison, actualisation ; identification automatique des nouvelles séries après un scan ; réglages.
+- ⏳ **5.6 `feat/external-covers`** : téléchargement, stockage persistant dans le dossier de données (pas le cache, qui peut être vidé) par hash, service redimensionné, relais des miniatures.
+- ⏳ **5.7 `feat/web-metadata-match`** (UI) : fenêtre « Identifier » façon Plex (liste déroulante de la source, recherche, grille de couvertures des candidats, confirmer, délier) ; Administration → Métadonnées (activation expliquée, ordre des sources réglable, liste « à confirmer » qui ouvre la même grille, erreurs, tout actualiser).
+- ⏳ **5.8 `chore/phase5`** : bilan, parcours de bout en bout, captures.
+
+### Dépendances prévues (dernière version vérifiée au lot)
+
+`quick-xml` (serde) pour ComicInfo ; `reqwest` en rustls (pas d'OpenSSL) ; si le fournisseur par défaut (aws-lc-rs) exige cmake ou un compilateur C sous Windows, `ring`. Débit limité par un intervalle tokio par source, sans crate.
+
+### Tests
+
+- **Rust** : reprise des séries renommées et ses cas limites ; fusion et verrous en table (priorité, langue, source principale, verrou, déverrouillage) ; migrations sur une base de la phase précédente ; ComicInfo valide, invalide, BOM, très gros, absent, RAR solid ; `index.json` réel allégé en fixture ; sources contre un serveur axum local qui rejoue des réponses enregistrées (succès, 404, 429 + `Retry-After`, délai, hors ligne, JSON inattendu) ; aucune requête ne contient de chemin ou de nom de fichier ; relais des miniatures refusé hors liste blanche (SSRF) ; couvertures stockées et URLs immuables. Couverture ≥ 80 % lignes et branches.
+- **Vitest** : fenêtre « Modifier » (cadenas, déverrouillage, erreurs traduites), grille d'identification, filtres par auteur et titre alternatif, catalogues. Seuils 80 %.
+- **Bout en bout** : modifier un champ puis rescanner (valeur gardée), renommer un dossier (réglages et métadonnées gardés), ComicInfo affiché. Aucun appel réseau en CI.
+- **Lots d'interface** : UI/UX Pro Max, MCP shadcn, captures aux quatre tailles (titres très longs, résumés vides, couvertures absentes).
+
+### Questions de la phase 5 (résolues le 2026-11-13)
+
+- **Q28 Sources et priorité** ✅ : sources locales, AniList et MangaDex en phase 5 (MangaUpdates et Comic Vine plus tard). Priorité par champ : manuel (verrou) > fichiers locaux > sources web dans l'ordre choisi. L'ordre se règle dans Administration → Métadonnées ; par défaut il suit la langue de l'interface : anglais → AniList d'abord, français → MangaDex d'abord. Une série peut imposer sa source principale (liste déroulante dans « Modifier »).
+- **Q29 Identité des séries** ✅ : reprise par le hash des tomes (ci-dessus).
+- **Q30 Rapprochement** ✅ : automatique seulement si un seul candidat a exactement le même titre normalisé ; sinon « à confirmer ». Identification manuelle façon Plex : choisir la source, chercher, choisir parmi les couvertures des candidats.
+- **Q31 Niveau** ✅ : séries pour toutes les sources ; tomes (titre, résumé, date, auteurs) depuis ComicInfo et l'édition manuelle ; numéro, ordre et pages restent au scan.
+- **Q32 Couvertures** ✅ : page 0 du premier tome par défaut ; au choix, n'importe quelle page ou une couverture de source, stockée de façon persistante.
+- **Q33 Réseau et vie privée** ✅ : désactivé par défaut, activé dans l'administration avec une explication de ce qui est envoyé ; agent générique ; débit sous les limites publiées (relues au lot 5.5) ; hors ligne = état visible, jamais bloquant ; miniatures relayées.
+- **Q34 Langue du titre** ✅ : titre dans la langue de l'interface s'il existe, sinon romaji, sinon le nom du dossier ; un titre édité l'emporte ; la recherche porte sur tous les titres.
 
 ### Reste ouvert de la phase 4
 
-Voir « Bilan de la phase 4 » ci-dessus (registre shadcn et le paquet `cn`, notification haute dans le lecteur sur mobile, journal d'un scan en cours non rafraîchi, test e2e « tome suivant » instable une fois en CI, essai sur la tablette réelle).
+Voir « Bilan de la phase 4 » (registre shadcn et le paquet `cn`, journal d'un scan en cours non rafraîchi, test e2e « tome suivant » instable une fois en CI, essai sur la tablette réelle) ; la notification haute du lecteur est corrigée au lot 5.4.
 
 ## Fonctionnalités ajoutées en cours de route
 
@@ -1041,3 +1096,4 @@ L'ordre de lecture ne dépend jamais de l'ordre dans l'archive : le lecteur reç
 - 2026-11-12 : plan de la phase 4 validé : breakpoint `lg` (Q18), statut de publication manuel (Q23), « Continuer la lecture » avec tome suivant (Q24), chemin en champ texte (Q25), statistiques reportées (Q26), tri « Récemment ajoutés » (Q27).
 - 2026-11-13 : phase 4 terminée (bibliothèque façon Plex, navigation définitive, administration des bibliothèques et des scans, DESIGN_SYSTEM.md) ; l'accent de l'interface reste ambre, les couleurs du logo lui sont réservées.
 - 2026-11-13 : mode clair de l'interface reporté en phase 6 ; plan de la phase 5 préparé dans une nouvelle session (notes de passation dans « Phase 5 »).
+- 2026-11-13 : plan de la phase 5 validé (Q28 à Q34) : sources locales + AniList + MangaDex, ordre réglable (par défaut selon la langue de l'interface), source principale par série, identification façon Plex, réseau désactivé par défaut ; une série renommée garde son identité (lot 5.1).
