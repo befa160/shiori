@@ -2,6 +2,7 @@ import type {
   ContinueItem,
   Health,
   Library,
+  LibraryKind,
   PageInfo,
   Progress,
   PublicationStatus,
@@ -63,6 +64,11 @@ export const api = {
   pages: (volumeId: string, init?: RequestInit) => must<PageInfo[]>(`/volumes/${volumeId}/pages`, init),
   saveProgress: (volumeId: string, pageId: string, init?: RequestInit) =>
     must<Progress>(`/volumes/${volumeId}/progress`, { ...init, method: 'PUT', body: JSON.stringify({ page_id: pageId }) }),
+  createLibrary: (library: { name: string; root: string; kind: LibraryKind }) =>
+    must<Library>('/libraries', { method: 'POST', body: JSON.stringify(library) }),
+  deleteLibrary: (id: number) => request<null>(`/libraries/${id}`, { method: 'DELETE' }),
+  startScan: (libraryId: number) =>
+    must<{ run: number }>('/admin/scans', { method: 'POST', body: JSON.stringify({ library_id: libraryId }) }),
   clearProgress: (volumeId: string) => request<null>(`/volumes/${volumeId}/progress`, { method: 'DELETE' }),
   patchSeries: (seriesId: number, patch: { publication_status: PublicationStatus | null }) =>
     must<SeriesDetail>(`/series/${seriesId}`, { method: 'PATCH', body: JSON.stringify(patch) }),
