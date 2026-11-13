@@ -74,6 +74,22 @@ describe('passe en cours', () => {
   })
 })
 
+describe('scan très court', () => {
+  it('annonce quand même sa fin et rafraîchit les listes', async () => {
+    // Le serveur répond déjà « rien ne tourne » quand le suivi l'interroge après le lancement.
+    const fetch = mockApi({
+      '/api/libraries': () => json(libraries),
+      '/api/admin/scans/current': none,
+      '/api/admin/scans': () => json({ run: 12 }, 202),
+      '/api/admin/scans/12': () => json(run(12)),
+    })
+    renderAt('/admin')
+    await userEvent.click(await main().findByRole('button', { name: 'Scanner Mangas' }))
+    expect(await screen.findByText('Scan terminé')).toBeInTheDocument()
+    expect(urls(fetch)).toContain('/api/admin/scans/12')
+  })
+})
+
 describe('scan lancé ailleurs', () => {
   it('apparaît sur la carte « Scan en cours » sans recharger', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })

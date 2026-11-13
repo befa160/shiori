@@ -9,7 +9,7 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 | 1 | CLI de scan d'intégrité + schéma SQLite + CI linux/windows, puis graphe Graphify | ✅ |
 | 2 | API axum + streaming/redimensionnement des images + parseur de noms + job de scan + API d'administration des scans + CBR | ✅ |
 | 3 | Lecteur web (sens de lecture, webtoon, doubles pages) + front embarqué + progression de lecture | ✅ |
-| 4 | Bibliothèque façon Plex + statuts/filtres + menu d'administration (scans, journaux) + DESIGN_SYSTEM.md | ⏳ |
+| 4 | Bibliothèque façon Plex + statuts/filtres + menu d'administration (scans, journaux) + DESIGN_SYSTEM.md | ✅ |
 | 5 | Métadonnées web + édition manuelle | ⏳ |
 | 6 | Distribution : image Docker, PWA finalisée, binaires Linux/Windows en release, Dependabot, documentation (technique, installation, fonctionnelle) | ⏳ |
 
@@ -784,7 +784,7 @@ Propositions retenues :
 - **Q21 Qui traduit** ✅ : l'interface, d'après les codes stables de l'API ; serveur et CLI restent en français (le message du serveur sert de secours). Pas de catalogue côté Rust.
 - **Q18 Breakpoint tablette 8" en portrait** (CLAUDE.md) : sans objet en phase 3 (le lecteur en est exclu, la navigation provisoire est une simple liste) ; à valider en phase 4.
 
-## Phase 4 : bibliothèque, navigation et administration (plan validé le 2026-11-12)
+## Phase 4 : bibliothèque, navigation et administration (plan validé le 2026-11-12, terminée le 2026-11-13)
 
 ### Objectif
 
@@ -915,7 +915,29 @@ Pour chaque lot d'interface : skill UI/UX Pro Max avant de coder et en contrôle
   - Review Ponytail, corrigé : un scan lancé depuis un autre appareil n'apparaissait pas sur la carte (interrogation au repos ajoutée) ; un filtre de bibliothèque devenait impossible à retirer après la suppression de cette bibliothèque. Testés.
   - Test instable du lot 4.3 révélé par la CI : deux lectures enregistrées dans la même milliseconde ont la même date, et la suite de lecture prenait l'autre tome. Le test espace ses lectures de quelques millisecondes (un vrai lecteur n'enregistre jamais deux tomes dans la même milliseconde).
   - 147 tests Vitest, 98,6 % des lignes, 94 % des branches ; e2e verts.
-- [ ] **4.9** `chore/phase4-wrap` : e2e du parcours complet par l'interface, bilan de phase, README, `graphify update`, scratchpad vidé.
+- [x] **4.9** `chore/phase4-wrap` : e2e du parcours complet par l'interface, bilan de phase, README, `graphify update`, scratchpad vidé.
+  - **Parcours complet de bout en bout** (`e2e/library.spec.ts`, Chromium, sans appel direct à l'API) : créer une bibliothèque, voir son scan lancé puis annoncé terminé, la retrouver sur l'accueil et en grille, la chercher par l'onglet du bas en 390 px (sans accents ni majuscules), filtrer jusqu'à « aucune série », effacer, ouvrir la série, lire le tome 1, supprimer la bibliothèque. Dossier et nom propres à chaque exécution ; trois passages de suite verts.
+  - **Défaut trouvé par ce test** : un scan plus court qu'un aller-retour (une petite bibliothèque se scanne en quelques dizaines de millisecondes) finissait avant que le suivi le voie en cours : ni notification de fin, ni listes rafraîchies. Le lancement dépose désormais le numéro de la passe dans le cache, et le suivi réagit à chaque réponse du serveur, pas seulement aux changements de valeur. Test Vitest qui échoue sans le correctif.
+  - README à jour (état de la phase 4, création des bibliothèques par l'administration au lieu de l'API), DESIGN_SYSTEM.md (composants ajoutés pendant la phase), graphe Graphify mis à jour, scratchpad vidé.
+
+### Bilan de la phase 4
+
+- Livré :
+  - **Navigation définitive** : sidebar réductible à partir de `lg`, barre d'onglets en dessous (Accueil, Séries, Recherche, Administration), lien d'évitement ; logos de l'auteur (favicon, icônes d'écran d'accueil, manifeste).
+  - **Bibliothèque façon Plex** : accueil avec « Continuer la lecture » (tome en cours ou suivant) et une étagère des derniers ajouts par bibliothèque ; grilles de couvertures, couverture de repli générée ; page série (reprise, statut de publication, marquer lu ou non lu, problèmes du scan traduits).
+  - **Recherche et filtres** : sans accents, mot par mot ; lecture, publication, bibliothèque ; tri par titre, dernière lecture ou ajout ; tout dans l'adresse.
+  - **Administration** : bibliothèques (création suivie d'un scan, suppression confirmée), scan en cours (progression, annulation, vu depuis n'importe quel appareil), options expliquées, historique filtrable, journal traduit avec lien vers le tome.
+  - **API** : `GET /api/series`, `GET /api/continue`, `PATCH /api/series/{id}`, résumé de série enrichi, tome à reprendre (une seule règle), journal relié aux tomes ; migration 0006.
+  - **DESIGN_SYSTEM.md** : couleurs et contrastes mesurés, grille sans breakpoint, carte de couverture, couverture de repli, composants et états.
+- Validé : parcours complet par l'interface dans Chromium ; scan réel du webtoon de 2 Go suivi dans l'interface ; captures aux quatre tailles à chaque lot ; saisie de la recherche vérifiée avec un processeur ralenti six fois.
+- Qualité : 192 tests Rust, 148 tests Vitest (98,6 % des lignes, 94 % des branches), 8 tests de bout en bout ; 11 PR (#34 à #44), chacune passée en review Ponytail ; outils UI (UI/UX Pro Max, MCP shadcn, captures Playwright) sur chaque lot d'interface.
+- Défauts trouvés et corrigés en route : relire un tome fini proposait le suivant ; listes de l'accueil périmées au retour du lecteur ; champ de recherche piloté par une transition ; chemins du journal au mauvais format sous Windows ; scan trop court jamais vu ; deux tests instables (route `lazy` chargée à froid, dates à la milliseconde).
+- Reste ouvert pour la suite :
+  - le registre shadcn installe le paquet npm `cn` et écrit `import { cn } from "cn"` à chaque ajout (corrigé à chaque fois, la règle oxlint le bloque) ;
+  - dans le lecteur sur mobile, une notification monte de 56 px de trop (`--tabbar-height` globale) ;
+  - le journal d'une passe en cours ne se met pas à jour en continu (il se rafraîchit à la fin) ;
+  - les messages du serveur sans code (lignes « scanné » du journal) restent en français (Q21) ;
+  - essai sur la tablette réelle à faire par l'utilisateur.
 
 ### Questions de la phase 4 (résolues le 2026-11-12)
 
@@ -964,3 +986,4 @@ L'ordre de lecture ne dépend jamais de l'ordre dans l'archive : le lecteur reç
 - 2026-11-12 : plan de la phase 3 validé : progression côté serveur (Q11), type de bibliothèque qui donne le sens de lecture par défaut (Q12), doubles pages coupées en deux moitiés par défaut en mode simple (Q14) ; défauts Q13, Q15 à Q18 retenus.
 - 2026-11-12 : interface bilingue français / anglais (lot 3.4b) ; langue enregistrée côté serveur, traduction par l'interface d'après les codes stables de l'API.
 - 2026-11-12 : plan de la phase 4 validé : breakpoint `lg` (Q18), statut de publication manuel (Q23), « Continuer la lecture » avec tome suivant (Q24), chemin en champ texte (Q25), statistiques reportées (Q26), tri « Récemment ajoutés » (Q27).
+- 2026-11-13 : phase 4 terminée (bibliothèque façon Plex, navigation définitive, administration des bibliothèques et des scans, DESIGN_SYSTEM.md) ; l'accent de l'interface reste ambre, les couleurs du logo lui sont réservées.

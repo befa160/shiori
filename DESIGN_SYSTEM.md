@@ -164,17 +164,22 @@ Quand la série n'a pas de couverture **ou** que l'image échoue (`onError`), m�
 
 - **Sidebar** (`≥ lg`, Sidebar shadcn) : surface `card`, entrées de 44 px, icône lucide + libellé ; entrée active `bg-accent text-primary` et `aria-current="page"` ; réduite, les icônes ont une infobulle et un nom accessible. État réduit gardé dans `localStorage`. Lien « Aller au contenu » en premier arrêt du clavier, visible au focus.
 - **Barre d'onglets** (`< lg`) : `fixed inset-x-0 bottom-0`, surface `card` avec bordure haute `border-border`, 4 onglets égaux, icône au-dessus d'un libellé `text-xs` (jamais l'icône seule), onglet actif en ambre + `aria-current="page"`, hauteur 56 px + zone sûre.
-- **Listes cliquables** (`Row`, administration) : ligne entière cliquable, 56 px au moins, 8 px entre deux lignes.
+- **Listes cliquables** (historique des scans) : ligne entière cliquable (`Link` en carte `bg-card`), 56 px au moins, 8 px entre deux lignes, chevron à droite.
+- **Retour** (`BackLink`) : libellé tronqué (`truncate`, nom complet en `title`) : un nom de bibliothèque très long n'élargit jamais la page.
 
 ### Formulaires et fenêtres
 
-- Champs : `Input` shadcn, 44 px, bordure `input`, libellé visible au-dessus (`Label`, jamais le seul placeholder), aide en `text-sm text-muted-foreground`, erreur sous le champ en `text-destructive` reliée par `aria-describedby` et `aria-invalid`.
+- Champs : `Input` shadcn, 44 px, texte à 16 px (sinon iOS zoome au focus), bordure `input`, libellé visible au-dessus (`<label>`, jamais le seul placeholder), aide en `text-sm text-muted-foreground`, erreur sous le champ en `text-destructive` reliée par `aria-describedby` et `aria-invalid`.
 - Erreur du serveur : traduite d'après son code stable (`errorText`), affichée près du champ concerné (`invalid_root` sous le chemin) ou en tête du formulaire.
-- Fenêtres : `Dialog` pour créer ou modifier, `AlertDialog` pour une action irréversible (le texte dit ce qui est conservé : fichiers, progression). Focus piégé dans la fenêtre, Échap ferme, le focus revient au bouton d'origine.
+- Fenêtres : `Dialog` pour créer ou modifier, `AlertDialog` pour une action irréversible (le texte dit ce qui est conservé : fichiers, progression). Focus piégé dans la fenêtre, Échap ferme, le focus revient au bouton d'origine. Bouton de fermeture de 44 px au libellé traduit (`closeLabel`).
+- Menus : `DropdownMenu` (actions d'un tome), déclencheur toujours visible (le survol n'existe pas au toucher), pastille de 36 px dans une zone de 44 px, entrées de 44 px.
+- Listes déroulantes de filtre : `Select`, en ambre quand elles restreignent la liste (état actif), libellé tronqué par des points de suspension sur une colonne étroite.
+- Cases à cocher : `Checkbox` de 20 px, libellé cliquable sur une ligne de 44 px, aide reliée par `aria-describedby`.
+- Champ piloté par un état local, jamais directement par l'adresse : React Router change l'adresse dans une transition, et un champ piloté par une transition prend du retard sur un appareil lent.
 
 ### Notifications
 
-Sonner (déjà monté hors des routes) : succès ou échec d'une action qui ne change pas l'écran (« Scan lancé », « Statut non enregistré »). Fermeture au bout de 5 s, au-dessus de la barre d'onglets et de la zone sûre. Une erreur qui empêche d'utiliser l'écran n'est jamais seulement une notification.
+Sonner (déjà monté hors des routes) : succès ou échec d'une action qui ne change pas l'écran (« Scan lancé », « Statut non enregistré »). Fermeture au bout de 5 s, au-dessus de la barre d'onglets et de la zone sûre (`--tabbar-height`). La fin d'un scan est annoncée ainsi, quel que soit l'écran. Une erreur qui empêche d'utiliser l'écran n'est jamais seulement une notification.
 
 ## États
 
