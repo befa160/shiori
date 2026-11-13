@@ -37,7 +37,7 @@ test('ComicInfo affiché, champ modifié gardé au rescan et au renommage, puis 
   // Modifier le résumé : verrouillé, et affiché.
   await main.getByRole('button', { name: 'Modifier' }).click()
   let dialog = page.getByRole('dialog', { name: 'Modifier « Série Méta E2E »' })
-  await dialog.getByLabel('Résumé').fill('Mon résumé, écrit à la main.')
+  await dialog.getByLabel('Résumé', { exact: true }).fill('Mon résumé, écrit à la main.')
   await dialog.getByRole('button', { name: 'Enregistrer' }).click()
   await expect(page.getByText('Modifications enregistrées')).toBeVisible()
   await expect(main.getByText('Mon résumé, écrit à la main.')).toBeVisible()
@@ -54,7 +54,7 @@ test('ComicInfo affiché, champ modifié gardé au rescan et au renommage, puis 
   dialog = page.getByRole('dialog', { name: 'Modifier « Série Méta E2E »' })
   await expect(dialog.getByText('Modifié à la main')).toBeVisible()
   await dialog.getByRole('button', { name: 'Rendre « Résumé » aux fichiers' }).click()
-  await expect(dialog.getByLabel('Résumé')).toHaveValue('Résumé venu du fichier.')
+  await expect(dialog.getByLabel('Résumé', { exact: true })).toHaveValue('Résumé venu du fichier.')
   await page.keyboard.press('Escape')
   await expect(main.getByText('Résumé venu du fichier.')).toBeVisible()
 
