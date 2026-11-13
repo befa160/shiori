@@ -3,8 +3,8 @@
 use std::path::Path;
 
 use shiori_core::{
-    Archive, CbzArchive, FileReport, IssueCode, PageStatus, ScanOptions, Severity, Status,
-    scan_file,
+    Archive, CbzArchive, FileReport, IssueCode, LocalMetadata, MAX_METADATA_SIZE, MetadataSource,
+    PageStatus, ScanOptions, Severity, Status, scan_file,
 };
 use shiori_testkit::{DEFLATED, RAR4, RAR5, fixtures, page_color, png, write_zip};
 
@@ -50,9 +50,12 @@ fn webtoon_is_clean_and_fully_described() {
 fn manga_has_cover_spreads_and_back_cover() {
     let dir = tempfile::tempdir().unwrap();
     let r = scan(&fixtures::manga(dir.path()));
-    // ComicInfo.xml n'est qu'une information : le tome reste « ok ».
+    // ComicInfo.xml est lu (métadonnées), pas compté comme une page ni signalé.
     assert_eq!(r.status, Status::Ok);
-    assert_eq!(codes(&r), [IssueCode::IgnoredEntry]);
+    assert_eq!(codes(&r), []);
+    assert_eq!(r.metadata.len(), 1);
+    assert_eq!(r.metadata[0].0, MetadataSource::Comicinfo);
+    assert_eq!(r.metadata[0].1.title.as_deref(), Some("Test"));
     assert_eq!(r.pages.len(), fixtures::MANGA_PAGES);
     assert_eq!(r.pages[0].media_type, Some("image/jpeg"));
     assert_eq!(r.pages[4].width, Some(1200));
@@ -347,7 +350,8 @@ fn report_serializes_ids_as_hex_and_hides_raw_names() {
     assert_eq!(json["volume_id"].as_str().unwrap().len(), 64);
     assert_eq!(json["pages"][0]["id"].as_str().unwrap().len(), 32);
     assert_eq!(json["pages"][0]["status"], "ok");
-    assert_eq!(json["issues"][0]["code"], "ignored_entry");
+    assert_eq!(json["metadata"][0][0], "comicinfo");
+    assert_eq!(json["metadata"][0][1]["title"], "Test");
     assert!(json["pages"][0].get("entry_name_raw").is_none());
 }
 
@@ -360,7 +364,12 @@ fn rar_volumes_are_scanned_like_zip_ones() {
         let name = format!("{version:?}-{solid}.cbr");
         let r = scan(&fixtures::rar(dir.path(), &name, version, solid));
         assert_eq!(r.format, "cbr");
-        let mut expected = vec![IssueCode::IgnoredEntry];
+        // Le ComicInfo.xml est lu même dans une archive solid (lecture en flux).
+        assert_eq!(
+            r.metadata,
+            [(MetadataSource::Comicinfo, LocalMetadata::default())]
+        );
+        let mut expected = vec![];
         if solid {
             expected.insert(0, IssueCode::SolidArchive);
         }
@@ -456,4 +465,49 @@ fn damaged_solid_rar_breaks_the_pages_after_the_damage() {
     let full = std::fs::read(&path).unwrap();
     std::fs::write(&path, &full[..full.len() / 2]).unwrap();
     assert_eq!(codes(&scan(&path)), [IssueCode::ArchiveTruncated]);
+}
+
+#[test]
+fn metadata_files_are_read_and_broken_ones_only_warn() {
+    let dir = tempfile::tempdir().unwrap();
+    let page = png(4, 6, page_color(0));
+    let huge = vec![b' '; MAX_METADATA_SIZE as usize + 1];
+    let path = write_zip(
+        dir.path(),
+        "meta.cbz",
+        &[
+            ("01.png", &page, DEFLATED),
+            ("ComicInfo.xml", b"<ComicInfo><Series>x</Serie>", DEFLATED),
+            ("index.json", br#"{"title": "Leviathan"}"#, DEFLATED),
+            ("extra/ComicInfo.xml", b"<ComicInfo/>", DEFLATED),
+            ("INDEX.JSON", br#"{"title": "Autre"}"#, DEFLATED),
+        ],
+    );
+    let r = scan(&path);
+    assert_eq!(r.status, Status::Warning);
+    assert_eq!(r.pages.len(), 1);
+    assert_eq!(
+        codes(&r),
+        [
+            IssueCode::IgnoredEntry,
+            IssueCode::IgnoredEntry,
+            IssueCode::MetadataInvalid
+        ]
+    );
+    assert_eq!(
+        issue_entry(&r, IssueCode::MetadataInvalid),
+        Some("ComicInfo.xml")
+    );
+    assert_eq!(r.metadata.len(), 1);
+    assert_eq!(r.metadata[0].0, MetadataSource::IndexJson);
+    assert_eq!(r.metadata[0].1.series.as_deref(), Some("Leviathan"));
+
+    let path = write_zip(
+        dir.path(),
+        "huge.cbz",
+        &[("01.png", &page, DEFLATED), ("index.json", &huge, DEFLATED)],
+    );
+    let r = scan(&path);
+    assert_eq!(codes(&r), [IssueCode::MetadataInvalid]);
+    assert!(r.metadata.is_empty());
 }

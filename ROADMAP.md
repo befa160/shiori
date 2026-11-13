@@ -100,7 +100,8 @@ Chaque diagnostic a un code stable (utilisé par l'UI plus tard), une sévérit�
 | `non_image_entry` | warning | fichier parasite (txt, nfo, url…) |
 | `subdirectories` | warning | pages réparties dans des sous-dossiers |
 | `archive_order_differs` | warning | ordre de l'annuaire ≠ ordre naturel (typiquement `1, 10, 2`) |
-| `ignored_entry` | info | entrées connues et sans risque : `ComicInfo.xml` (noté pour la phase 5), `__MACOSX/`, `.DS_Store`, `Thumbs.db` |
+| `metadata_invalid` | warning | `ComicInfo.xml` ou `index.json` à la racine illisible (XML/JSON invalide, encodage, plus de 4 Mio) : ignoré, les pages restent lues (lot 5.2) |
+| `ignored_entry` | info | entrées connues et sans risque : `ComicInfo.xml` hors de la racine, `__MACOSX/`, `.DS_Store`, `Thumbs.db` (à la racine, `ComicInfo.xml` et `index.json` sont lus : lot 5.2) |
 
 Statut du fichier = sévérité maximale (info ne dégrade pas `ok`).
 **Une page dont l'image est illisible reste listée** à sa place avec `status = broken` : le lecteur affichera une erreur explicite à cet endroit au lieu de sauter la page ou de répéter la précédente (principe 4).
@@ -1001,8 +1002,9 @@ Restent des séries distinctes : déplacement partiel, fusion dans une série ex
 
 ### Base (une migration par lot qui s'en sert)
 
-- **0008 (lot 5.2)** : `series_metadata` (titres par langue, résumé par langue, auteurs avec rôle, genres, tags, année, éditeur, âge, liens, couverture choisie, source principale de la série, `locked`), `series_sources` (dernière réponse normalisée de chaque source, identifiant externe, `matched_by` local / auto / user, `last_error` en code stable), `volume_metadata` (titre, résumé, date, auteurs, ComicInfo brut, `locked`, `read_at` pour rattraper les tomes déjà scannés).
-- **0009 (lot 5.5)** : `metadata_candidates` (correspondances à confirmer) ; `app_settings.metadata_online` (désactivé par défaut) et `metadata_sources` (ordre choisi, `NULL` = ordre par défaut selon la langue).
+- **0008 (lot 5.2)** ✅ : `volume_metadata (volume_id, source, data)` : `ComicInfo.xml` et `index.json` normalisés (`shiori_core::LocalMetadata` en JSON), réécrits à chaque scan du tome. Les tomes déjà scannés sont relus grâce à `SCANNER_VERSION = 2` (pas de colonne `read_at`).
+- **0009 (lot 5.3)** : `series_metadata` (titres par langue, résumé par langue, auteurs avec rôle, genres, tags, année, éditeur, âge, liens, couverture choisie, source principale de la série, `locked`), `series_sources` (dernière réponse normalisée de chaque source, identifiant externe, `matched_by` local / auto / user, `last_error` en code stable), champs édités et `locked` des tomes.
+- **0010 (lot 5.5)** : `metadata_candidates` (correspondances à confirmer) ; `app_settings.metadata_online` (désactivé par défaut) et `metadata_sources` (ordre choisi, `NULL` = ordre par défaut selon la langue).
 
 ### Routes
 
@@ -1023,10 +1025,10 @@ Restent des séries distinctes : déplacement partiel, fusion dans une série ex
 ### Lots (une branche + une PR chacun)
 
 - ✅ **5.1 `feat/series-identity`** : reprise d'une série dont le dossier est renommé ; plan de la phase dans ROADMAP.md.
-- ⏳ **5.2 `feat/local-metadata`** : migration 0008 ; fusion avec verrous (fonction pure) ; ComicInfo.xml (quick-xml, taille plafonnée, XML invalide = avertissement `metadata_invalid`, jamais une erreur de tome) et `index.json` lus pendant le scan ; rattrapage des tomes déjà scannés ; `Manga=YesAndRightToLeft` propose le sens de lecture sans l'imposer.
-- ⏳ **5.3 `feat/metadata-api`** : GET / PATCH séries et tomes, verrous, déverrouillage ; n'importe quelle page comme couverture.
+- ✅ **5.2 `feat/local-metadata`** : migration 0008 ; `shiori_core::metadata` lit `ComicInfo.xml` (quick-xml ; UTF-8 avec ou sans BOM, UTF-16 ; auteurs par rôle, genres, date partielle, `Manga` → proposition de sens) et `index.json` (titres, auteurs « a / b », description, état, tags, lien) à la racine, dans la même passe que les pages (RAR solid compris) ; fichier illisible ou de plus de 4 Mio = avertissement `metadata_invalid`, jamais une erreur de tome ; `SCANNER_VERSION = 2` pour relire les tomes connus. Vérifié sur le webtoon réel (son `index.json`) et deux vrais CBR (inchangés).
+- ⏳ **5.3 `feat/metadata-api`** : migration 0009 ; fusion avec verrous (fonction pure) depuis les tomes de la série ; GET / PATCH séries et tomes, verrous, déverrouillage ; n'importe quelle page comme couverture.
 - ⏳ **5.4 `feat/web-metadata-edit`** (UI) : page série (auteurs, résumé repliable, genres, titres alternatifs, liens) ; fenêtre « Modifier » avec cadenas par champ et liste déroulante « Source principale » ; auteur sur les cartes et la couverture de repli ; recherche par auteur et titre alternatif ; choix de la couverture ; **correctif** de la notification trop haute de 56 px dans le lecteur sur mobile.
-- ⏳ **5.5 `feat/online-sources`** : migration 0009 ; crate `shiori-meta` (trait `Source`, AniList GraphQL, MangaDex REST, normalisation, débit limité par source, délais, `Retry-After`, hors ligne = code stocké) ; recherche, liaison, actualisation ; identification automatique des nouvelles séries après un scan ; réglages.
+- ⏳ **5.5 `feat/online-sources`** : migration 0010 ; crate `shiori-meta` (trait `Source`, AniList GraphQL, MangaDex REST, normalisation, débit limité par source, délais, `Retry-After`, hors ligne = code stocké) ; recherche, liaison, actualisation ; identification automatique des nouvelles séries après un scan ; réglages.
 - ⏳ **5.6 `feat/external-covers`** : téléchargement, stockage persistant dans le dossier de données (pas le cache, qui peut être vidé) par hash, service redimensionné, relais des miniatures.
 - ⏳ **5.7 `feat/web-metadata-match`** (UI) : fenêtre « Identifier » façon Plex (liste déroulante de la source, recherche, grille de couvertures des candidats, confirmer, délier) ; Administration → Métadonnées (activation expliquée, ordre des sources réglable, liste « à confirmer » qui ouvre la même grille, erreurs, tout actualiser).
 - ⏳ **5.8 `chore/phase5`** : bilan, parcours de bout en bout, captures.

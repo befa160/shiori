@@ -31,6 +31,7 @@ fn synthetic(n: usize) -> FileReport {
         status: Status::Ok,
         pages,
         issues: Vec::new(),
+        metadata: Vec::new(),
     }
 }
 

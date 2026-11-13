@@ -259,6 +259,7 @@ export const en: Translations = {
     archive_order_differs: 'The page order in the archive differs from the reading order',
     ignored_entry: 'Extra file skipped',
     solid_archive: 'Solid RAR archive: the first page takes longer to open',
+    metadata_invalid: 'Unreadable metadata file (ComicInfo.xml, index.json), skipped',
   },
   errors: {
     invalid_name: 'Give the library a name',

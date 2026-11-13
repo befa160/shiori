@@ -304,6 +304,19 @@ impl Db {
             })
         })
         .collect::<Result<_, Error>>()?;
+        let metadata = sqlx::query(
+            "SELECT source, data FROM volume_metadata WHERE volume_id = ? ORDER BY rowid",
+        )
+        .bind(&id)
+        .fetch_all(&self.pool)
+        .await?
+        .iter()
+        .map(|r| {
+            let data =
+                serde_json::from_str(r.get("data")).map_err(|e| Error::Decode(Box::new(e)))?;
+            Ok((from_db(r.get("source"))?, data))
+        })
+        .collect::<Result<_, Error>>()?;
         let issues = sqlx::query(
             "SELECT code, entry_name, message FROM scan_issues WHERE volume_id = ? ORDER BY id",
         )
@@ -332,6 +345,7 @@ impl Db {
             status: from_db::<Status>(row.get("status"))?,
             pages,
             issues,
+            metadata,
         }))
     }
 }
@@ -402,6 +416,18 @@ async fn save_volume(
         .bind(volume)
         .execute(&mut **tx)
         .await?;
+    sqlx::query("DELETE FROM volume_metadata WHERE volume_id = ?")
+        .bind(volume)
+        .execute(&mut **tx)
+        .await?;
+    for (source, data) in &report.metadata {
+        sqlx::query("INSERT INTO volume_metadata (volume_id, source, data) VALUES (?, ?, ?)")
+            .bind(volume)
+            .bind(to_db(source))
+            .bind(serde_json::to_string(data).expect("des métadonnées se sérialisent"))
+            .execute(&mut **tx)
+            .await?;
+    }
     Ok(())
 }
 
