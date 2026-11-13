@@ -2,6 +2,7 @@ import type { RouteObject } from 'react-router'
 import { LibraryPage } from '@/browse/LibraryPage'
 import { SeriesPage } from '@/browse/SeriesPage'
 import { WithId } from '@/browse/parts'
+import { ScanPage, ScansPage } from '@/admin/scans'
 import { HomePage } from '@/library/HomePage'
 import { SeriesBrowse } from '@/library/SeriesBrowse'
 import { AdminPage } from '@/pages/AdminPage'
@@ -30,6 +31,8 @@ export const routes: RouteObject[] = [
       { path: 'search', element: <SeriesBrowse key="search" search /> },
       { path: 'series/:id', element: <WithId>{(id) => <SeriesPage id={id} />}</WithId> },
       { path: 'admin', element: <AdminPage /> },
+      { path: 'admin/scans', element: <ScansPage /> },
+      { path: 'admin/scans/:id', element: <WithId>{(id) => <ScanPage id={id} />}</WithId> },
       { path: '*', element: <NotFound /> },
     ],
   },

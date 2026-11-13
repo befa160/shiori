@@ -3,10 +3,13 @@ import type {
   Health,
   Library,
   LibraryKind,
+  LogLine,
   PageInfo,
   Progress,
   PublicationStatus,
   ReadingSettings,
+  RunSummary,
+  ScanProgress,
   SeriesDetail,
   SeriesSummary,
   Settings,
@@ -67,8 +70,14 @@ export const api = {
   createLibrary: (library: { name: string; root: string; kind: LibraryKind }) =>
     must<Library>('/libraries', { method: 'POST', body: JSON.stringify(library) }),
   deleteLibrary: (id: number) => request<null>(`/libraries/${id}`, { method: 'DELETE' }),
-  startScan: (libraryId: number) =>
-    must<{ run: number }>('/admin/scans', { method: 'POST', body: JSON.stringify({ library_id: libraryId }) }),
+  startScan: (libraryId: number, options: { deep?: boolean; rehash?: boolean } = {}) =>
+    must<{ run: number }>('/admin/scans', { method: 'POST', body: JSON.stringify({ library_id: libraryId, ...options }) }),
+  currentScan: (init?: RequestInit) => request<ScanProgress>('/admin/scans/current', init),
+  cancelScan: () => request<null>('/admin/scans/current/cancel', { method: 'POST' }),
+  scans: (query: URLSearchParams, init?: RequestInit) => must<RunSummary[]>(`/admin/scans?${query}`, init),
+  scan: (id: number, init?: RequestInit) => must<RunSummary>(`/admin/scans/${id}`, init),
+  scanLogs: (id: number, query: URLSearchParams, init?: RequestInit) =>
+    must<LogLine[]>(`/admin/scans/${id}/logs?${query}`, init),
   clearProgress: (volumeId: string) => request<null>(`/volumes/${volumeId}/progress`, { method: 'DELETE' }),
   patchSeries: (seriesId: number, patch: { publication_status: PublicationStatus | null }) =>
     must<SeriesDetail>(`/series/${seriesId}`, { method: 'PATCH', body: JSON.stringify(patch) }),

@@ -22,20 +22,11 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { errorText } from '@/i18n/errors'
+import { useStartScan } from './useStartScan'
 
 const KINDS: LibraryKind[] = ['manga', 'comics', 'webtoon']
 // Ce qui montre les bibliothèques et leurs séries : redemandé après une création ou une suppression.
 const LISTS = [['libraries'], ['series'], ['continue']]
-
-/** Lance le scan d'une bibliothèque ; le résultat se dit par une notification. */
-function useStartScan() {
-  const { t } = useTranslation()
-  return useMutation({
-    mutationFn: (library: Pick<Library, 'id' | 'name'>) => api.startScan(library.id),
-    onSuccess: (_, library) => toast.success(t('admin.scanStarted', { name: library.name })),
-    onError: (error) => toast.error(t('admin.scanNotStarted'), { description: errorText(error, t) }),
-  })
-}
 
 /** Bibliothèques : liste, création (suivie d'un scan), scan, suppression confirmée. */
 export function AdminLibraries() {
@@ -93,7 +84,7 @@ function LibraryRow({ library }: { library: Library }) {
         <p className="mt-1 font-mono text-xs [overflow-wrap:anywhere] text-muted-foreground">{library.root}</p>
       </div>
       <div className="flex shrink-0 gap-2">
-        <Button variant="secondary" disabled={scan.isPending} onClick={() => scan.mutate(library)} aria-label={t('admin.scanNamed', { name: library.name })}>
+        <Button variant="secondary" disabled={scan.isPending} onClick={() => scan.mutate({ library })} aria-label={t('admin.scanNamed', { name: library.name })}>
           {scan.isPending ? <Loader2 aria-hidden className="animate-spin" /> : <RefreshCw aria-hidden />}
           {t('admin.scan')}
         </Button>
@@ -139,7 +130,7 @@ function NewLibrary({ onDone }: { onDone: () => void }) {
       for (const queryKey of LISTS) void queryClient.invalidateQueries({ queryKey })
       toast.success(t('admin.created', { name: library.name }))
       // Une bibliothèque neuve est vide tant qu'elle n'a pas été scannée.
-      scan.mutate(library)
+      scan.mutate({ library })
       onDone()
     },
   })

@@ -181,3 +181,46 @@ async fn purge_keeps_runs_still_holding_current_issues() {
         .get("n");
     assert!(issues > 0);
 }
+
+/// Une ligne de journal mène au tome de son fichier (et à sa série quand il en a une) ; un
+/// chemin qui n'est plus suivi n'y mène nulle part.
+#[tokio::test]
+async fn log_lines_point_to_their_volume() {
+    let (dir, db) = db().await;
+    let root = dir.path().join("lib");
+    let folder = root.join("Série");
+    std::fs::create_dir_all(&folder).unwrap();
+    let manga = fixtures::manga(&folder);
+    let library = db
+        .create_library("Lib", &root, crate::LibraryKind::Manga)
+        .await
+        .unwrap();
+    let run = db
+        .begin_run(RunOrigin::Api, Some(library.id), "/", "{}")
+        .await
+        .unwrap();
+    let scanned = db
+        .scan(run, &manga, ScanOptions::default(), false)
+        .await
+        .unwrap();
+    db.attach(&library, &manga).await.unwrap();
+    db.log_file(run, &scanned).await.unwrap();
+    db.log(
+        run,
+        Severity::Warning,
+        Some("/nulle/part.cbz"),
+        None,
+        "disparu",
+    )
+    .await
+    .unwrap();
+    let lines = db.run_logs(run, Severity::Info, None, 50).await.unwrap();
+    let series = db.series_of(library.id).await.unwrap().unwrap()[0].id;
+    let volume = scanned.report.volume_id.unwrap().to_string();
+    assert_eq!(
+        (lines[0].series_id, lines[0].volume_id.as_ref()),
+        (Some(series), Some(&volume))
+    );
+    let last = lines.last().unwrap();
+    assert_eq!((last.series_id, last.volume_id.as_ref()), (None, None));
+}
