@@ -1078,6 +1078,37 @@ Restent des séries distinctes : déplacement partiel, fusion dans une série ex
 - **Q33 Réseau et vie privée** ✅ : désactivé par défaut, activé dans l'administration avec une explication de ce qui est envoyé ; agent générique ; débit sous les limites publiées ; hors ligne = état visible, jamais bloquant ; miniatures relayées. Conditions relues le 2026-11-13 (lot 5.5a) : AniList 90 requêtes/min, **30 en ce moment** (confirmé par `X-RateLimit-Limit`), 1 min de blocage au-delà avec `Retry-After`, ni collecte massive ni usage comme stockage, gratuit sous 150 $/mois de revenus ; MangaDex environ 5 requêtes/s par IP, agent honnête obligatoire, pas de lien direct vers ses images, **créditer MangaDex** (lot 5.7), pas de publicité.
 - **Q34 Titre affiché** ✅ (précisé le 2026-11-13) : titre édité, sinon celui des fichiers (`index.json`, puis `ComicInfo.xml`), sinon celui des métadonnées web, sinon le nom du dossier. La langue ne sert qu'à choisir parmi les titres d'une source web : celui de la langue de l'interface s'il existe, sinon romaji. Les autres titres (nom du dossier compris) restent cherchables comme titres alternatifs.
 
+## Phase 6 : distribution, documentation et mode clair (à planifier)
+
+Notes de passation du 2026-11-13, pour la session qui préparera le plan détaillé (à valider avant de coder, comme pour chaque phase).
+
+### Objectif (tableau des phases)
+
+Rendre Shiori installable et maintenable par quelqu'un d'autre que son développeur : image Docker, PWA finalisée, binaires Linux / Windows publiés à chaque version, Dependabot, documentation (technique, installation, fonctionnelle) et mode clair de l'interface.
+
+### Ce qui existe déjà et s'y raccorde
+
+- **Un seul binaire** : `shiori serve` embarque le front en release (`rust-embed`, `npm run build` avant `cargo build --release`) ; base dans le dossier de données de l'OS (`SHIORI_DATA_DIR` ou `--db`), cache dans celui de l'OS (`SHIORI_CACHE_DIR` ou `--cache-dir`, plafond `--cache-max-mib`), journaux des scans `--scan-log-days`. Code pur Rust, sans commande externe (principe 9) : une compilation statique (musl) est plausible, à vérifier (SQLite embarqué via `sqlite-bundled`, `ring` pour TLS).
+- **Écoute** : `--listen 127.0.0.1:7878` par défaut ; en écoute locale, seul un `Host` local est accepté (parade au DNS rebinding) ; **aucune authentification** (« Plus tard ») : écouter sur `0.0.0.0` n'est sûr que sur un réseau de confiance, ce qui pèse directement sur l'image Docker.
+- **CI** (`.github/workflows/ci.yml`) : jobs `backend` (linux, windows, macos), `coverage` (nightly figé `NIGHTLY`, `cargo-llvm-cov` figé), `web`, `e2e` ; **pas de job de release** ni de Dependabot. Le job macOS attend parfois longtemps un runner.
+- **PWA** : `web/public/manifest.webmanifest` minimal (nom, icônes dont maskable, `standalone`, fond `#121212`), zones sûres et plein écran posés (phases 3 et 4) ; **pas de service worker**. Les pages servies sont immuables (`Cache-Control: immutable`, ETag), ce qui facilite une mise en cache hors ligne.
+- **Couleurs** : jetons CSS dans `web/src/index.css` (thème sombre seul), règles et contrastes mesurés dans DESIGN_SYSTEM.md ; le logo a déjà sa variante claire (`shiori-mark-light.svg`, favicon adaptatif). La langue est enregistrée côté serveur (`/api/settings`) : le choix du thème pourrait suivre le même chemin.
+- **Documentation** : README (présentation, architecture, développement), ROADMAP.md (décisions et bilans de chaque phase), DESIGN_SYSTEM.md, `docs/cbr.md`, le graphe Graphify (`graphify-out/`, à mettre à jour avec `/graphify . --update` après de gros changements de docs). Demande d'origine : section « Documentation (demandée le 2026-11-11) » ci-dessous.
+
+### Questions à trancher au début de la phase
+
+- **Docker** : image de base (scratch ou distroless avec binaire statique musl, ou Debian slim) ; architectures (amd64 seule, ou aussi arm64 pour NAS et Raspberry Pi) ; volumes (`/data` pour la base et les couvertures, `/cache`, bibliothèques montées en lecture seule) ; utilisateur non root, `PUID` / `PGID` ; registre (GitHub Container Registry) ; **écoute dans le conteneur sans authentification** : avertissement et reverse proxy documentés, ou authentification minimale avant de publier une image.
+- **Binaires** : cibles (Linux x86_64 et aarch64, Windows x86_64, macOS ?), déclenchement (tag `v*`), sommes de contrôle, version (0.1.0 aujourd'hui, semver), notes de version ou changelog.
+- **PWA hors ligne** : jusqu'où (coquille de l'interface seulement, ou tomes téléchargés pour lire sans réseau, un sujet bien plus gros) ; service worker fait main ou `vite-plugin-pwa` (dépendance) ; invitation à installer.
+- **Dependabot** : fréquence, regroupement des mises à jour, fusion automatique ou non (règle « dernières versions stables » ; le nightly de couverture et `cargo-llvm-cov` restent figés et montés à la main).
+- **Documentation** : où (fichiers `docs/` dans le dépôt, ou site), langues (français seul, ou aussi anglais), public de chaque document (technique, installation simple, fonctionnelle).
+- **Mode clair** : suivre le système (`prefers-color-scheme`), choix manuel enregistré côté serveur comme la langue, ou les deux ; le lecteur reste-t-il toujours sombre ; contrastes à remesurer et à reporter dans DESIGN_SYSTEM.md.
+- **Ordre des lots** : par exemple Dependabot et release d'abord (petits, débloquent la suite), puis Docker, mode clair, PWA, documentation en dernier (elle décrit l'état final).
+
+### Reste ouvert des phases précédentes
+
+Voir « Bilan de la phase 5 » (« Reste ouvert ») : édition d'un tome dans l'interface, MangaUpdates et Comic Vine, `shortcut:` notés, vérification de `:root:has()` sur un vrai Safari iOS, essai sur la tablette réelle, journal d'un scan en cours non rafraîchi, registre shadcn et le paquet `cn`.
+
 ## Fonctionnalités ajoutées en cours de route
 
 ### Menu d'administration des scans (demandé le 2026-11-11)
@@ -1122,3 +1153,4 @@ L'ordre de lecture ne dépend jamais de l'ordre dans l'archive : le lecteur reç
 - 2026-11-13 : résumés des sources web en texte brut (le Markdown de MangaDex est retiré, pas de moteur de rendu dans l'interface).
 - 2026-11-13 : fiches pour adultes exclues par défaut des recherches web, une case de l'administration les permet.
 - 2026-11-13 : phase 5 terminée (métadonnées des fichiers et du web, édition manuelle avec verrouillage par champ, séries qui survivent au renommage, identification façon Plex, couvertures des sources).
+- 2026-11-13 : plan de la phase 6 préparé dans une nouvelle session (notes de passation dans « Phase 6 »).
