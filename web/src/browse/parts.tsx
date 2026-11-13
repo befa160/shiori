@@ -1,12 +1,11 @@
 import type { UseQueryResult } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { errorText } from '@/i18n/errors'
-import { cn } from '@/lib/utils'
 import { NotFound } from '@/pages/NotFound'
 
 /** Monte l'écran seulement si `:id` est un entier positif ; sinon « Page introuvable », au lieu
@@ -19,39 +18,13 @@ export function WithId({ children }: { children: (id: number) => ReactNode }) {
 /** Bouton « Retour » explicite vers l'écran parent (la barre du navigateur est masquée en PWA). */
 export function BackLink({ to, label }: { to: string; label: string }) {
   return (
-    <Button asChild variant="ghost" className="-ml-3 text-muted-foreground">
-      <Link to={to}>
+    <Button asChild variant="ghost" className="-ml-3 max-w-[calc(100%+0.75rem)] text-muted-foreground">
+      <Link to={to} title={label}>
         <ChevronLeft aria-hidden />
-        {label}
+        {/* Un nom de bibliothèque très long se tronque au lieu d'élargir la page. */}
+        <span className="truncate">{label}</span>
       </Link>
     </Button>
-  )
-}
-
-/** Ligne d'une liste, entièrement cliquable : cible tactile de 56 px au moins. */
-export function Row({ to, children, className }: { to: string; children: ReactNode; className?: string }) {
-  return (
-    <li>
-      <Link
-        to={to}
-        className={cn(
-          'relative flex min-h-14 items-center gap-3 overflow-hidden rounded-md bg-card px-4 py-3 transition-colors hover:bg-accent active:bg-muted',
-          className,
-        )}
-      >
-        <div className="min-w-0 flex-1">{children}</div>
-        <ChevronRight aria-hidden className="size-5 shrink-0 text-muted-foreground" />
-      </Link>
-    </li>
-  )
-}
-
-/** Titre tronqué sur deux lignes (CLAUDE.md) ; le titre complet reste lisible au survol. */
-export function RowTitle({ children }: { children: string }) {
-  return (
-    <p title={children} className="line-clamp-2 font-medium break-words">
-      {children}
-    </p>
   )
 }
 

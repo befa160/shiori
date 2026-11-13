@@ -147,6 +147,9 @@ async fn summaries_follow_the_reading() {
         (2, ReadingStatus::InProgress)
     );
     assert_eq!(s.resume_volume_id.as_ref(), Some(&f.volumes[&4]));
+    // Le détail de la série suit la même règle.
+    let detail = f.db.series_detail(s.id).await.unwrap().unwrap();
+    assert_eq!(detail.resume_volume_id, s.resume_volume_id);
 
     // Tout ce qui se lit est lu, sauf le tome en erreur : la série n'est pas « lue ».
     f.read(4, 2).await;

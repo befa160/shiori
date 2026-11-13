@@ -83,6 +83,8 @@ pub struct SeriesDetail {
     pub folder: Option<String>,
     pub publication_status: Option<PublicationStatus>,
     pub settings: ReadingSettings,
+    /// Tome qu'ouvre « Lire » : même règle que dans [`SeriesSummary`].
+    pub resume_volume_id: Option<String>,
     pub volumes: Vec<SeriesVolume>,
 }
 
@@ -465,6 +467,8 @@ impl Db {
             .iter()
             .map(located)
             .collect::<Result<Vec<_>, _>>()?;
+        let rows = in_series_order(rows);
+        let resume_volume_id = resume(&rows.iter().collect::<Vec<_>>(), &progress);
         Ok(Some(SeriesDetail {
             id,
             library_id: series.get("library_id"),
@@ -475,7 +479,8 @@ impl Db {
                 .map(from_db)
                 .transpose()?,
             settings: ReadingSettings::of(&series)?,
-            volumes: in_series_order(rows)
+            resume_volume_id,
+            volumes: rows
                 .into_iter()
                 .map(|r| SeriesVolume {
                     progress: progress.remove(&r.volume.volume_id),
