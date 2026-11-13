@@ -52,6 +52,8 @@ pub struct SeriesSummary {
     pub last_read_at: Option<String>,
     /// Page choisie comme couverture, sinon page 0 du premier tome de la série.
     pub cover_page_id: Option<String>,
+    /// Couverture d'une source choisie (`/api/covers/{id}`) : l'emporte sur la page.
+    pub cover_image_id: Option<String>,
     /// Tome qu'ouvre « Lire » : voir [`resume`].
     pub resume_volume_id: Option<String>,
 }
@@ -420,6 +422,7 @@ impl Db {
                         .transpose()?,
                     created_at: s.get("created_at"),
                     last_read_at: read_at.cloned(),
+                    cover_image_id: meta.cover_image_id,
                     cover_page_id: meta
                         .cover_page_id
                         .or_else(|| vols.first().and_then(|r| r.volume.cover_page_id.clone())),

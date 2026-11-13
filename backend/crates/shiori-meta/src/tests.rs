@@ -121,3 +121,34 @@ fn requests_keep_their_distance_and_give_up_on_a_long_wait() {
     assert!(matches!(http.turn(), Err(FetchError::RateLimited(_))));
     assert!(start.elapsed() < Duration::from_secs(1));
 }
+
+#[test]
+fn only_https_addresses_on_the_expected_hosts_are_downloaded() {
+    assert_eq!(
+        image_host("https://S4.AniList.co/file/x.jpg").as_deref(),
+        Some("s4.anilist.co")
+    );
+    assert_eq!(
+        image_host("https://uploads.mangadex.org?x").as_deref(),
+        Some("uploads.mangadex.org")
+    );
+    for refused in [
+        "http://s4.anilist.co/x.jpg",
+        "https://user@s4.anilist.co/x.jpg",
+        "https://s4.anilist.co:8443/x.jpg",
+        "https://127.0.0.1:80/",
+        "https:///x",
+        "file:///etc/passwd",
+        "https://s4.anilist.co\\@evil/",
+    ] {
+        assert_eq!(image_host(refused), None, "{refused}");
+    }
+    // Un hôte inattendu n'est même pas contacté.
+    let http = Http::new(Duration::ZERO);
+    let evil = http.image("https://evil.example/x.jpg", |h| h.ends_with(".anilist.co"));
+    assert!(matches!(evil, Err(FetchError::BadResponse(_))));
+    let lookalike = http.image("https://anilist.co.evil.example/x.jpg", |h| {
+        h.ends_with(".anilist.co")
+    });
+    assert!(matches!(lookalike, Err(FetchError::BadResponse(_))));
+}

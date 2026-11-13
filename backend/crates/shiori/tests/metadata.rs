@@ -65,6 +65,15 @@ impl Source for Fake {
             .pop_front()
             .unwrap_or(Err(FetchError::NotFound))
     }
+
+    /// Une vraie image (600 × 900) pour l'adresse prévue, autre chose sinon.
+    fn image(&self, url: &str) -> Answer<Vec<u8>> {
+        self.calls.lock().unwrap().push(format!("image {url}"));
+        match url {
+            "https://s4.anilist.co/c.jpg" => Ok(png(600, 900, page_color(3))),
+            _ => Ok(b"pas une image".to_vec()),
+        }
+    }
 }
 
 fn fiche(id: &str, title: &str) -> WebMetadata {
@@ -463,4 +472,169 @@ async fn only_one_identification_at_a_time() {
     let (_, overview) = call(&f.app, "GET", "/api/admin/metadata", None).await;
     assert_eq!(overview["identify"]["running"], true);
     f.state.metadata.wait().await;
+}
+
+#[tokio::test]
+async fn source_covers_are_relayed_kept_and_served() {
+    let f = fixture(Duration::ZERO).await;
+    scan(&f).await;
+    let gigant = series_id(&f, "Gigant").await;
+    let (status, _) = call(&f.app, "GET", "/api/metadata/thumbnail/anilist/4", None).await;
+    assert_eq!(status, StatusCode::CONFLICT, "réseau désactivé");
+    enable(&f).await;
+
+    // Vignette d'un résultat de recherche : relayée par le serveur, gardée un jour.
+    let other = WebMetadata {
+        cover_url: Some("https://x/bad.jpg".into()),
+        ..fiche("5", "Autre")
+    };
+    f.anilist
+        .search_gives(Ok(vec![fiche("4", "GIGANT"), other]));
+    call(
+        &f.app,
+        "GET",
+        &format!("/api/series/{gigant}/metadata/search?source=anilist&q=gigant"),
+        None,
+    )
+    .await;
+    let response = raw(&f.app, "/api/metadata/thumbnail/anilist/4", None).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["content-type"], "image/png");
+    assert_eq!(
+        response.headers()["cache-control"],
+        "private, max-age=86400"
+    );
+    let (status, err) = call(&f.app, "GET", "/api/metadata/thumbnail/anilist/5", None).await;
+    assert_eq!(
+        (status, err["code"].as_str()),
+        (StatusCode::BAD_GATEWAY, Some("bad_response")),
+        "pas une image"
+    );
+    let (status, _) = call(
+        &f.app,
+        "GET",
+        "/api/metadata/thumbnail/anilist/inconnu",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // Pas de fiche liée : pas de couverture de source.
+    let use_cover = format!("/api/series/{gigant}/metadata/cover");
+    let (status, _) = call(
+        &f.app,
+        "POST",
+        &use_cover,
+        Some(json!({ "source": "anilist" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    // Liée : sa couverture devient celle de la série, gardée par le serveur.
+    f.anilist.fetch_gives(Ok(fiche("4", "GIGANT")));
+    let link = format!("/api/series/{gigant}/metadata/links/anilist");
+    call(&f.app, "PUT", &link, Some(json!({ "external_id": "4" }))).await;
+    let (status, detail) = call(
+        &f.app,
+        "POST",
+        &use_cover,
+        Some(json!({ "source": "anilist" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let id = detail["metadata"]["cover_image_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert_eq!(id.len(), 64);
+    assert!(
+        detail["locked"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("cover_image_id"))
+    );
+    let (_, all) = call(&f.app, "GET", "/api/series", None).await;
+    assert!(
+        all.as_array()
+            .unwrap()
+            .iter()
+            .any(|s| s["cover_image_id"] == id.as_str())
+    );
+
+    // Servie : originale, ou redimensionnée en JPEG ; immuable, 304 sur ETag.
+    let original = raw(&f.app, &format!("/api/covers/{id}"), None).await;
+    assert_eq!(original.status(), StatusCode::OK);
+    assert_eq!(original.headers()["content-type"], "image/png");
+    let small = raw(&f.app, &format!("/api/covers/{id}?w=320&f=jpeg"), None).await;
+    assert_eq!(small.headers()["content-type"], "image/jpeg");
+    let etag = small.headers()["etag"].to_str().unwrap().to_owned();
+    assert!(
+        small.headers()["cache-control"]
+            .to_str()
+            .unwrap()
+            .contains("immutable")
+    );
+    let bytes = small.into_body().collect().await.unwrap().to_bytes();
+    assert_eq!(imagesize::blob_size(&bytes).unwrap().width, 320);
+    let again = raw(
+        &f.app,
+        &format!("/api/covers/{id}?w=320&f=jpeg"),
+        Some(&etag),
+    )
+    .await;
+    assert_eq!(again.status(), StatusCode::NOT_MODIFIED);
+    // Plus large que l'originale : l'originale.
+    let wide = raw(&f.app, &format!("/api/covers/{id}?w=1080&f=jpeg"), None).await;
+    assert_eq!(wide.headers()["content-type"], "image/png");
+    for bad in [
+        "/api/covers/zz".to_owned(),
+        format!("/api/covers/{}", "0".repeat(64)),
+        format!("/api/covers/{id}?w=333"),
+    ] {
+        assert_ne!(
+            raw(&f.app, &bad, None).await.status(),
+            StatusCode::OK,
+            "{bad}"
+        );
+    }
+
+    // Une seule couverture choisie : une page remplace l'image ; une image inconnue est refusée.
+    let uri = format!("/api/series/{gigant}");
+    let (_, detail) = call(&f.app, "GET", &uri, None).await;
+    let page = detail["volumes"][0]["cover_page_id"].clone();
+    let (_, detail) = call(
+        &f.app,
+        "PATCH",
+        &uri,
+        Some(json!({ "cover_page_id": page })),
+    )
+    .await;
+    assert_eq!(detail["metadata"]["cover_image_id"], Value::Null);
+    assert_eq!(detail["metadata"]["cover_page_id"], page);
+    let (status, _) = call(
+        &f.app,
+        "PATCH",
+        &uri,
+        Some(json!({ "cover_image_id": "0".repeat(64) })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let (_, detail) = call(&f.app, "PATCH", &uri, Some(json!({ "cover_image_id": id }))).await;
+    assert_eq!(detail["metadata"]["cover_page_id"], Value::Null);
+    assert!(
+        f.anilist
+            .calls()
+            .contains(&"image https://s4.anilist.co/c.jpg".to_owned())
+    );
+}
+
+/// Réponse brute (en-têtes, corps binaire), avec un `If-None-Match` éventuel.
+async fn raw(app: &Router, uri: &str, etag: Option<&str>) -> axum::response::Response {
+    let mut request = Request::builder().uri(uri);
+    if let Some(etag) = etag {
+        request = request.header("if-none-match", etag);
+    }
+    app.clone()
+        .oneshot(request.body(Body::empty()).unwrap())
+        .await
+        .unwrap()
 }

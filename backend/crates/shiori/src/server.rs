@@ -168,6 +168,9 @@ pub fn router(app: Arc<App>, local_only: bool) -> Router {
             put(link_source).delete(unlink_source),
         )
         .route("/api/series/{id}/metadata/refresh", post(refresh_metadata))
+        .route("/api/series/{id}/metadata/cover", post(use_cover))
+        .route("/api/metadata/thumbnail/{source}/{id}", get(thumbnail))
+        .route("/api/covers/{id}", get(cover))
         .route("/api/admin/metadata", get(metadata_status))
         .route("/api/admin/metadata/identify", post(identify))
         .route("/api/volumes/{id}", get(volume).patch(patch_volume))
@@ -635,6 +638,93 @@ async fn refresh_metadata(
     series_or_404(&app, id).await?;
     app.metadata.refresh(id).await?;
     Ok(Json(series_or_404(&app, id).await?))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct UseCover {
+    source: SourceId,
+}
+
+/// Prend la couverture de la fiche liée chez une source et renvoie le détail de la série.
+async fn use_cover(
+    State(app): State<Arc<App>>,
+    Path(id): Path<String>,
+    body: Result<Json<UseCover>, JsonRejection>,
+) -> ApiResult<shiori_db::SeriesDetail> {
+    let id = int_id(&id)?;
+    let Json(body) = body.map_err(invalid_body)?;
+    series_or_404(&app, id).await?;
+    app.metadata.use_cover(id, body.source).await?;
+    Ok(Json(series_or_404(&app, id).await?))
+}
+
+/// Vignette d'une fiche, relayée ; gardée un jour par le navigateur.
+async fn thumbnail(
+    State(app): State<Arc<App>>,
+    Path((source, id)): Path<(String, String)>,
+) -> Result<Response, ApiError> {
+    let bytes = app.metadata.thumbnail(source_id(&source)?, &id).await?;
+    let media_type = match imagesize::image_type(&bytes) {
+        Ok(imagesize::ImageType::Png) => "image/png",
+        Ok(imagesize::ImageType::Webp) => "image/webp",
+        Ok(imagesize::ImageType::Jpeg) => "image/jpeg",
+        _ => return Err(MetaError::from(FetchError::BadResponse("pas une image".into())).into()),
+    };
+    let headers = [
+        (header::CONTENT_TYPE, media_type),
+        (header::CACHE_CONTROL, "private, max-age=86400"),
+    ];
+    Ok((headers, bytes).into_response())
+}
+
+/// Couverture gardée, originale ou redimensionnée (largeurs fixes) ; URL immuable : son
+/// identifiant est le hash de son contenu.
+async fn cover(
+    State(app): State<Arc<App>>,
+    Path(id): Path<String>,
+    query: Result<Query<ImageQuery>, QueryRejection>,
+    headers: HeaderMap,
+) -> Result<Response, ApiError> {
+    let Query(query) = query.map_err(invalid_query)?;
+    let wanted = wanted(&query)?;
+    // L'identifiant est un hash hexadécimal : rien d'autre n'est cherché.
+    if id.len() != 64 || !id.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(ApiError::not_found("couverture"));
+    }
+    let found = app
+        .db
+        .cover(&id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("couverture"))?;
+    // On n'agrandit jamais : au-delà de sa largeur, l'originale.
+    let resize = wanted.filter(|&(w, _)| w < found.width);
+    let etag = match resize {
+        Some((w, f)) => format!("\"{id}-w{w}-{}-v{RENDER_VERSION}\"", f.extension()),
+        None => format!("\"{id}\""),
+    };
+    let cache = [
+        (header::ETAG, etag.clone()),
+        (header::CACHE_CONTROL, IMMUTABLE.into()),
+    ];
+    if etag_matches(&headers, &etag) {
+        return Ok((StatusCode::NOT_MODIFIED, cache).into_response());
+    }
+    // shortcut: rendu à chaque demande, sans cache disque (couvertures de 500 px au plus, gardées par le navigateur) ; passer par `Images` si le CPU le demande.
+    let (bytes, media_type) = match resize {
+        None => (found.bytes, found.media_type.to_owned()),
+        Some((w, f)) => {
+            let _permit = app.renders.acquire().await.expect("sémaphore jamais fermé");
+            let failed =
+                |e: String| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "render_failed", e);
+            let bytes = tokio::task::spawn_blocking(move || render::render(&found.bytes, w, f))
+                .await
+                .map_err(|_| failed("rendu interrompu".into()))?
+                .map_err(failed)?;
+            (bytes, f.media_type().to_owned())
+        }
+    };
+    Ok(([(header::CONTENT_TYPE, media_type)], cache, bytes).into_response())
 }
 
 #[derive(Serialize)]

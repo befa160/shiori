@@ -2310,6 +2310,8 @@ dependencies = [
 name = "shiori-db"
 version = "0.1.0"
 dependencies = [
+ "blake3",
+ "imagesize",
  "serde",
  "serde_json",
  "shiori-core",

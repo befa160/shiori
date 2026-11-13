@@ -258,3 +258,60 @@ async fn a_series_gone_meanwhile_is_skipped() {
     }
     assert!(db.source_states(one).await.unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn covers_are_kept_once_and_found_back() {
+    let (_dir, db, one, akira) = setup().await;
+    assert_eq!(
+        db.store_cover(b"pas une image".to_vec()).await.unwrap(),
+        None
+    );
+    let png = shiori_testkit::png(30, 45, shiori_testkit::page_color(1));
+    let id = db.store_cover(png.clone()).await.unwrap().unwrap();
+    assert_eq!(
+        db.store_cover(png.clone()).await.unwrap().as_deref(),
+        Some(id.as_str()),
+        "même contenu, même id"
+    );
+    let cover = db.cover(&id).await.unwrap().unwrap();
+    assert_eq!(
+        (cover.media_type, cover.width, cover.bytes),
+        ("image/png", 30, png)
+    );
+    assert_eq!(db.cover("inconnu").await.unwrap(), None);
+    // Trop grande pour être décodée sans risque (en-tête PNG annonçant 20 000 px de large).
+    let mut huge = shiori_testkit::png(30, 45, shiori_testkit::page_color(1));
+    huge[16..20].copy_from_slice(&20_000u32.to_be_bytes());
+    assert_eq!(db.store_cover(huge).await.unwrap(), None);
+
+    // Adresse d'une fiche liée ou candidate, retrouvée par son identifiant chez la source.
+    db.record_source(one, SourceId::Anilist, linked("7", "AKIRA", "en"))
+        .await
+        .unwrap();
+    let candidate = WebMetadata {
+        cover_url: Some("https://s4.anilist.co/b.jpg".into()),
+        ..fiche("8", "B", "en")
+    };
+    db.record_source(
+        akira,
+        SourceId::Anilist,
+        Outcome::Candidates(vec![candidate]),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        db.cover_url(SourceId::Anilist, "7")
+            .await
+            .unwrap()
+            .as_deref(),
+        Some("https://exemple/c.jpg")
+    );
+    assert_eq!(
+        db.cover_url(SourceId::Anilist, "8")
+            .await
+            .unwrap()
+            .as_deref(),
+        Some("https://s4.anilist.co/b.jpg")
+    );
+    assert_eq!(db.cover_url(SourceId::Mangadex, "7").await.unwrap(), None);
+}

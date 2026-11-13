@@ -16,6 +16,7 @@ clap.workspace = true
 comfy-table.workspace = true
 directories.workspace = true
 image.workspace = true
+imagesize.workspace = true
 ravif.workspace = true
 rust-embed.workspace = true
 serde.workspace = true
@@ -31,7 +32,6 @@ tracing-subscriber.workspace = true
 
 [dev-dependencies]
 http-body-util.workspace = true
-imagesize.workspace = true
 sqlx.workspace = true
 tokio = { workspace = true, features = ["macros"] }
 tower.workspace = true

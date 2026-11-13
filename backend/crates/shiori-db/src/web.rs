@@ -246,5 +246,92 @@ impl Db {
     }
 }
 
+const MAX_COVER_SIDE: usize = 4096;
+
+/// Couverture gardée : type d'image, largeur, contenu.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Cover {
+    pub media_type: &'static str,
+    pub width: u32,
+    pub bytes: Vec<u8>,
+}
+
+impl Db {
+    /// Garde une couverture téléchargée et rend son identifiant (hash du contenu) ; `None` si
+    /// ce n'est pas une image JPEG, PNG ou WebP lisible, de 4 096 px de côté au plus.
+    // shortcut: une couverture remplacée ou d'une source déliée reste en base (quelques centaines de Ko) ; purger celles qu'aucune série ne référence si la base grossit.
+    pub async fn store_cover(&self, bytes: Vec<u8>) -> Result<Option<String>, Error> {
+        use imagesize::ImageType;
+        let media_type = match imagesize::image_type(&bytes) {
+            Ok(ImageType::Jpeg) => "image/jpeg",
+            Ok(ImageType::Png) => "image/png",
+            Ok(ImageType::Webp) => "image/webp",
+            _ => return Ok(None),
+        };
+        // Image venue du réseau : au-delà de 4 096 px de côté, la décoder pour un rendu pourrait
+        // épuiser la mémoire (un PNG de quelques Mo peut annoncer 20 000 × 20 000 px).
+        let Ok(size) = imagesize::blob_size(&bytes) else {
+            return Ok(None);
+        };
+        if size.width > MAX_COVER_SIDE || size.height > MAX_COVER_SIDE {
+            return Ok(None);
+        }
+        let id = blake3::hash(&bytes).to_hex().to_string();
+        sqlx::query(concat!(
+            "INSERT INTO covers (id, media_type, width, height, data, created_at) VALUES (?, ?, ?, ?, ?, ",
+            now!(),
+            ") ON CONFLICT (id) DO NOTHING"
+        ))
+        .bind(&id)
+        .bind(media_type)
+        .bind(size.width as i64)
+        .bind(size.height as i64)
+        .bind(bytes)
+        .execute(&self.pool)
+        .await?;
+        Ok(Some(id))
+    }
+
+    pub async fn cover(&self, id: &str) -> Result<Option<Cover>, Error> {
+        let row = sqlx::query("SELECT media_type, width, data FROM covers WHERE id = ?")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
+        Ok(row.map(|r| Cover {
+            media_type: match r.get::<&str, _>("media_type") {
+                "image/png" => "image/png",
+                "image/webp" => "image/webp",
+                _ => "image/jpeg",
+            },
+            width: r.get::<i64, _>("width") as u32,
+            bytes: r.get("data"),
+        }))
+    }
+
+    /// Adresse de couverture d'une fiche déjà vue (liée ou candidate) chez `source`.
+    pub async fn cover_url(
+        &self,
+        source: SourceId,
+        external_id: &str,
+    ) -> Result<Option<String>, Error> {
+        let rows = sqlx::query("SELECT data, candidates FROM series_sources WHERE source = ?")
+            .bind(to_db(&source))
+            .fetch_all(&self.pool)
+            .await?;
+        for row in rows {
+            let linked: Option<WebMetadata> = json(row.get("data"))?;
+            let candidates: Vec<WebMetadata> = json(row.get("candidates"))?.unwrap_or_default();
+            if let Some(found) = linked
+                .into_iter()
+                .chain(candidates)
+                .find(|w| w.id == external_id)
+            {
+                return Ok(found.cover_url);
+            }
+        }
+        Ok(None)
+    }
+}
+
 #[cfg(test)]
 mod tests;
