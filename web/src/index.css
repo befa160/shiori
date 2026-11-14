@@ -1,11 +1,14 @@
 @import "tailwindcss";
 
-/* L'application est toujours sombre : les variantes `dark:` des composants shadcn suivent la
-   classe `dark` posée sur <html>, pas le thème de l'OS (sinon, OS en clair = composants en clair). */
+/* Les variantes `dark:` des composants shadcn suivent la classe `dark` que `applyTheme` pose sur
+   <html> pour les thèmes sombre et OLED, pas le thème de l'OS. */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Thème sombre natif (CLAUDE.md, direction UI/UX) : variables au format shadcn/ui. */
-:root {
+/* Thèmes (lot 6.4, Q40) : le sombre est le défaut (`:root`) ; chaque autre thème redéfinit les
+   jetons sous `[data-theme]`, posé sur <html> par `applyTheme` ou sur un aperçu du sélecteur.
+   `theme.test.ts` mesure les contrastes de chaque thème (texte 4,5:1, champs et focus 3:1). */
+:root,
+[data-theme='dark'] {
   color-scheme: dark;
   --background: #121212;
   --foreground: #f4f4f5;
@@ -37,6 +40,70 @@
   --sidebar-primary: var(--primary);
   --sidebar-accent: var(--accent);
   --sidebar-border: var(--border);
+}
+
+/* Noir pur : les pixels éteints des écrans OLED économisent la batterie. */
+[data-theme='oled'] {
+  color-scheme: dark;
+  --background: #000000;
+  --card: #111111;
+  --popover: #111111;
+  --muted: #1f1f1f;
+  --accent: #1f1f1f;
+  --secondary: #1f1f1f;
+  --border: #1f1f1f;
+}
+
+/* Clair : l'ambre vif ne se lit pas sur du blanc (2,1:1) ; amber-700, de la même famille, sert de
+   texte, de remplissage (texte blanc) et d'anneau de focus. */
+[data-theme='light'] {
+  color-scheme: light;
+  --background: #f4f4f5;
+  --foreground: #18181b;
+  --card: #ffffff;
+  --card-foreground: #18181b;
+  --popover: #ffffff;
+  --popover-foreground: #18181b;
+  --muted: #e4e4e7;
+  --muted-foreground: #52525b;
+  --accent: #e4e4e7;
+  --accent-foreground: #18181b;
+  --secondary: #e4e4e7;
+  --secondary-foreground: #18181b;
+  --primary: #b45309;
+  --primary-foreground: #ffffff;
+  --destructive: #b91c1c;
+  --destructive-fill: #b91c1c;
+  --border: #d4d4d8;
+  --input: #71717a;
+  --ring: #b45309;
+}
+
+/* Sépia : papier chaud et encre brune, pour lire longtemps ; ambre amber-800. */
+[data-theme='sepia'] {
+  color-scheme: light;
+  --background: #f4ecd8;
+  --foreground: #3b2f1e;
+  --card: #fbf6ea;
+  --card-foreground: #3b2f1e;
+  --popover: #fbf6ea;
+  --popover-foreground: #3b2f1e;
+  --muted: #e8dcc0;
+  --muted-foreground: #5f4f36;
+  --accent: #e8dcc0;
+  --accent-foreground: #3b2f1e;
+  --secondary: #e8dcc0;
+  --secondary-foreground: #3b2f1e;
+  --primary: #92400e;
+  --primary-foreground: #ffffff;
+  --destructive: #a61b1b;
+  --destructive-fill: #a61b1b;
+  --border: #dccfb0;
+  --input: #8a7350;
+  --ring: #92400e;
+}
+
+:root {
   /* Hauteur de la barre d'onglets du bas (hors zone sûre) ; nulle à partir de `lg`, où la sidebar
      la remplace. Le contenu et les notifications s'écartent d'autant. */
   --tabbar-height: 3.5rem;

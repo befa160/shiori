@@ -200,7 +200,7 @@ function VolumeMenu({ volume, label }: { volume: SeriesVolume; label: string }) 
         <DropdownMenuTrigger
           aria-label={t('series.actions', { label })}
           // Pastille de 36 px, zone de toucher de 44 px.
-          className="relative flex size-9 items-center justify-center rounded-full bg-black/70 text-foreground transition-colors after:absolute after:-inset-1 hover:bg-black/90"
+          className="relative flex size-9 items-center justify-center rounded-full bg-black/70 text-white transition-colors after:absolute after:-inset-1 hover:bg-black/90"
         >
           <EllipsisVertical aria-hidden className="size-5" />
         </DropdownMenuTrigger>

@@ -15,6 +15,20 @@ pub enum Language {
     En,
 }
 
+/// Thème de l'interface (Q40) ; le lecteur reste sombre.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Theme {
+    /// Sombre ou clair selon l'appareil (`prefers-color-scheme`).
+    #[default]
+    System,
+    Dark,
+    Light,
+    /// Noir pur, pour les écrans OLED.
+    Oled,
+    Sepia,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Settings {
     /// `None` : personne n'a choisi, l'interface suit la langue du navigateur.
@@ -27,6 +41,7 @@ pub struct Settings {
     pub metadata_sources: Option<Vec<SourceId>>,
     /// Fiches pour adultes permises dans les recherches (exclues par défaut).
     pub metadata_adult: bool,
+    pub theme: Theme,
 }
 
 impl Settings {
@@ -54,7 +69,7 @@ impl Settings {
 impl Db {
     pub async fn settings(&self) -> Result<Settings, Error> {
         let row = sqlx::query(
-            "SELECT language, page_turn, metadata_online, metadata_sources, metadata_adult
+            "SELECT language, page_turn, metadata_online, metadata_sources, metadata_adult, theme
              FROM app_settings WHERE id = 1",
         )
         .fetch_one(&self.pool)
@@ -67,6 +82,7 @@ impl Db {
             page_turn: from_db(row.get("page_turn"))?,
             metadata_online: row.get("metadata_online"),
             metadata_adult: row.get("metadata_adult"),
+            theme: from_db(row.get("theme"))?,
             metadata_sources: row
                 .get::<Option<&str>, _>("metadata_sources")
                 .map(serde_json::from_str)
@@ -101,6 +117,14 @@ impl Db {
             .execute(&self.pool)
             .await?;
         self.refresh_metadata(None).await?;
+        self.settings().await
+    }
+
+    pub async fn set_theme(&self, theme: Theme) -> Result<Settings, Error> {
+        sqlx::query("UPDATE app_settings SET theme = ? WHERE id = 1")
+            .bind(to_db(&theme))
+            .execute(&self.pool)
+            .await?;
         self.settings().await
     }
 

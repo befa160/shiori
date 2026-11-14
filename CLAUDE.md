@@ -74,7 +74,7 @@ Détail des règles (couleurs, contrastes, composants, états) : `DESIGN_SYSTEM.
 
 Le lecteur est plein écran et immersif (barre d'outils masquée, tap au centre pour l'afficher) et il est exclu des règles ci-dessous.
 
-- Thème sombre natif par défaut : fond `#121212`, cartes/panneaux `#1E1E1E`, survol `#2A2A2A`. Accent ambre `#E5A00D` (amber-500) réservé à l'action principale, aux états actifs et aux barres de progression.
+- Thème sombre natif par défaut : fond `#121212`, cartes/panneaux `#1E1E1E`, survol `#2A2A2A`. Accent ambre `#E5A00D` (amber-500) réservé à l'action principale, aux états actifs et aux barres de progression. Autres thèmes (clair, noir OLED, sépia, ou « Système ») : mêmes jetons redéfinis dans `index.css`, ambre plus foncé sur fond clair, contrastes testés (`DESIGN_SYSTEM.md`) ; jamais de couleur en dur dans un composant.
 - Couvertures en `aspect-[2/3]`, `object-cover`, `rounded-md`. Couverture de repli générée (titre + auteur sur fond dégradé sombre) si absente. Titres tronqués sur 2 lignes (`line-clamp-2`), auteur en `text-zinc-400`.
 - Barre de progression fine (`h-1`, amber-500) collée en bas de la couverture pour les tomes en cours. Au survol (desktop) : léger zoom, bordure lumineuse subtile, bouton d'action rapide.
 - Navigation : sidebar fixe/rétractable (Bibliothèques, Séries, Statistiques) + recherche globale à partir du breakpoint `lg` ; en dessous, barre d'onglets fixe en bas (4 onglets max). Breakpoint à valider pour la tablette 8" en portrait.

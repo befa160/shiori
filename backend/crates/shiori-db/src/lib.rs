@@ -50,7 +50,7 @@ pub use reading::{
     SettingsChange,
 };
 pub use runs::{LogLine, RunCounts, RunFilter, RunOrigin, RunStatus, RunSummary};
-pub use settings::{Language, Settings};
+pub use settings::{Language, Settings, Theme};
 pub use web::{Cover, MatchedBy, Outcome, SourceIssue, SourceState, ToIdentify};
 
 pub struct Db {

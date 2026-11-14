@@ -324,7 +324,7 @@ async fn language_setting_round_trip() {
         call(&f.app, "GET", "/api/settings", None).await,
         (
             StatusCode::OK,
-            json!({ "language": null, "page_turn": "reading", "metadata_online": false, "metadata_sources": null, "metadata_adult": false })
+            json!({ "language": null, "page_turn": "reading", "metadata_online": false, "metadata_sources": null, "metadata_adult": false, "theme": "system" })
         )
     );
     let (status, saved) = call(
@@ -338,12 +338,12 @@ async fn language_setting_round_trip() {
         (status, saved),
         (
             StatusCode::OK,
-            json!({ "language": "en", "page_turn": "reading", "metadata_online": false, "metadata_sources": null, "metadata_adult": false })
+            json!({ "language": "en", "page_turn": "reading", "metadata_online": false, "metadata_sources": null, "metadata_adult": false, "theme": "system" })
         )
     );
     assert_eq!(
         call(&f.app, "GET", "/api/settings", None).await.1,
-        json!({ "language": "en", "page_turn": "reading", "metadata_online": false, "metadata_sources": null, "metadata_adult": false })
+        json!({ "language": "en", "page_turn": "reading", "metadata_online": false, "metadata_sources": null, "metadata_adult": false, "theme": "system" })
     );
     let (_, reset) = call(
         &f.app,
@@ -354,7 +354,7 @@ async fn language_setting_round_trip() {
     .await;
     assert_eq!(
         reset,
-        json!({ "language": null, "page_turn": "reading", "metadata_online": false, "metadata_sources": null, "metadata_adult": false })
+        json!({ "language": null, "page_turn": "reading", "metadata_online": false, "metadata_sources": null, "metadata_adult": false, "theme": "system" })
     );
     // Un champ absent reste inchangé.
     let (_, turned) = call(
@@ -366,10 +366,23 @@ async fn language_setting_round_trip() {
     .await;
     assert_eq!(
         turned,
-        json!({ "language": null, "page_turn": "ltr", "metadata_online": false, "metadata_sources": null, "metadata_adult": false })
+        json!({ "language": null, "page_turn": "ltr", "metadata_online": false, "metadata_sources": null, "metadata_adult": false, "theme": "system" })
+    );
+    let (_, themed) = call(
+        &f.app,
+        "PUT",
+        "/api/settings",
+        Some(json!({ "theme": "sepia" })),
+    )
+    .await;
+    assert_eq!(
+        (themed["theme"].as_str(), themed["page_turn"].as_str()),
+        (Some("sepia"), Some("ltr"))
     );
     for body in [
         json!({ "language": "de" }),
+        json!({ "theme": null }),
+        json!({ "theme": "rose" }),
         json!({ "page_turn": null }),
         json!({ "language": "fr", "page_turn": null }),
         json!({ "page_turn": "haut" }),

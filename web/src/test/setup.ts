@@ -7,6 +7,13 @@ import i18n from '@/i18n'
 Element.prototype.hasPointerCapture ??= () => false
 Element.prototype.releasePointerCapture ??= () => {}
 Element.prototype.scrollIntoView ??= () => {}
+// `prefers-color-scheme` : appareil en sombre, sauf si un test remplace `matchMedia`.
+globalThis.matchMedia ??= ((media: string) => ({
+  matches: false,
+  media,
+  addEventListener() {},
+  removeEventListener() {},
+})) as unknown as typeof matchMedia
 globalThis.ResizeObserver ??= class {
   observe() {}
   unobserve() {}

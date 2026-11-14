@@ -26,6 +26,11 @@ export const fr = {
     title: 'Administration',
     language: "Langue de l'interface",
     languageHelp: "Enregistrée sur le serveur : elle s'applique sur tous vos appareils.",
+    theme: 'Thème',
+    themeHelp:
+      "Enregistré sur le serveur, comme la langue. « Système » suit le réglage de l'appareil (sombre ou clair). Le lecteur reste toujours sombre.",
+    themes: { system: 'Système', dark: 'Sombre', light: 'Clair', oled: 'Noir OLED', sepia: 'Sépia' },
+    themeNotSaved: 'Thème non enregistré',
     reading: 'Lecture',
     pageTurn: 'Tourner les pages, par défaut',
     pageTurnHelp:

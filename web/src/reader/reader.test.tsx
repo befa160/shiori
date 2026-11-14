@@ -81,6 +81,16 @@ afterEach(() => {
 })
 
 describe('lecteur', () => {
+  it('reste sombre, quel que soit le thème de l’interface', async () => {
+    document.documentElement.dataset.theme = 'light'
+    api('rtl')
+    renderAt(`/read/${VOLUME}`)
+    // Premier test du fichier : le lecteur (route `lazy`) peut encore se charger à froid.
+    await screen.findByRole('img', { name: 'Page 1 sur 3' }, { timeout: 5000 })
+    expect(document.documentElement.dataset.theme).toBe('dark')
+    expect(document.documentElement).toHaveClass('dark')
+  })
+
   it('affiche la page 1 à la taille de l’écran, puis avance au clavier dans le sens manga', async () => {
     api('rtl')
     const { router } = renderAt(`/read/${VOLUME}`)
