@@ -23,7 +23,7 @@ use serde_json::json;
 use shiori_core::{Archive, PageId, PageStatus, Severity, VolumeId, open_archive as open_file};
 use shiori_db::{
     Db, EditError, Edited, Language, LibraryError, LibraryKind, PageFile, PageLayout, PageSource,
-    PageTurn, ReadingMode, RunFilter, RunStatus, SaveProgress, SettingsChange,
+    PageTurn, ReadingMode, RunFilter, RunStatus, SaveProgress, SettingsChange, Theme,
 };
 use shiori_meta::{FetchError, Source, SourceId, WebMetadata};
 use tokio::net::TcpListener;
@@ -363,6 +363,9 @@ struct NewSettings {
     /// Absent : inchangé ; `null` : ordre d'après la langue ; sinon sources sans doublon.
     #[serde(default, deserialize_with = "present")]
     metadata_sources: Option<Option<Vec<SourceId>>>,
+    /// Absent : inchangé ; jamais `null` (`system` pour suivre l'appareil).
+    #[serde(default, deserialize_with = "present")]
+    theme: Option<Option<Theme>>,
 }
 
 async fn save_settings(
@@ -373,6 +376,9 @@ async fn save_settings(
     let bad = |msg: &str| ApiError::new(StatusCode::BAD_REQUEST, "invalid_body", msg);
     if new.page_turn == Some(None) {
         return Err(bad("page_turn ne peut pas être null"));
+    }
+    if new.theme == Some(None) {
+        return Err(bad("theme ne peut pas être null"));
     }
     if new.metadata_online == Some(None) || new.metadata_adult == Some(None) {
         return Err(bad(
@@ -392,6 +398,7 @@ async fn save_settings(
         && new.metadata_online.is_none()
         && new.metadata_adult.is_none()
         && new.metadata_sources.is_none()
+        && new.theme.is_none()
     {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -404,6 +411,9 @@ async fn save_settings(
     }
     if let Some(Some(turn)) = new.page_turn {
         app.db.set_page_turn(turn).await?;
+    }
+    if let Some(Some(theme)) = new.theme {
+        app.db.set_theme(theme).await?;
     }
     if let Some(Some(online)) = new.metadata_online {
         app.db.set_metadata_online(online).await?;

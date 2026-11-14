@@ -16,7 +16,7 @@ const THUMBS = [160, 320, 480] as const
 const SIZES = '(min-width: 640px) 12rem, 45vw'
 
 /** Couverture générée : dégradé sombre (16 % de luminosité au plus, contraste vérifié), titre
- * et auteur dessous. */
+ * et auteur dessous. Comme une vraie couverture, elle reste sombre dans tous les thèmes. */
 export function FallbackCover({ title, author }: { title: string; author?: string }) {
   return (
     <div
@@ -25,8 +25,8 @@ export function FallbackCover({ title, author }: { title: string; author?: strin
       className="flex size-full flex-col items-center justify-center gap-1 p-3 text-center break-words"
       style={{ background: `linear-gradient(to bottom, hsl(${titleHue(title)} 35% 16%), #121212)` }}
     >
-      <span className="line-clamp-4 font-semibold text-foreground">{title}</span>
-      {author && <span className="line-clamp-2 text-sm text-muted-foreground">{author}</span>}
+      <span className="line-clamp-4 font-semibold text-zinc-100">{title}</span>
+      {author && <span className="line-clamp-2 text-sm text-zinc-400">{author}</span>}
     </div>
   )
 }
@@ -99,7 +99,7 @@ export function CoverCard({ to, title, subtitle, author, coverPageId, coverImage
           </p>
           <p className="line-clamp-1 text-sm text-muted-foreground">{subtitle}</p>
         </div>
-        <div className="relative aspect-[2/3] overflow-hidden rounded-md bg-card ring-1 ring-transparent transition-shadow group-hover:ring-white/15">
+        <div className="relative aspect-[2/3] overflow-hidden rounded-md bg-card ring-1 ring-transparent transition-shadow group-hover:ring-foreground/15">
           {/* `key` : une autre couverture repart sans l'échec de la précédente. */}
           <Cover key={coverImageId ?? coverPageId} pageId={coverPageId} imageId={coverImageId} title={title} author={author} eager={eager} />
           {badges.length > 0 && (
@@ -110,7 +110,7 @@ export function CoverCard({ to, title, subtitle, author, coverPageId, coverImage
                   key={badge.text}
                   className={cn(
                     'max-w-full truncate rounded-full px-2 py-0.5 text-xs font-medium',
-                    badge.tone === 'error' ? 'bg-destructive-fill text-white' : 'bg-black/80 text-foreground',
+                    badge.tone === 'error' ? 'bg-destructive-fill text-white' : 'bg-black/80 text-white',
                   )}
                 >
                   {badge.text}

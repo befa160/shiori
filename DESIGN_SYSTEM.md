@@ -14,7 +14,13 @@ Source de vérité du code : [`web/src/index.css`](web/src/index.css) (couleurs)
 
 ## Couleurs
 
-Thème sombre unique (`color-scheme: dark`, classe `dark` fixe sur `<html>` : un OS en clair ne change rien).
+Quatre thèmes (lot 6.4, Q40) : **sombre** (défaut, valeurs ci-dessous), **clair**, **noir OLED** et **sépia**, plus « Système » qui choisit sombre ou clair selon l'appareil. Un thème est un bloc `[data-theme='…']` de `web/src/index.css` qui redéfinit les mêmes jetons ; `applyTheme` (`web/src/lib/theme.ts`) le pose sur `<html>` avec la classe `dark` pour les thèmes sombres (variantes `dark:` de shadcn) et la couleur de barre `theme-color`. Le lecteur reste toujours sombre.
+
+- **Jamais de couleur en dur dans un composant** : un jeton, ou une couleur fixe seulement sur ce qui reste sombre dans tous les thèmes (pastilles posées sur une couverture : `bg-black/80 text-white` ; couverture de repli : `text-zinc-100` / `text-zinc-400`).
+- **Ajouter un thème** : un bloc dans `index.css`, une entrée dans `THEMES` de `theme.test.ts`, le type `Theme` (Rust et TypeScript), la contrainte de la migration, son nom dans `fr.ts` / `en.ts`. `theme.test.ts` mesure les couples texte (4,5:1) et champ / focus (3:1) de chaque thème : un thème illisible casse le build.
+- **Ambre sur fond clair** : `#E5A00D` ne fait que 2,1:1 sur blanc. Clair : amber-700 `#B45309` (texte blanc dessus) ; sépia : amber-800 `#92400E`. Même famille, même rôle (action principale, état actif, progression, focus).
+
+Valeurs du thème sombre :
 
 | Rôle | Variable / classe | Valeur | Usage |
 |---|---|---|---|
@@ -43,6 +49,8 @@ Thème sombre unique (`color-scheme: dark`, classe `dark` fixe sur `<html>` : un
 | Bordure de champ `#71717A` | 3,9 | 3,4 | 3,0 | 3 |
 
 Autres paires : `#121212` sur ambre 8,4:1 ; blanc sur `#B91C1C` 6,5:1. Le texte secondaire tombe à 4,1:1 sur `#3F3F46` (zinc-700) : **pas de texte secondaire sur une surface plus claire que `#2A2A2A`**.
+
+Les autres thèmes ne sont pas recopiés ici : leurs valeurs vivent dans `index.css` et leurs contrastes sont vérifiés à chaque build par `theme.test.ts`.
 
 ### Logo
 
@@ -230,5 +238,5 @@ Sonner (déjà monté hors des routes) : succès ou échec d'une action qui ne c
 1. Skill UI/UX Pro Max avant de coder, et sa liste de contrôle à la fin.
 2. Composants par le MCP shadcn, liste d'audit du MCP.
 3. Données de test avec des titres très longs, des couvertures manquantes, un tome en erreur.
-4. Captures Playwright en 390×844, 800×1280, 1280×800 et 1440×900 (binaire release), en français et en anglais pour les écrans à beaucoup de libellés ; défauts d'alignement corrigés.
+4. Captures Playwright en 390×844, 800×1280, 1280×800 et 1440×900 (binaire release), en français et en anglais pour les écrans à beaucoup de libellés, et dans un thème clair (clair ou sépia) en plus du sombre ; défauts d'alignement corrigés.
 5. Parcours au clavier seul.

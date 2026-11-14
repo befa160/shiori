@@ -15,6 +15,7 @@ import { Toggle } from '@/components/ui/toggle'
 import i18n from '@/i18n'
 import { errorText } from '@/i18n/errors'
 import { useLanguage } from '@/i18n/useLanguage'
+import { useTheme } from '@/lib/theme'
 import { cn } from '@/lib/utils'
 import { NotFound } from '@/pages/NotFound'
 import { type Direction, type Move, keyMove, moveIndex, pageUrl, swipeAction, tapAction } from './controls'
@@ -56,6 +57,7 @@ export interface ReaderProps {
 /** Lecteur plein écran, hors du cadre commun : il applique lui-même la langue enregistrée. */
 function Reader({ volumeId }: { volumeId: string }) {
   useLanguage()
+  useTheme('dark')
   const { t, i18n: i18next } = useTranslation()
   const queryClient = useQueryClient()
   const volume = useVolume(volumeId)

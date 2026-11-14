@@ -26,6 +26,11 @@ export const en: Translations = {
     title: 'Administration',
     language: 'Interface language',
     languageHelp: 'Saved on the server: it applies to all your devices.',
+    theme: 'Theme',
+    themeHelp:
+      'Saved on the server, like the language. “System” follows the device setting (dark or light). The reader always stays dark.',
+    themes: { system: 'System', dark: 'Dark', light: 'Light', oled: 'OLED black', sepia: 'Sepia' },
+    themeNotSaved: 'Theme not saved',
     reading: 'Reading',
     pageTurn: 'Turn pages, by default',
     pageTurnHelp:

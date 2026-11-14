@@ -5,6 +5,7 @@ import { AdminMetadata } from '@/admin/Metadata'
 import { PageTurnSetting } from '@/admin/PageTurnSetting'
 import { CurrentScan } from '@/admin/scans'
 import { Button } from '@/components/ui/button'
+import { ThemeSetting } from '@/admin/ThemeSetting'
 import { LanguageSelect } from './LanguageSelect'
 
 /** Administration : passe en cours, bibliothèques, langue ; l'historique des scans a sa page. */
@@ -39,6 +40,12 @@ export function AdminPage() {
         </h2>
         <p className="text-sm text-muted-foreground">{t('admin.languageHelp')}</p>
         <LanguageSelect />
+      </section>
+      <section aria-labelledby="admin-theme" className="max-w-prose space-y-3 rounded-md bg-card p-4">
+        <h2 id="admin-theme" className="text-lg font-semibold">
+          {t('admin.theme')}
+        </h2>
+        <ThemeSetting />
       </section>
     </section>
   )

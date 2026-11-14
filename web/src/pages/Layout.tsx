@@ -22,6 +22,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar'
 import { ScanWatcher } from '@/admin/scans'
+import { useTheme } from '@/lib/theme'
 import { LanguageSelect } from './LanguageSelect'
 
 // Destinations principales : sidebar à partir de `lg`, barre d'onglets en dessous (4 au plus).
@@ -35,6 +36,7 @@ const NAV = [
 /** Cadre commun hors lecteur (DESIGN_SYSTEM.md, « Cadre et breakpoints »). */
 export function Layout() {
   const { t } = useTranslation()
+  useTheme()
   return (
     <SidebarProvider className="bg-background text-foreground">
       <a
@@ -73,7 +75,9 @@ function AppSidebar() {
           className="flex items-center gap-2 rounded-md px-2 py-1 text-lg font-semibold group-data-[collapsible=icon]:hidden"
         >
           {/* Logo crème et ambre, pour le fond sombre ; décoratif, le lien a déjà son nom. */}
-          <img src="/shiori-mark.svg" alt="" width={28} height={28} />
+          {/* Logo crème sur les thèmes sombres, noir sur les thèmes clairs (classe `dark` de <html>). */}
+          <img src="/shiori-mark.svg" alt="" width={28} height={28} className="hidden dark:block" />
+          <img src="/shiori-mark-light.svg" alt="" width={28} height={28} className="dark:hidden" />
           Shiori
         </Link>
         <SidebarTrigger label={t(state === 'expanded' ? 'layout.collapse' : 'layout.expand')} />

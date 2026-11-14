@@ -207,7 +207,7 @@ function Candidate({
       onClick={onChoose}
       className="group w-full space-y-1 rounded-md text-left disabled:opacity-60"
     >
-      <div className="relative aspect-[2/3] overflow-hidden rounded-md bg-card ring-2 ring-transparent group-hover:ring-white/15 group-aria-pressed:ring-primary">
+      <div className="relative aspect-[2/3] overflow-hidden rounded-md bg-card ring-2 ring-transparent group-hover:ring-foreground/15 group-aria-pressed:ring-primary">
         {failed ? (
           <FallbackCover title={title} />
         ) : (

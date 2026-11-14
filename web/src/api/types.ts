@@ -44,6 +44,8 @@ export interface Progress {
   updated_at: string
 }
 
+export type Theme = 'system' | 'dark' | 'light' | 'oled' | 'sepia'
+
 export interface Settings {
   /** `null` : personne n'a choisi, l'interface suit la langue du navigateur. */
   language: 'fr' | 'en' | null
@@ -55,6 +57,8 @@ export interface Settings {
   metadata_sources: SourceId[] | null
   /** Fiches pour adultes permises dans les recherches (exclues par défaut). */
   metadata_adult: boolean
+  /** Thème de l'interface ; `system` suit l'appareil (sombre ou clair). Le lecteur reste sombre. */
+  theme: Theme
 }
 
 /** Sources de métadonnées web. */

@@ -9,7 +9,7 @@ afterEach(() => vi.unstubAllGlobals())
 const idle = { running: false, done: 0, total: 0, stopped: null }
 
 function serve(overview: Partial<MetadataOverview>, settings: Partial<Settings> = {}) {
-  let current: Settings = { language: 'fr', page_turn: 'reading', metadata_online: false, metadata_sources: null, metadata_adult: false, ...settings }
+  let current: Settings = { language: 'fr', page_turn: 'reading', metadata_online: false, metadata_sources: null, metadata_adult: false, theme: 'system', ...settings }
   let state: MetadataOverview = { online: current.metadata_online, sources: ['mangadex', 'anilist'], identify: idle, issues: [], ...overview }
   const fetch = mockApi({
     '/api/libraries': () => json([]),
