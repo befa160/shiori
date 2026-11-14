@@ -118,10 +118,19 @@ jobs:
         run: |
           sha256sum shiori-* > SHA256SUMS
           cat SHA256SUMS
-          # Un tag avec suffixe (v0.1.0-rc.1) donne une préversion.
-          pre=(); [[ $GITHUB_REF_NAME == *-* ]] && pre=(--prerelease)
-          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
-            --generate-notes "${pre[@]}" shiori-* SHA256SUMS
+          # Release créée dans l'interface de GitHub (qui crée le tag) : on y ajoute les fichiers,
+          # titre et notes gardés. Sinon (`git push` du tag) : on la crée.
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber shiori-* SHA256SUMS
+          else
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
+              --generate-notes shiori-* SHA256SUMS
+          fi
+          # Un tag avec suffixe (v0.1.0-rc.1) est toujours une préversion, même si la case a été
+          # oubliée dans l'interface (elle ne doit pas devenir « Latest »).
+          if [[ $GITHUB_REF_NAME == *-* ]]; then
+            gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --prerelease --latest=false
+          fi
         env:
           GH_TOKEN: ${{ github.token }}
 
