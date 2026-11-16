@@ -33,6 +33,11 @@ export const fr = {
       "Enregistré sur le serveur, comme la langue. « Système » suit le réglage de l'appareil (sombre ou clair). Le lecteur reste toujours sombre.",
     themes: { system: 'Système', dark: 'Sombre', light: 'Clair', oled: 'Noir OLED', sepia: 'Sépia' },
     themeNotSaved: 'Thème non enregistré',
+    storage: 'Données',
+    storageHelp:
+      'Pour sauvegarder Shiori, copiez la base, programme arrêté. Le cache se reconstruit tout seul, on peut donc le vider.',
+    database: 'Base',
+    cache: 'Cache',
     reading: 'Lecture',
     pageTurn: 'Tourner les pages, par défaut',
     pageTurnHelp:

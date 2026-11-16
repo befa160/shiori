@@ -305,3 +305,77 @@ async fn fatal_error_closes_the_run_as_failed() {
         row.get::<String, _>("error")
     );
 }
+
+/// `--open` (double-clic) : le navigateur s'ouvre sur l'interface une fois le serveur prêt ; un
+/// second lancement, port pris, l'ouvre aussi et s'arrête. Linux seulement : `$BROWSER` y
+/// remplace le vrai navigateur par un script qui note l'adresse.
+#[cfg(target_os = "linux")]
+#[test]
+fn open_launches_the_browser_even_when_already_running() {
+    use std::os::unix::fs::PermissionsExt;
+    use std::process::Stdio;
+    let dir = tempfile::tempdir().unwrap();
+    let opened = dir.path().join("ouvert.txt");
+    let browser = dir.path().join("navigateur");
+    std::fs::write(
+        &browser,
+        format!("#!/bin/sh\necho \"$1\" >> '{}'\n", opened.display()),
+    )
+    .unwrap();
+    std::fs::set_permissions(&browser, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let serve = |listen: &str| {
+        Command::new(env!("CARGO_BIN_EXE_shiori"))
+            .args(["serve", "--open", "--listen", listen, "--cache-dir"])
+            .arg(dir.path().join("cache"))
+            .env("SHIORI_DATA_DIR", dir.path())
+            .env("BROWSER", &browser)
+            .env_remove("RUST_LOG")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap()
+    };
+    let wait_for = |line: &str| {
+        for _ in 0..100 {
+            let text = std::fs::read_to_string(&opened).unwrap_or_default();
+            if text.contains(line) {
+                return text;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        panic!("navigateur jamais ouvert sur {line}");
+    };
+
+    // Port déjà pris : l'interface s'ouvre, puis le programme s'arrête sans erreur.
+    let taken = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = taken.local_addr().unwrap().port();
+    let out = serve(&format!("127.0.0.1:{port}"))
+        .wait_with_output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    assert!(stderr(&out).contains("tourne déjà"), "{}", stderr(&out));
+    assert!(
+        !dir.path().join("shiori.db").exists(),
+        "la base du Shiori déjà lancé n'est pas touchée"
+    );
+    wait_for(&format!("http://localhost:{port}"));
+    drop(taken);
+
+    // Premier lancement : le serveur écoute, montre où sont ses données, ouvre l'interface.
+    let free = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = free.local_addr().unwrap().port();
+    drop(free);
+    let mut server = serve(&format!("127.0.0.1:{port}"));
+    wait_for(&format!("http://localhost:{port}"));
+    server.kill().unwrap();
+    let out = server.wait_with_output().unwrap();
+    let text = stderr(&out);
+    assert!(
+        text.contains(&format!(
+            "Base : {}",
+            dir.path().join("shiori.db").display()
+        )),
+        "{text}"
+    );
+}

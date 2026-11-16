@@ -46,10 +46,10 @@ L'image tourne sans droits d'administrateur et garde ses données dans deux volu
 
    Facultatif : comparez son empreinte avec le fichier `SHA256SUMS` (`sha256sum -c SHA256SUMS --ignore-missing` sous Linux).
 2. Décompressez l'archive, puis lancez Shiori :
-   - **Windows** : double-cliquez sur `shiori.exe`. Au premier lancement, Windows peut afficher « Windows a protégé votre ordinateur » : cliquez sur **Informations complémentaires**, puis **Exécuter quand même**. Une fenêtre reste ouverte tant que Shiori tourne ; la fermer l'arrête.
-   - **Linux** : dans un terminal, `./shiori`.
-   - **macOS** : le programme n'est pas signé par Apple. Dans un terminal, une seule fois : `xattr -d com.apple.quarantine shiori`, puis `./shiori`.
-3. Ouvrez <http://localhost:7878> et passez à [Premiers pas](#premiers-pas).
+   - **Windows** : double-cliquez sur `shiori.exe`. Au premier lancement, Windows peut afficher « Windows a protégé votre ordinateur » : cliquez sur **Informations complémentaires**, puis **Exécuter quand même**. Shiori ouvre son interface dans votre navigateur. Une fenêtre noire reste ouverte tant que Shiori tourne (elle indique l'adresse et l'emplacement des données) ; la fermer l'arrête. Interface fermée par erreur ? Double-cliquez de nouveau sur `shiori.exe` : il la rouvre.
+   - **Linux** : dans un terminal, `./shiori` (ou un double-clic depuis le gestionnaire de fichiers) ; l'interface s'ouvre dans le navigateur.
+   - **macOS** : le programme n'est pas signé par Apple. Dans un terminal, une seule fois : `xattr -d com.apple.quarantine shiori`, puis `./shiori` ; l'interface s'ouvre dans le navigateur.
+3. Sinon, ouvrez <http://localhost:7878>, puis passez à [Premiers pas](#premiers-pas).
 
 Sans option, Shiori garde ses données dans le dossier habituel de votre système :
 
@@ -59,7 +59,7 @@ Sans option, Shiori garde ses données dans le dossier habituel de votre systèm
 | Windows | `%APPDATA%\shiori\data\` | `%LOCALAPPDATA%\shiori\cache\` |
 | macOS | `~/Library/Application Support/shiori/` | `~/Library/Caches/shiori/` |
 
-Pour les déplacer : variables `SHIORI_DATA_DIR` et `SHIORI_CACHE_DIR`, ou options `--db` et `--cache-dir`. Toutes les options : `shiori serve --help`.
+Leur emplacement exact s'affiche dans **Administration → Données** et au démarrage. Pour les déplacer : variables `SHIORI_DATA_DIR` et `SHIORI_CACHE_DIR`, ou options `--db` et `--cache-dir`. Toutes les options : `shiori serve --help`.
 
 ## Premiers pas
 

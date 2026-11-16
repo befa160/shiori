@@ -33,6 +33,10 @@ export const en: Translations = {
       'Saved on the server, like the language. “System” follows the device setting (dark or light). The reader always stays dark.',
     themes: { system: 'System', dark: 'Dark', light: 'Light', oled: 'OLED black', sepia: 'Sepia' },
     themeNotSaved: 'Theme not saved',
+    storage: 'Data',
+    storageHelp: 'To back up Shiori, copy the database while it is stopped. The cache rebuilds itself, so it can be emptied.',
+    database: 'Database',
+    cache: 'Cache',
     reading: 'Reading',
     pageTurn: 'Turn pages, by default',
     pageTurnHelp:

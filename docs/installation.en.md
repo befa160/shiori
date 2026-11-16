@@ -46,10 +46,10 @@ The image runs without administrator rights and keeps its data in two Docker vol
 
    Optional: check its fingerprint against the `SHA256SUMS` file (`sha256sum -c SHA256SUMS --ignore-missing` on Linux).
 2. Unpack the archive, then start Shiori:
-   - **Windows**: double-click `shiori.exe`. On first launch Windows may show "Windows protected your PC": click **More info**, then **Run anyway**. A window stays open while Shiori runs; closing it stops Shiori.
-   - **Linux**: in a terminal, `./shiori`.
-   - **macOS**: the program is not signed by Apple. In a terminal, once: `xattr -d com.apple.quarantine shiori`, then `./shiori`.
-3. Open <http://localhost:7878> and go to [First steps](#first-steps).
+   - **Windows**: double-click `shiori.exe`. On first launch Windows may show "Windows protected your PC": click **More info**, then **Run anyway**. Shiori opens its interface in your browser. A black window stays open while Shiori runs (it shows the address and where the data is); closing it stops Shiori. Closed the interface by mistake? Double-click `shiori.exe` again: it reopens it.
+   - **Linux**: in a terminal, `./shiori` (or double-click it in the file manager); the interface opens in the browser.
+   - **macOS**: the program is not signed by Apple. In a terminal, once: `xattr -d com.apple.quarantine shiori`, then `./shiori`; the interface opens in the browser.
+3. Otherwise, open <http://localhost:7878>, then go to [First steps](#first-steps).
 
 Without options, Shiori keeps its data in your system's usual folder:
 
@@ -59,7 +59,7 @@ Without options, Shiori keeps its data in your system's usual folder:
 | Windows | `%APPDATA%\shiori\data\` | `%LOCALAPPDATA%\shiori\cache\` |
 | macOS | `~/Library/Application Support/shiori/` | `~/Library/Caches/shiori/` |
 
-To move them: the `SHIORI_DATA_DIR` and `SHIORI_CACHE_DIR` variables, or the `--db` and `--cache-dir` options. All options: `shiori serve --help`.
+Their exact location is shown in **Administration → Data** and at startup. To move them: the `SHIORI_DATA_DIR` and `SHIORI_CACHE_DIR` variables, or the `--db` and `--cache-dir` options. All options: `shiori serve --help`.
 
 ## First steps
 

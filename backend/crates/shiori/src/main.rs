@@ -32,11 +32,11 @@ enum Command {
 }
 
 fn main() -> ExitCode {
-    // Double-clic sur le binaire (Windows) : aucun argument, on lance le serveur au lieu de
-    // l'aide, dont la fenêtre se refermerait aussitôt.
+    // Double-clic sur le binaire : aucun argument, on lance le serveur et ouvre l'interface au
+    // lieu de l'aide, dont la fenêtre se refermerait aussitôt.
     let double_click = std::env::args_os().len() == 1;
     let cli = match double_click {
-        true => Cli::parse_from(["shiori", "serve"]),
+        true => Cli::parse_from(["shiori", "serve", "--open"]),
         false => Cli::parse(),
     };
     let level = match cli.verbose {
