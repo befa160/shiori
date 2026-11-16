@@ -1,4 +1,4 @@
-import { BookCopy, House, Loader2, RefreshCw, Search, Settings } from 'lucide-react'
+import { BookCopy, House, Loader2, RefreshCw, Search, Settings, WifiOff } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link, NavLink, Outlet } from 'react-router'
 import { useLibraries } from '@/api/queries'
@@ -22,6 +22,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar'
 import { ScanWatcher } from '@/admin/scans'
+import { useOnline } from '@/lib/online'
 import { useTheme } from '@/lib/theme'
 import { LanguageSelect } from './LanguageSelect'
 
@@ -53,6 +54,7 @@ export function Layout() {
           tabIndex={-1}
           className="mx-auto w-full max-w-screen-2xl pt-[max(1.5rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pb-[calc(var(--tabbar-height)+env(safe-area-inset-bottom)+1.5rem)] pl-[max(1rem,env(safe-area-inset-left))] outline-none lg:px-8"
         >
+          <Offline />
           <Outlet />
         </main>
       </SidebarInset>
@@ -179,5 +181,17 @@ function TabBar() {
         ))}
       </ul>
     </nav>
+  )
+}
+
+/** Hors ligne : ce qui est déjà en cache (interface, pages vues) reste lisible, le reste échoue. */
+function Offline() {
+  const { t } = useTranslation()
+  if (useOnline()) return null
+  return (
+    <p role="status" className="mb-4 flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
+      <WifiOff aria-hidden className="size-4 shrink-0" />
+      {t('layout.offline')}
+    </p>
   )
 }
