@@ -11,7 +11,21 @@
 
 Lecteur de mangas, BD et webtoons auto-hébergé. Un seul binaire Rust sert la bibliothèque et une application web installable (PWA), pensée d'abord pour la lecture sur tablette.
 
-> **État : en développement (fin de la phase 5).** Utilisables aujourd'hui : `shiori scan` (scan d'intégrité des archives CBZ et CBR), `shiori serve` et **l'application web** : bibliothèque en couvertures avec « Continuer la lecture », recherche et filtres, page de chaque série, lecteur manga (droite à gauche), BD (gauche à droite) et webtoon (défilement vertical) avec double page, zoom et reprise de la lecture, et une **administration** pour créer les bibliothèques, lancer et suivre les scans et lire leurs journaux. Les **métadonnées** viennent de vos fichiers (ComicInfo.xml, `index.json`) et, si vous l'autorisez, d'AniList et de MangaDex (identification automatique ou façon Plex, couvertures) ; tout se modifie à la main, champ par champ, sans être écrasé ensuite. En français et en anglais. L'avancement détaillé est dans [ROADMAP.md](ROADMAP.md).
+> **État : première version en préparation (fin de la phase 6).** Bibliothèque en couvertures avec « Continuer la lecture », recherche et filtres ; lecteur manga, BD et webtoon (double page, zoom, reprise) ; administration des bibliothèques et des scans ; métadonnées des fichiers (ComicInfo.xml, `index.json`) et, si vous l'autorisez, d'AniList et de MangaDex, modifiables champ par champ ; application installable (PWA) avec lecture hors ligne des tomes téléchargés ; thèmes sombre, clair, noir OLED et sépia ; français et anglais. Image Docker et binaires Linux, Windows et macOS. Pas encore de comptes (phase 7). L'avancement détaillé est dans [ROADMAP.md](ROADMAP.md).
+
+## Documentation
+
+- **[Installer Shiori](docs/installation.fr.md)** ([English](docs/installation.en.md)) : Docker ou programme seul, premiers pas, accès depuis la tablette ou Internet, mise à jour, sauvegarde.
+- **[Utiliser Shiori](docs/fonctionnel.md)** : bibliothèques, rangement des fichiers, lecture, hors-ligne, métadonnées, scans et codes de diagnostic.
+- **[Documentation technique](docs/technique.md)** : architecture, identités et invariants, base, API, images, front, tests, distribution.
+
+## Démarrage rapide
+
+```bash
+docker compose up -d
+```
+
+avec le [`compose.yaml`](compose.yaml) du dépôt (décommentez la ligne de vos bibliothèques), puis <http://localhost:7878> → **Administration → Ajouter une bibliothèque**. Sans Docker : téléchargez le programme de votre système dans les [Releases](https://github.com/befa160/shiori/releases) et lancez-le. Détails : [installation](docs/installation.fr.md).
 
 ## Pourquoi
 
@@ -24,7 +38,7 @@ Shiori est conçu pour que ces défauts soient impossibles :
 - **Une archive abîmée se voit** : une page illisible affiche une erreur explicite à sa place, jamais une autre image.
 - **Les fichiers sources ne sont jamais modifiés.**
 
-## Fonctionnalités prévues
+## Fonctionnalités
 
 | | |
 |---|---|
@@ -32,16 +46,18 @@ Shiori est conçu pour que ces défauts soient impossibles :
 | **Lecteur** | Gauche→droite, droite→gauche (manga), vertical continu (webtoon) ; page simple ou double ; découpage des doubles pages ; reprise exacte de la lecture |
 | **Webtoons** | Défilement vertical continu, chargement paresseux, aucun saut de mise en page (place de chaque page réservée d'après le scan) |
 | **Bibliothèque** | Grille d'affiches, séries, « Continuer la lecture », recherche, filtres par statut de publication et de lecture |
-| **Métadonnées** | ComicInfo.xml, `index.json`, AniList et MangaDex (fait, phase 5) ; MangaUpdates, Comic Vine plus tard ; édition manuelle avec verrouillage par champ (fait) |
+| **Métadonnées** | ComicInfo.xml, `index.json`, AniList et MangaDex ; édition manuelle avec verrouillage par champ ; MangaUpdates et Comic Vine plus tard |
 | **Formats** | CBZ (zip, zip64) et CBR (RAR 4 et 5, solid compris, en Rust pur). Images jpg, png, webp, avif, servies redimensionnées en AVIF (pages) et JPEG (miniatures) |
-| **Déploiement** | Image Docker et binaires autonomes Linux et Windows |
+| **Application** | PWA installable, lecture hors ligne des tomes téléchargés (page par page), thèmes, français et anglais |
+| **Déploiement** | Image Docker (amd64, arm64) et binaires autonomes Linux, Windows et macOS |
 
 ## Architecture
 
 ```
 backend/                 workspace Rust
   crates/shiori-core/    archives, identités stables, ordre des pages, scan d'intégrité (sans base ni async)
-  crates/shiori-db/      base SQLite : persistance des scans, détection de changement
+  crates/shiori-db/      base SQLite : scans, bibliothèques, progression, métadonnées et leur fusion
+  crates/shiori-meta/    clients AniList et MangaDex
   crates/shiori-testkit/ fixtures de test générées par du code
   crates/shiori/         binaire : CLI de scan et serveur HTTP (API, images, job de scan)
 web/                     application React 19 + TypeScript + Vite
