@@ -1339,3 +1339,4 @@ L'ordre de lecture ne dépend jamais de l'ordre dans l'archive : le lecteur reç
 - 2026-11-16 : tomes téléchargés pour le hors-ligne (lot 6.5b) ; authentification et comptes ajoutés en phase 7 (à planifier).
 - 2026-11-16 : signature des binaires (Windows, macOS) et attestations des artefacts (Linux, image Docker) ajoutées à la roadmap, à planifier.
 - 2026-11-16 : phase 6 terminée (distribution, thèmes, PWA et hors-ligne, documentation) ; version `v0.1.0`.
+- 2026-11-16 : version `v0.1.1` : correctifs de l'audit (dont le scan d'une racine illisible qui vidait la bibliothèque), recherche et filtre par tag, double-clic qui ouvre l'interface, Administration → Données ; plan de la phase 7 proposé.
