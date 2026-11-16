@@ -1149,18 +1149,74 @@ Aucune nouvelle prévue (service worker fait main, `tokio::signal::unix` déjà 
 
 Édition d'un tome dans l'interface, MangaUpdates et Comic Vine, actualisation périodique des fiches, autres `shortcut:` notés au bilan de la phase 5, `:root:has()` sur un vrai Safari iOS, essai sur la tablette réelle, registre shadcn et le paquet `cn`.
 
-## Phase 7 : authentification et comptes (à planifier)
+## Phase 7 : comptes, authentification et sauvegarde (plan proposé le 2026-11-16, à valider)
 
-Demandée le 2026-11-16 : Shiori sera ouvert depuis l'extérieur (reverse proxy sur un sous-domaine, Cloudflare) ; aujourd'hui seule l'authentification du reverse proxy le protège, et toute la progression est commune. Plan détaillé à valider en début de phase, comme les autres.
+### Objectif
 
-### Pistes (à confirmer)
+Ouvrir Shiori hors de chez soi et le partager en famille : comptes locaux (administrateur, lecteurs), sessions de longue durée sur la PWA, progression et préférences par compte, accès par bibliothèque, administration réservée ; et sauvegarde de la base sans arrêter Shiori. Demandée le 2026-11-16 (reverse proxy sur un sous-domaine, Cloudflare) ; aujourd'hui seule l'authentification du reverse proxy protège l'instance, et toute la progression est commune.
 
-- **Comptes locaux** : premier lancement = création du compte administrateur ; mots de passe hachés en Argon2id (crate `argon2`, pur Rust) ; connexion limitée en débit contre les essais en rafale.
-- **Sessions** : cookie `HttpOnly`, `Secure`, `SameSite=Lax`, de longue durée sur la PWA (on ne se reconnecte pas à chaque ouverture de la tablette) ; déconnexion et révocation des sessions ; protection CSRF des requêtes qui modifient.
-- **Rôles** : administrateur (bibliothèques, scans, métadonnées, comptes) et lecteur ; accès par bibliothèque.
-- **Par compte** : progression, « Continuer la lecture », langue et thème (aujourd'hui globaux), sens des pages ; la progression actuelle est rattachée au premier administrateur à la migration.
-- **Hors ligne** (lot 6.5b) : les tomes téléchargés appartiennent à l'appareil ; à la déconnexion, proposer de les effacer ; la progression gardée hors ligne est envoyée au nom du compte connecté.
-- **Accès** : `--allowed-host` reste nécessaire (parade au DNS rebinding) ; la documentation d'installation (lot 6.7) décrit d'ici là l'authentification par le reverse proxy.
+### Existant vérifié (2026-11-16)
+
+- **Aucune authentification** : toutes les routes sont ouvertes ; parades déjà en place : `Host` contrôlé (DNS rebinding, `--allowed-host`), écritures cross-site refusées (`Sec-Fetch-Site`), CSP et `X-Frame-Options` sur l'interface, images en `Cache-Control: private`.
+- **Données globales** : `reading_progress` a pour clé le tome seul ; `app_settings` (ligne unique) garde langue, thème et sens des pages par défaut ; `series` garde `reading_mode`, `page_layout`, `page_turn` par série.
+- **Routes d'administration** mêlées aux autres : `/api/admin/*` (scans, métadonnées, `storage`), mais aussi `POST`/`DELETE /api/libraries`, `PATCH /api/series/{id}` et `/api/volumes/{id}` (édition), liens aux sources, choix de couverture.
+- **Serveur** : `axum::serve` sans délai de lecture des en-têtes ni limite de débit ; `server.rs` fait environ 1 350 lignes (point 10 de l'audit).
+- **Hors ligne** : caches du service worker `shiori-images-v1`, `shiori-shell-v1`, `shiori-offline-v1`, liste des tomes téléchargés et file de progression hors ligne dans IndexedDB, sans notion de compte.
+- **Sauvegarde** : documentée seulement « Shiori arrêté, copier `shiori.db` ».
+
+### Plan technique
+
+**Crates** (dernières versions au moment du lot) : `argon2` 0.6 (Argon2id, pur Rust) ; `rand` 0.10 (jetons de session, 32 octets) ; `blake3` (déjà là : seul le hash du jeton est stocké) ; `axum-extra` 0.12 (cookies) ; rien pour la limite de débit (compteur en mémoire, quelques lignes).
+
+**Schéma SQLite** (migration 0014, une seule) :
+
+- `users` : `id`, `username` (unique, sans tenir compte de la casse), `password_hash` (PHC Argon2id), `role` (`admin` | `reader`), `disabled_at`, `created_at`, `password_changed_at`.
+- `sessions` : `token_hash` (BLAKE3 du jeton, clé), `user_id` (cascade), `created_at`, `last_seen_at`, `expires_at`, `label` (navigateur et système, pour la liste des appareils).
+- `user_libraries` : (`user_id`, `library_id`) ; un administrateur voit tout.
+- `user_settings` : `user_id` (clé), `language`, `theme`, `page_turn` ; `NULL` = défaut de l'instance (`app_settings`, réglé par l'administrateur).
+- `reading_progress` : clé (`user_id`, `volume_id`). La progression existante va dans `legacy_progress`, rattachée au premier administrateur à sa création (Q46).
+
+**Routes** :
+
+- Publiques : `GET /api/health` ; `GET /api/auth/state` (`setup_required`, et le compte si une session est valide) ; `POST /api/auth/setup` (premier administrateur, avec le jeton d'installation) ; `POST /api/auth/login` ; l'interface (le front affiche la page de connexion).
+- Avec une session : tout le reste ; `POST /api/auth/logout` ; `GET`/`PUT /api/me` (préférences, mot de passe) ; `GET`/`DELETE /api/me/sessions/{id}` (appareils connectés).
+- Administrateur seulement (403 `forbidden` sinon) : `/api/admin/*`, `POST`/`DELETE /api/libraries`, édition des séries et des tomes, sources et couvertures, `GET`/`POST`/`PATCH`/`DELETE /api/admin/users` (création, rôle, bibliothèques, désactivation, nouveau mot de passe, révocation des sessions), `POST /api/admin/backup`.
+- Accès par bibliothèque : les listes, le détail, les pages, les images et les couvertures d'une bibliothèque non accessible répondent 404 (jamais « existe mais interdit »).
+
+**Sécurité** :
+
+- Cookie `shiori_session` `HttpOnly`, `SameSite=Lax`, `Path=/`, `Secure` quand la requête est en HTTPS (directement ou d'après `X-Forwarded-Proto` d'un proxy) ; jeton aléatoire de 256 bits, seul son hash en base.
+- Durée glissante (Q47) ; changer son mot de passe ou être désactivé révoque les autres sessions.
+- Écritures : la garde `Sec-Fetch-Site` reste, plus `SameSite=Lax` ; JSON exigé sur les routes à corps.
+- Connexion : temps constant (hash factice pour un nom inconnu), message unique « identifiants incorrects », limite par adresse et par nom (pause croissante, 429 `rate_limited` avec `Retry-After`).
+- Serveur : délai de lecture des en-têtes et délai par requête (hors images en cours de rendu) avant toute exposition directe.
+- Récupération sans interface : `shiori user add <nom> --admin` et `shiori user password <nom>` (CLI, base locale).
+
+**Front** : page de connexion et page d'installation ; 401 → page de connexion, puis retour à la page demandée ; menu du compte (préférences, mot de passe, appareils, déconnexion) ; **Administration → Comptes** ; administration masquée aux lecteurs. Déconnexion : vide les caches du service worker et propose d'effacer les tomes téléchargés ; la file de progression hors ligne garde le compte qui l'a remplie et n'est envoyée que pour lui.
+
+**Sauvegarde** : `VACUUM INTO` (copie cohérente, Shiori allumé) : `shiori backup <fichier>` et un bouton « Télécharger une sauvegarde » dans **Administration → Données** ; restauration documentée (arrêter Shiori, remplacer `shiori.db`) ; une sauvegarde automatique avant chaque migration de schéma (`shiori.db.avant-<version>`).
+
+### Lots
+
+- **7.1 `refactor/images`** : sortir le service des images de `server.rs` (point 10 de l'audit), sans changement de comportement.
+- **7.2 `feat/accounts-db`** : migration 0014, `shiori-db` (comptes, sessions, accès, préférences, progression par compte, `legacy_progress`), CLI `shiori user`.
+- **7.3 `feat/auth`** : installation, connexion, déconnexion, cookie, middleware de session, limite de débit, délais du serveur.
+- **7.4 `feat/roles`** : routes réservées, accès par bibliothèque sur toutes les lectures, `/api/me`, `/api/admin/users`.
+- **7.5 `feat/web-auth`** : connexion, installation, menu du compte, Comptes, préférences par compte, déconnexion et hors-ligne.
+- **7.6 `feat/backup`** : `shiori backup`, bouton de l'administration, sauvegarde avant migration.
+- **7.7 `docs/phase7`** : installation (premier compte, jeton d'installation, comptes, sauvegarde et restauration), technique, fonctionnelle, bilan.
+
+### Questions à trancher (Q42 à Q50)
+
+- **Q42 En-tête `Remote-User` d'un proxy d'authentification** (Authelia, Authentik) : proposition : **plus tard**. Les comptes locaux d'abord ; le proxy avec mot de passe reste possible devant, en couche de plus.
+- **Q43 Jetons d'API (lecteurs tiers, OPDS)** : proposition : **plus tard**, avec OPDS.
+- **Q44 Double authentification (TOTP)** : proposition : **plus tard** (crate `totp-rs` le moment venu).
+- **Q45 Création des comptes** : proposition : **par l'administrateur seulement** (nom et mot de passe provisoire, changé à la première connexion) ; liens d'invitation plus tard.
+- **Q46 Premier administrateur** : proposition : page d'installation tant qu'aucun compte n'existe, protégée par un **jeton d'installation** affiché dans la console et le journal Docker (sinon le premier venu du réseau prend l'instance) ; il reprend la progression existante.
+- **Q47 Durée des sessions** : proposition : **90 jours glissants** (prolongés à chaque usage), révocables appareil par appareil.
+- **Q48 Réglages de lecture d'une série** (sens, mise en page, tourner les pages) : proposition : **communs**, réglés par l'administrateur (c'est une propriété de l'œuvre) ; le sens des pages *par défaut*, la langue et le thème deviennent **par compte**.
+- **Q49 Accès d'un nouveau lecteur** : proposition : **toutes les bibliothèques par défaut**, à restreindre à la création.
+- **Q50 Métadonnées** : proposition : édition, sources et couvertures réservées à l'administrateur (communes à tous).
 
 ### Notes de l'audit du 2026-11-16 (avant la phase 7)
 
@@ -1186,13 +1242,14 @@ Audit complet après la phase 6 (couverture backend 96,85 % lignes / 91,64 % bra
 - Aucun délai de connexion ni limite de débit dans `serve` : vérifier les défauts d'axum avant une exposition sans reverse proxy ; limiter les essais de connexion.
 - Non vérifié pendant l'audit : `cargo audit`, clippy, `cargo fmt`, tests Playwright ; `sw.js` n'est couvert que par eux.
 
-### Questions à trancher au début de la phase
+## Phase 8 : maintenance de la bibliothèque (à planifier après la phase 7)
 
-- Faire confiance, en option, à l'en-tête d'un reverse proxy d'authentification (Authelia, Authentik : `Remote-User`) au lieu des comptes locaux ?
-- Jetons d'API (lecteurs tiers, OPDS) dans cette phase ou plus tard ?
-- Double authentification (TOTP) : dans cette phase ou plus tard ?
-- Inscription : seulement par l'administrateur, ou invitation par lien ?
+Idées retenues le 2026-11-16 (audit fonctionnel externe, comparé à l'existant) : Shiori « prend soin de la bibliothèque autant que de la lecture ».
 
+- **8.1 Surveillance des dossiers** (décidée le 2026-11-16) : crate `notify` (8.2, dernière stable ; inotify, ReadDirectoryChangesW, FSEvents). Chaque bibliothèque est surveillée ; les événements sont regroupés et, après un temps calme (fichier encore en copie), un scan ciblé part sur le dossier de série touché (file d'attente : un scan à la fois). Limite connue : sur un montage réseau (SMB, NFS), les changements faits depuis une autre machine ne sont pas signalés ; un **scan complet périodique** sert de filet. À trancher au plan : surveillance activable par bibliothèque, temps calme, intervalle du scan périodique, comportement quand la racine disparaît (le garde-fou de l'audit s'applique).
+- **8.2 Santé des bibliothèques** : tableau de bord (Administration → Santé) : tomes sains, en avertissement, en erreur, par bibliothèque ; date de la dernière vérification complète (`--deep`) ; liste des tomes à réparer, filtrable par code de diagnostic, avec le lien vers les problèmes du tome ; bouton « Vérifier en profondeur ». Les données existent déjà (dernier rapport de chaque tome, journaux des passes).
+
+Plus tard, sans ordre : collections et listes de lecture, relations entre séries (suites, éditions), OPDS (avec les jetons d'API), statistiques de lecture, Comic Vine et MangaUpdates. EPUB et PDF : non.
 
 ## Fonctionnalités ajoutées en cours de route
 
