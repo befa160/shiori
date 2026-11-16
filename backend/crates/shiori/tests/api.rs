@@ -661,6 +661,18 @@ async fn library_series_continue_and_publication_status() {
     )
     .await;
     assert_eq!(detail["publication_status"], Value::Null);
+
+    // Genres puis tags, sans doublon, dans la liste : la recherche par tag s'en sert.
+    let tags = r#"{"genres":["Comédie","SF"],"tags":["SF","Cuisine"]}"#;
+    let (status, _) = call(&f.app, "PATCH", &uri, Some(tags)).await;
+    assert_eq!(status, StatusCode::OK);
+    let (_, all) = get(&f.app, "/api/series").await;
+    let listed = all
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["id"] == serie_a["id"]);
+    assert_eq!(listed.unwrap()["tags"], json!(["Comédie", "SF", "Cuisine"]));
     for bad in [
         r#"{"publication_status":"fini"}"#,
         r#"{"statut":"completed"}"#,
@@ -683,9 +695,12 @@ async fn library_series_continue_and_publication_status() {
     let (_, detail) = call(&f.app, "PATCH", &uri, Some(r#"{"title":"Autre titre"}"#)).await;
     assert_eq!(
         (detail["name"].as_str(), &detail["locked"]),
-        (Some("Autre titre"), &json!(["publication_status", "title"]))
+        (
+            Some("Autre titre"),
+            &json!(["genres", "publication_status", "tags", "title"])
+        )
     );
-    let body = r#"{"unlock":["title","publication_status"]}"#;
+    let body = r#"{"unlock":["title","publication_status","genres","tags"]}"#;
     let (_, detail) = call(&f.app, "PATCH", &uri, Some(body)).await;
     assert_eq!(
         (&detail["locked"], &detail["metadata"]["title"]),

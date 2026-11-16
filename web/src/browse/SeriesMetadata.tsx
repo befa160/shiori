@@ -1,6 +1,7 @@
 import { ExternalLink, Lock } from 'lucide-react'
 import { type ReactNode, useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router'
 import { toast } from 'sonner'
 import type { Author, PublicationStatus, SeriesDetail, SeriesField, SeriesMetadata, SeriesPatch, SourceId } from '@/api/types'
 import { usePatchSeries, webLinks } from './series'
@@ -47,10 +48,17 @@ export function SeriesAbout({ series }: { series: SeriesDetail }) {
         </div>
       )}
       {chips.length > 0 && (
-        <ul aria-label={t('series.genresAndTags')} className="flex flex-wrap gap-2">
+        <ul aria-label={t('series.genresAndTags')} className="flex flex-wrap gap-x-2 gap-y-3">
           {chips.map((chip) => (
-            <li key={chip} className="max-w-full truncate rounded-full bg-card px-3 py-1 text-sm">
-              {chip}
+            <li key={chip} className="max-w-full">
+              {/* Toutes les séries de ce tag ; puce de 32 px, zone tactile de 44 px (`after:`), sans
+                  chevauchement grâce à l'écart vertical de 12 px. */}
+              <Link
+                to={`/series?${new URLSearchParams({ tag: chip })}`}
+                className="relative flex h-8 max-w-full items-center rounded-full bg-card px-3 text-sm after:absolute after:inset-x-0 after:-inset-y-1.5 hover:bg-accent"
+              >
+                <span className="truncate">{chip}</span>
+              </Link>
             </li>
           ))}
         </ul>

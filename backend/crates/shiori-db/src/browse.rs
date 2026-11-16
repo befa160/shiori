@@ -38,6 +38,8 @@ pub struct SeriesSummary {
     /// Pour la recherche : titres alternatifs et noms des auteurs.
     pub alt_titles: Vec<String>,
     pub authors: Vec<String>,
+    /// Genres puis tags, sans doublon : recherche et filtre par tag.
+    pub tags: Vec<String>,
     pub volume_count: usize,
     /// Tomes de la série dont la dernière page a été atteinte.
     pub read_count: usize,
@@ -415,6 +417,15 @@ impl Db {
                     name: meta.title.unwrap_or_else(|| s.get("name")),
                     alt_titles: meta.alt_titles,
                     authors: meta.authors.into_iter().map(|a| a.name).collect(),
+                    tags: {
+                        let mut tags = meta.genres;
+                        for tag in meta.tags {
+                            if !tags.contains(&tag) {
+                                tags.push(tag);
+                            }
+                        }
+                        tags
+                    },
                     volume_count: vols.len(),
                     read_count,
                     page_count,

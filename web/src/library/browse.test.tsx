@@ -25,6 +25,7 @@ const base = {
   cover_image_id: null,
   alt_titles: [] as string[],
   authors: [] as string[],
+  tags: [] as string[],
 } as const
 const series: SeriesSummary[] = [
   { ...base, id: 1, name: 'Akira', reading_status: 'read', read_count: 1, publication_status: 'completed' },
@@ -33,7 +34,12 @@ const series: SeriesSummary[] = [
 ]
 
 const serve = (libs = libraries) => mockApi({ '/api/libraries': () => json(libs), '/api/series': () => json(series) })
-const grid = () => within(screen.getByRole('main')).getAllByRole('listitem').map((li) => within(li).getAllByTitle(/./)[0].textContent)
+// Cartes de séries seulement (les puces de tags choisis sont aussi des éléments de liste).
+const grid = () =>
+  within(screen.getByRole('main'))
+    .getAllByRole('listitem')
+    .flatMap((li) => within(li).queryAllByTitle(/./).slice(0, 1))
+    .map((title) => title.textContent)
 const search = () => screen.getByRole('searchbox', { name: 'Rechercher une série' })
 
 describe('séries : recherche, filtres et tri', () => {
@@ -48,6 +54,49 @@ describe('séries : recherche, filtres et tri', () => {
     expect(router.state.location.search).toBe('?q=ete')
     // Taper ne remplit pas l'historique.
     expect(router.state.historyAction).toBe('REPLACE')
+  })
+
+  it('filtre par tags : liste cherchable, tous exigés, puces à retirer, lien direct', async () => {
+    mockApi({
+      '/api/libraries': () => json(libraries),
+      '/api/series': () =>
+        json([
+          { ...series[0], tags: ['SF', 'Action'] },
+          { ...series[1], tags: ['Comédie', 'sf'] },
+          series[2],
+        ]),
+    })
+    const { router } = renderAt('/series')
+    await userEvent.click(await screen.findByRole('button', { name: 'Tags' }))
+    const list = () => within(screen.getByRole('list', { name: 'Tags' }))
+    expect(list().getAllByRole('checkbox').map((c) => c.closest('label')?.textContent)).toEqual([
+      'Action1 série',
+      'Comédie1 série',
+      'SF2 séries',
+    ])
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Chercher un tag' }), 'come')
+    expect(list().getAllByRole('checkbox')).toHaveLength(1)
+    await userEvent.click(list().getByRole('checkbox', { name: /Comédie/ }))
+    expect(router.state.location.search).toBe('?tag=Com%C3%A9die')
+    expect(grid()).toEqual(['Été en pente'])
+    await userEvent.clear(screen.getByRole('searchbox', { name: 'Chercher un tag' }))
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Chercher un tag' }), 'zzz')
+    expect(screen.getByText('Aucun tag ne correspond.')).toBeInTheDocument()
+    await userEvent.keyboard('{Escape}')
+
+    // Un lien de fiche série (`?tag=sf`) : casse et accents ignorés.
+    await router.navigate('/series?tag=sf&tag=action')
+    expect(await screen.findByRole('button', { name: '2 tags' })).toBeInTheDocument()
+    expect(grid()).toEqual(['Akira'])
+    // Puces à la graphie des séries.
+    expect(screen.getByRole('button', { name: 'Retirer le tag SF' })).toHaveTextContent('SF')
+    await userEvent.click(screen.getByRole('button', { name: 'Retirer le tag Action' }))
+    expect(grid()).toEqual(['Akira', 'Été en pente'])
+    // Décocher dans la liste retire le tag aussi.
+    await userEvent.click(screen.getByRole('button', { name: '1 tag' }))
+    await userEvent.click(within(screen.getByRole('list', { name: 'Tags' })).getByRole('checkbox', { name: /SF/ }))
+    expect(router.state.location.search).toBe('')
+    expect(grid()).toEqual(['Akira', 'Été en pente', 'Watchmen'])
   })
 
   it('montre la couverture d’une source quand elle a été choisie', async () => {
