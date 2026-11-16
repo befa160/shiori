@@ -1144,6 +1144,15 @@ Objectif : piloter les scans depuis l'application et consulter leurs journaux, s
 - **Documentation d'installation**, expliquée simplement : Docker, binaire Linux/Windows, premier lancement, ajout d'une bibliothèque, mise à jour, sauvegarde de la base.
 - **Documentation fonctionnelle** : bibliothèques et séries, rangement conseillé des fichiers, lecture, scans et leurs journaux, signification de chaque code de diagnostic.
 
+### Adresse locale à la maison, adresse publique ailleurs (demandée le 2026-11-16)
+
+Besoin : comme les applications Home Assistant ou Immich, passer par l'adresse locale du serveur sur le Wi-Fi de la maison et par l'adresse publique (reverse proxy, Cloudflare) ailleurs, sans rien faire. Motif : le compte gratuit Cloudflare limite la taille des requêtes à 100 Mo.
+
+- **Ce que la limite touche vraiment** : les 100 Mo de Cloudflare portent sur le corps d'une requête envoyée (un envoi de fichier). Shiori ne demande que des pages, des miniatures et du JSON, de quelques Ko à quelques Mo chacun, et ne reçoit jamais de gros envoi : le streaming et le futur téléchargement de tomes (page par page) passent sous la limite. Reste à relire les conditions de Cloudflare pour un site composé surtout d'images.
+- **Pourquoi une PWA ne peut pas basculer seule** : dans un navigateur, l'adresse est l'identité de l'application. Changer d'adresse, c'est changer d'application : installation, service worker, tomes téléchargés et réglages locaux appartiennent à une seule adresse. Une page en `https://` ne peut pas non plus appeler `http://192.168.x.x` (contenu mixte bloqué), et le navigateur ne donne pas le nom du Wi-Fi. Home Assistant et Immich basculent dans leurs **applications natives**.
+- **Solution retenue, sans code : DNS local (split DNS)**. Le même nom (`shiori.mondomaine.fr`) pointe vers l'adresse locale du reverse proxy à la maison (box, Pi-hole ou AdGuard Home) et vers Cloudflare ailleurs ; certificat Let's Encrypt par défi DNS sur le reverse proxy local. Une seule adresse, donc une seule PWA, et le trafic de la maison ne sort pas. À décrire dans la documentation d'installation (lot 6.7), avec `--allowed-host` / `SHIORI_ALLOWED_HOSTS` pour ce nom.
+- **Bascule dans l'application** : seulement avec une application native (enveloppe Tauri mobile ou équivalente), étape de distribution « Plus tard ».
+
 ### Invariant de lecture à vérifier en phase 2
 
 L'ordre de lecture ne dépend jamais de l'ordre dans l'archive : le lecteur reçoit la liste ordonnée des `page_id` (par `ordinal`), et le serveur lit chaque page par l'`archive_index` enregistré pour cet ID. Test d'intégration prévu au lot 2.4 : sur une archive rangée dans le désordre, la page n servie par HTTP est l'image attendue à l'ordinal n (même contrôle par couleur que `every_page_is_the_right_image`).
@@ -1173,3 +1182,4 @@ L'ordre de lecture ne dépend jamais de l'ordre dans l'archive : le lecteur reç
 - 2026-11-13 : phase 5 terminée (métadonnées des fichiers et du web, édition manuelle avec verrouillage par champ, séries qui survivent au renommage, identification façon Plex, couvertures des sources).
 - 2026-11-13 : plan de la phase 6 préparé dans une nouvelle session (notes de passation dans « Phase 6 »).
 - 2026-11-13 : plan de la phase 6 validé (Q35 à Q41) : Dependabot, release sur tag, image Docker distroless avec `--allowed-host`, système de thèmes (sombre, clair, OLED, sépia) au lieu du seul mode clair, PWA hors ligne limitée aux pages déjà lues, documentation dans `docs/`.
+- 2026-11-16 : binaire lancé sans argument (double-clic sous Windows) = `shiori serve`, une erreur reste affichée jusqu'à Entrée ; bascule adresse locale / publique par DNS local (split DNS), la bascule dans l'application attendra une application native.

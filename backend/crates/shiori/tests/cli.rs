@@ -220,6 +220,21 @@ fn usage_errors_exit_with_2() {
     );
 }
 
+/// Sans argument (double-clic sur le binaire), le serveur démarre au lieu de l'aide ; une
+/// erreur reste affichée jusqu'à Entrée (ici, l'entrée vide la ferme aussitôt).
+#[test]
+fn no_argument_starts_the_server() {
+    let data = tempfile::tempdir().unwrap();
+    // Un fichier à la place du dossier de données : `serve` échoue avant toute écoute.
+    let not_a_dir = data.path().join("fichier");
+    std::fs::write(&not_a_dir, b"").unwrap();
+    let out = shiori(&[], &not_a_dir);
+    assert_eq!(out.status.code(), Some(2), "{}", stderr(&out));
+    assert!(stderr(&out).contains("création de"), "{}", stderr(&out));
+    assert!(!stderr(&out).contains("Usage"), "{}", stderr(&out));
+    assert!(stderr(&out).contains("Entrée"), "{}", stderr(&out));
+}
+
 /// Base indiquée par un simple nom de fichier : créée dans le dossier courant.
 #[test]
 fn db_given_as_a_bare_file_name() {

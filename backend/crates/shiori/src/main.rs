@@ -32,7 +32,13 @@ enum Command {
 }
 
 fn main() -> ExitCode {
-    let cli = Cli::parse();
+    // Double-clic sur le binaire (Windows) : aucun argument, on lance le serveur au lieu de
+    // l'aide, dont la fenêtre se refermerait aussitôt.
+    let double_click = std::env::args_os().len() == 1;
+    let cli = match double_click {
+        true => Cli::parse_from(["shiori", "serve"]),
+        false => Cli::parse(),
+    };
     let level = match cli.verbose {
         0 => "warn",
         1 => "info",
@@ -60,6 +66,11 @@ fn main() -> ExitCode {
         Ok(code) => code,
         Err(e) => {
             eprintln!("erreur : {e:#}");
+            // Sans terminal ouvert, l'erreur doit rester lisible avant que la fenêtre se ferme.
+            if double_click {
+                eprintln!("Appuyez sur Entrée pour fermer.");
+                let _ = std::io::stdin().read_line(&mut String::new());
+            }
             ExitCode::from(2)
         }
     }
