@@ -10,6 +10,10 @@ import './index.css'
 
 applyStoredTheme()
 
+// Service worker (lot 6.5a) : en production seulement, il garderait sinon d'anciens fichiers du
+// serveur de développement.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) void navigator.serviceWorker.register('/sw.js')
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App router={createBrowserRouter(routes)} queryClient={createQueryClient()} />

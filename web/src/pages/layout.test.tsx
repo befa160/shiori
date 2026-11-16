@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { act, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Library } from '@/api/types'
@@ -19,6 +19,16 @@ afterEach(() => {
 const [sidebarNav, tabBar] = [0, 1].map((i) => () => screen.getAllByRole('navigation', { name: 'Navigation principale' })[i])
 
 describe('cadre de navigation', () => {
+  it('dit quand l’appareil est hors ligne, en direct', async () => {
+    mockApi({ '/api/libraries': () => json(libraries) })
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    renderAt('/')
+    expect(await screen.findByRole('status', { name: '' })).toHaveTextContent('Hors ligne : les pages déjà vues restent lisibles.')
+    online.mockReturnValue(true)
+    act(() => void dispatchEvent(new Event('online')))
+    expect(screen.queryByText(/Hors ligne/)).toBeNull()
+  })
+
   it('mène aux bibliothèques et à l’administration, et marque l’écran courant', async () => {
     mockApi({ '/api/libraries': () => json(libraries) })
     const { router } = renderAt('/')

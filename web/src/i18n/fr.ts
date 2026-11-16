@@ -10,6 +10,7 @@ export const fr = {
     home: 'Shiori, accueil',
     language: 'Langue',
     languageNotSaved: 'Langue non enregistrée, réessayez plus tard',
+    offline: 'Hors ligne : les pages déjà vues restent lisibles.',
     skip: 'Aller au contenu',
     navigation: 'Navigation principale',
     collapse: 'Réduire le menu',

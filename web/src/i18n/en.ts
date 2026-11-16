@@ -9,6 +9,7 @@ export const en: Translations = {
   layout: {
     home: 'Shiori, home',
     language: 'Language',
+    offline: 'Offline: pages you have already seen can still be read.',
     languageNotSaved: 'Language not saved, try again later',
     skip: 'Skip to content',
     navigation: 'Main navigation',
