@@ -1172,7 +1172,7 @@ Audit complet après la phase 6 (couverture backend 96,85 % lignes / 91,64 % bra
 2. ✅ **CSRF sur les POST sans corps** (annuler le scan, identifier, relire les métadonnées) : middleware `same_site_writes_only`, actif même sans `--allowed-host`, qui refuse (403 `cross_site`) toute requête autre que GET/HEAD dont `Sec-Fetch-Site` vaut `cross-site`.
 3. ✅ **Images en `Cache-Control: private`** au lieu de `public` (`IMMUTABLE` dans `server.rs`, pages et `assets/` du front) ; reste, en phase 7, à vider les caches du service worker (`shiori-images-v1`, `shiori-shell-v1`, `shiori-offline-v1`) et la liste des téléchargements à la déconnexion.
 4. ✅ **En-têtes de l'interface** (`web.rs` `serve`) : `X-Frame-Options: DENY` et CSP `default-src 'self'` avec `frame-ancestors 'none'`, validés avec Playwright (e2e verts, console sans violation) ; `style-src 'unsafe-inline'` reste nécessaire pour les balises `<style>` de Radix.
-5. ✅ **Failles connues des crates** : job CI `advisories` (`cargo deny check advisories`), relancé chaque semaine par les PR Dependabot.
+5. ✅ **Failles connues des crates** : job CI `advisories` (`cargo deny check advisories`), relancé chaque semaine par les PR Dependabot. Deux exceptions dans `backend/deny.toml`, chacune avec sa raison : RUSTSEC-2026-0459 (SQLite embarqué < 3.54 ; correctif bloqué par sqlx 0.9.0, sans risque pour une base locale de confiance) et RUSTSEC-2024-0436 (`paste` non maintenu, via rav1e).
 6. ✅ **Actions GitHub épinglées par SHA** (`ci.yml`, `release.yml`), version en commentaire.
 7. ✅ `npm update` (6 paquets en retard le 2026-11-16) et `cargo update`.
 8. ✅ `resized` (`server.rs`) : prendre le jeton de rendu avant de lire l'originale (mémoire bornée à 4 originales).
