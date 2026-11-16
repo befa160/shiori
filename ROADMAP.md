@@ -1167,6 +1167,16 @@ Objectif : piloter les scans depuis l'application et consulter leurs journaux, s
 - **Documentation d'installation**, expliquée simplement : Docker, binaire Linux/Windows, premier lancement, ajout d'une bibliothèque, mise à jour, sauvegarde de la base.
 - **Documentation fonctionnelle** : bibliothèques et séries, rangement conseillé des fichiers, lecture, scans et leurs journaux, signification de chaque code de diagnostic.
 
+### Signature des binaires et de l'image (demandée le 2026-11-16)
+
+Besoin : que Windows et macOS ouvrent Shiori sans avertissement, et que chacun puisse vérifier qu'un binaire ou une image vient bien de ce dépôt. Aujourd'hui : `SHA256SUMS` seulement ; Windows affiche SmartScreen (« Exécuter quand même »), macOS bloque le binaire non signé (`xattr` à la main, documenté dans l'installation).
+
+- **Windows (Authenticode)** : signer `shiori.exe` dans `release.yml`. Pistes, à comparer au moment de le faire (conditions et prix à revérifier) : SignPath Foundation (gratuit pour les projets libres, sur dossier), Azure Trusted Signing (abonnement mensuel, pays éligibles limités), certificat OV ou EV classique (cher, clé matérielle). SmartScreen se fie aussi à la réputation : les premières versions signées peuvent encore être signalées.
+- **macOS (Developer ID + notarisation)** : compte Apple Developer payant (annuel), certificat « Developer ID Application » et notarisation (`notarytool`) dans le job macOS ; certificat et mot de passe dans les secrets GitHub. Supprime l'étape `xattr` de l'installation.
+- **Linux** : pas de signature imposée par le système. Signer les artefacts : attestations de provenance GitHub (`actions/attest-build-provenance`, gratuites, sans clé à garder, vérifiables avec `gh attestation verify`) ou Sigstore (`cosign`, sans clé grâce à l'identité OIDC du workflow), pour les archives et pour l'image Docker.
+- **Ordre proposé** : les attestations (gratuites, aucun secret, couvrent toutes les plateformes et l'image) d'abord ; Windows et macOS ensuite, quand le coût et les comptes sont décidés.
+- **Questions** : budget annuel acceptable (Apple, et Windows hors SignPath) ; dossier SignPath ou abonnement Azure ; compte Apple à ton nom ou à celui d'une structure.
+
 ### Adresse locale à la maison, adresse publique ailleurs (demandée le 2026-11-16)
 
 Besoin : comme les applications Home Assistant ou Immich, passer par l'adresse locale du serveur sur le Wi-Fi de la maison et par l'adresse publique (reverse proxy, Cloudflare) ailleurs, sans rien faire. Motif : le compte gratuit Cloudflare limite la taille des requêtes à 100 Mo.
@@ -1208,3 +1218,4 @@ L'ordre de lecture ne dépend jamais de l'ordre dans l'archive : le lecteur reç
 - 2026-11-16 : binaire lancé sans argument (double-clic sous Windows) = `shiori serve`, une erreur reste affichée jusqu'à Entrée ; bascule adresse locale / publique par DNS local (split DNS), la bascule dans l'application attendra une application native.
 - 2026-11-16 : PWA recentrée sur le streaming (Q38 révisée) ; hors ligne sur demande, tome par tome, page par page (lot 6.5b) ; 2 pages préchargées, d'après une mesure sur 4G lente.
 - 2026-11-16 : tomes téléchargés pour le hors-ligne (lot 6.5b) ; authentification et comptes ajoutés en phase 7 (à planifier).
+- 2026-11-16 : signature des binaires (Windows, macOS) et attestations des artefacts (Linux, image Docker) ajoutées à la roadmap, à planifier.
