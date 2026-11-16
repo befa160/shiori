@@ -1,7 +1,7 @@
 //! `shiori scan` de bout en bout : le vrai binaire, de vraies fixtures.
 
 use std::path::Path;
-use std::process::{Command, Output, Stdio};
+use std::process::{Command, Output};
 
 use shiori_testkit::fixtures;
 
@@ -313,6 +313,7 @@ async fn fatal_error_closes_the_run_as_failed() {
 #[test]
 fn open_launches_the_browser_even_when_already_running() {
     use std::os::unix::fs::PermissionsExt;
+    use std::process::Stdio;
     let dir = tempfile::tempdir().unwrap();
     let opened = dir.path().join("ouvert.txt");
     let browser = dir.path().join("navigateur");
