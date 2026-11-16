@@ -23,6 +23,7 @@ const summary = {
   cover_image_id: null,
   alt_titles: [] as string[],
   authors: [] as string[],
+  tags: [] as string[],
 } as const
 const series: SeriesSummary[] = [
   { ...summary, id: 7, name: 'Toriko', volume_count: 1 },
@@ -168,6 +169,8 @@ describe('page d’une série', () => {
     expect(main().getByText('2008 · Kana · Publication terminée')).toBeInTheDocument()
     const chips = within(main().getByRole('list', { name: 'Genres et tags' })).getAllByRole('listitem')
     expect(chips.map((li) => li.textContent)).toEqual(['Action', 'Aventure', 'Cuisine'])
+    // Chaque tag mène aux séries qui l'ont.
+    expect(within(chips[2]).getByRole('link', { name: 'Cuisine' })).toHaveAttribute('href', '/series?tag=Cuisine')
     // Les autres titres servent à la recherche, ils ne s'affichent pas (trop nombreux sur les vraies fiches).
     expect(main().queryByText(/トリコ/)).not.toBeInTheDocument()
     const links = main().getAllByRole('link', { name: /example\.org/ })

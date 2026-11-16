@@ -43,9 +43,9 @@ Formats lus : **CBZ** (zip, y compris les très gros fichiers) et **CBR** (RAR 4
 ## Accueil, séries, recherche
 
 - **Accueil** : « Continuer la lecture » (le tome en cours de chaque série, ou le suivant quand un tome est fini), puis une étagère par bibliothèque.
-- **Séries** : toutes les séries en couvertures, avec des filtres par lecture (non lu, en cours, lu), par statut de publication et par bibliothèque, et un tri (par titre, dernière lecture, récemment ajoutées).
-- **Recherche** : par titre, titre alternatif ou auteur, sans tenir compte des accents ni des majuscules.
-- **Page d'une série** : couverture, résumé, auteurs, genres, avancement en pages, bouton pour reprendre ou commencer, et la liste des tomes. Le menu d'un tome permet de le marquer lu ou non lu, de le télécharger pour le hors-ligne et de voir les problèmes de son dernier scan.
+- **Séries** : toutes les séries en couvertures, avec des filtres par lecture (non lu, en cours, lu), par statut de publication, par bibliothèque et par **tags** (genres et tags des fichiers ou des sources web : comédie, SF… ; plusieurs tags cochés = séries qui les ont tous), et un tri (par titre, dernière lecture, récemment ajoutées).
+- **Recherche** : par titre, titre alternatif, auteur ou tag, sans tenir compte des accents ni des majuscules.
+- **Page d'une série** : couverture, résumé, auteurs, genres et tags (chacun mène aux séries qui l'ont), avancement en pages, bouton pour reprendre ou commencer, et la liste des tomes. Le menu d'un tome permet de le marquer lu ou non lu, de le télécharger pour le hors-ligne et de voir les problèmes de son dernier scan.
 
 Une barre ambre en bas d'une couverture montre la progression d'un tome commencé.
 

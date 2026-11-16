@@ -1206,6 +1206,14 @@ Besoin : comme les applications Home Assistant ou Immich, passer par l'adresse l
 - **Solution retenue, sans code : DNS local (split DNS)**. Le même nom (`shiori.mondomaine.fr`) pointe vers l'adresse locale du reverse proxy à la maison (box, Pi-hole ou AdGuard Home) et vers Cloudflare ailleurs ; certificat Let's Encrypt par défi DNS sur le reverse proxy local. Une seule adresse, donc une seule PWA, et le trafic de la maison ne sort pas. À décrire dans la documentation d'installation (lot 6.7), avec `--allowed-host` / `SHIORI_ALLOWED_HOSTS` pour ce nom.
 - **Bascule dans l'application** : seulement avec une application native (enveloppe Tauri mobile ou équivalente), étape de distribution « Plus tard ».
 
+### Recherche par tag (demandée le 2026-11-16)
+
+Genres et tags (ComicInfo, AniList, MangaDex, ou édités) dans la recherche des séries.
+
+- ✅ `SeriesSummary.tags` : genres puis tags de la vue fusionnée, sans doublon.
+- ✅ Le champ de recherche trouve aussi les tags ; filtre « Tags » à cocher (liste cherchable, nombre de séries par tag), plusieurs tags = séries qui les ont tous, casse et accents ignorés ; état dans l'adresse (`?tag=` répété) ; tags choisis en puces retirables.
+- ✅ Chaque tag de la fiche série est un lien vers `/series?tag=…`.
+
 ### Invariant de lecture à vérifier en phase 2
 
 L'ordre de lecture ne dépend jamais de l'ordre dans l'archive : le lecteur reçoit la liste ordonnée des `page_id` (par `ordinal`), et le serveur lit chaque page par l'`archive_index` enregistré pour cet ID. Test d'intégration prévu au lot 2.4 : sur une archive rangée dans le désordre, la page n servie par HTTP est l'image attendue à l'ordinal n (même contrôle par couleur que `every_page_is_the_right_image`).

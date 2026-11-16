@@ -25,6 +25,7 @@ const summary = {
   cover_image_id: null,
   alt_titles: [] as string[],
   authors: [] as string[],
+  tags: [] as string[],
 } as const
 const series: SeriesSummary[] = [
   { ...summary, id: 7, name: 'Ancienne', created_at: '2026-01-01T00:00:00.000Z' },

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SeriesSummary } from '@/api/types'
-import { applyFilters, fold, isFiltered, readFilters } from './filters'
+import { allTags, applyFilters, fold, isFiltered, readFilters } from './filters'
 
 const base: SeriesSummary = {
   id: 0,
@@ -19,6 +19,7 @@ const base: SeriesSummary = {
   cover_image_id: null,
   alt_titles: [],
   authors: [],
+  tags: [],
 }
 // Dans l'ordre du serveur (par nom).
 const series: SeriesSummary[] = [
@@ -32,12 +33,13 @@ const filters = (query: string) => readFilters(new URLSearchParams(query))
 
 describe('filtres de séries', () => {
   it('lit l’adresse et ignore les valeurs inconnues', () => {
-    expect(filters('')).toEqual({ q: '', read: null, status: null, library: null, sort: 'name' })
+    expect(filters('')).toEqual({ q: '', read: null, status: null, library: null, tags: [], sort: 'name' })
     expect(filters('q=one&read=read&status=unknown&library=2&sort=added')).toEqual({
       q: 'one',
       read: 'read',
       status: 'unknown',
       library: 2,
+      tags: [],
       sort: 'added',
     })
     expect(filters('read=lu&status=fini&library=-1&sort=hasard')).toEqual(filters(''))
@@ -73,6 +75,33 @@ describe('filtres de séries', () => {
     expect(ids(applyFilters(series, filters('')))).toEqual([1, 2, 3, 4])
     expect(ids(applyFilters(series, filters('sort=last_read')))).toEqual([3, 2, 1, 4])
     expect(ids(applyFilters(series, filters('sort=added')))).toEqual([1, 3, 2, 4])
+  })
+
+  it('filtre par tags, tous exigés, sans tenir compte des accents ni de la casse', () => {
+    const tagged = [
+      { ...series[0], tags: ['Comédie', 'SF'] },
+      { ...series[1], tags: ['comedie', 'Cuisine'] },
+      ...series.slice(2),
+    ]
+    expect(filters('tag=SF&tag=sf&tag=%20')).toMatchObject({ tags: ['sf'] })
+    expect(ids(applyFilters(tagged, filters('tag=COMEDIE')))).toEqual([1, 2])
+    expect(ids(applyFilters(tagged, filters('tag=comédie&tag=sf')))).toEqual([1])
+    expect(ids(applyFilters(tagged, filters('tag=Horreur')))).toEqual([])
+    // Le champ de recherche trouve aussi les tags.
+    expect(ids(applyFilters(tagged, filters('q=cuisine')))).toEqual([2])
+    expect(isFiltered(filters('tag=SF'))).toBe(true)
+    // Une graphie par tag (la première vue), doublons d'une même série comptés une fois.
+    const doubled = [{ ...tagged[0], tags: ['SF', 'sf'] }, ...tagged.slice(1)]
+    expect(allTags(doubled)).toEqual([
+      { tag: 'comedie', count: 1 },
+      { tag: 'Cuisine', count: 1 },
+      { tag: 'SF', count: 1 },
+    ])
+    expect(allTags(tagged)).toEqual([
+      { tag: 'Comédie', count: 2 },
+      { tag: 'Cuisine', count: 1 },
+      { tag: 'SF', count: 1 },
+    ])
   })
 
   it('sait si un filtre restreint la liste', () => {
