@@ -1206,6 +1206,16 @@ Besoin : comme les applications Home Assistant ou Immich, passer par l'adresse l
 - **Solution retenue, sans code : DNS local (split DNS)**. Le même nom (`shiori.mondomaine.fr`) pointe vers l'adresse locale du reverse proxy à la maison (box, Pi-hole ou AdGuard Home) et vers Cloudflare ailleurs ; certificat Let's Encrypt par défi DNS sur le reverse proxy local. Une seule adresse, donc une seule PWA, et le trafic de la maison ne sort pas. À décrire dans la documentation d'installation (lot 6.7), avec `--allowed-host` / `SHIORI_ALLOWED_HOSTS` pour ce nom.
 - **Bascule dans l'application** : seulement avec une application native (enveloppe Tauri mobile ou équivalente), étape de distribution « Plus tard ».
 
+### Lancement par double-clic (demandé le 2026-11-16)
+
+Besoin : en ouvrant le binaire (Windows, macOS, Linux ; pas Docker), arriver directement sur l'interface, et savoir où sont la base et les fichiers.
+
+- **Décision** : ouvrir le navigateur par défaut plutôt qu'une fenêtre webview (wry/Tauri) : aucune bibliothèque native (WebKitGTK sous Linux), la PWA reste installable, le binaire ne change presque pas. Option `serve --open`, donnée par le double-clic (aucun argument).
+- ✅ `--open` : ouvre `http://localhost:<port>` une fois le serveur prêt (crate `webbrowser`, URL http(s) seulement). Port déjà pris (second double-clic) : ouvre l'interface du Shiori déjà lancé et s'arrête, ce qui remplace l'icône de la zone de notification prévue au départ.
+- ✅ Au démarrage, la console montre l'adresse, la base et le cache ; **Administration → Données** (`GET /api/admin/storage`) les montre en lecture seule, sélectionnables.
+- Écart assumé au principe 9 : sous Linux, `webbrowser` lance `$BROWSER` ou `xdg-open` (aucune API système pour ça), seulement avec `--open` ; un échec affiche l'adresse à ouvrir à la main.
+- Plus tard, si besoin : icône dans la zone de notification (rouvrir, quitter) et fenêtre console masquée sous Windows.
+
 ### Invariant de lecture à vérifier en phase 2
 
 L'ordre de lecture ne dépend jamais de l'ordre dans l'archive : le lecteur reçoit la liste ordonnée des `page_id` (par `ordinal`), et le serveur lit chaque page par l'`archive_index` enregistré pour cet ID. Test d'intégration prévu au lot 2.4 : sur une archive rangée dans le désordre, la page n servie par HTTP est l'image attendue à l'ordinal n (même contrôle par couleur que `every_page_is_the_right_image`).

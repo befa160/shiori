@@ -519,6 +519,7 @@ async fn run_opens_the_database_and_reports_bind_errors() {
         jobs: None,
         scan_log_days: 30,
         allowed_hosts: Vec::new(),
+        open: false,
     };
     // Arrêt immédiat : la base est créée (avec son dossier) puis le serveur s'arrête.
     server::run(args("127.0.0.1:0"), false, async {})
@@ -530,6 +531,17 @@ async fn run_opens_the_database_and_reports_bind_errors() {
     let addr = taken.local_addr().unwrap().to_string();
     let err = server::run(args(&addr), true, async {}).await.unwrap_err();
     assert!(format!("{err:#}").contains(&addr), "{err:#}");
+}
+
+/// L'administration montre où sont la base et le cache, en chemins complets.
+#[tokio::test]
+async fn storage_gives_the_database_and_cache_paths() {
+    let f = fixture().await;
+    let (status, paths) = get(&f.app, "/api/admin/storage").await;
+    assert_eq!(status, StatusCode::OK);
+    let dir = f.root.parent().unwrap();
+    assert_eq!(paths["database"], dir.join("t.db").display().to_string());
+    assert_eq!(paths["cache"], dir.join("cache").display().to_string());
 }
 
 /// Hors `/api`, le routeur sert le front : `index.html` si `web/dist` est construit, sinon la

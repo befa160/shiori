@@ -14,6 +14,7 @@ import type {
   SeriesPatch,
   SeriesSummary,
   SourceId,
+  StoragePaths,
   WebMetadata,
   Settings,
   SettingsPatch,
@@ -99,6 +100,7 @@ export const api = {
   useSourceCover: (seriesId: number, source: SourceId) =>
     must<SeriesDetail>(`/series/${seriesId}/metadata/cover`, { method: 'POST', body: JSON.stringify({ source }) }),
   metadataOverview: (init?: RequestInit) => must<MetadataOverview>('/admin/metadata', init),
+  storage: (init?: RequestInit) => must<StoragePaths>('/admin/storage', init),
   identify: () => request<null>('/admin/metadata/identify', { method: 'POST' }),
   saveSeriesSettings: (seriesId: number, patch: SettingsPatch) =>
     must<ReadingSettings>(`/series/${seriesId}/settings`, { method: 'PATCH', body: JSON.stringify(patch) }),

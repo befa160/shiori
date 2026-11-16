@@ -66,6 +66,10 @@ pub struct ServeArgs {
         value_delimiter = ','
     )]
     pub allowed_hosts: Vec<String>,
+    /// Ouvre l'interface dans le navigateur une fois prêt (double-clic sur le binaire). Si le
+    /// port est déjà pris, par un Shiori déjà lancé, ouvre l'interface et s'arrête.
+    #[arg(long)]
+    pub open: bool,
 }
 
 /// État partagé par les requêtes.
@@ -112,6 +116,18 @@ pub async fn run(
     quiet: bool,
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> Result<()> {
+    // Port d'abord : un second lancement (`--open`) ne doit pas migrer la base d'un Shiori
+    // déjà lancé, peut-être d'une autre version.
+    let listener = match TcpListener::bind(args.listen).await {
+        Ok(listener) => listener,
+        // shortcut: le port pris est supposé l'être par un Shiori déjà lancé (second double-clic) ; interroger /api/health si un autre programme le prend un jour.
+        Err(e) if args.open && e.kind() == std::io::ErrorKind::AddrInUse => {
+            eprintln!("Shiori tourne déjà : ouverture de l'interface.");
+            open_browser(args.listen.port());
+            return Ok(());
+        }
+        Err(e) => return Err(e).with_context(|| format!("écoute sur {}", args.listen)),
+    };
     let db = crate::open_db(args.db).await?;
     let cache = match args.cache_dir {
         Some(dir) => dir,
@@ -122,11 +138,13 @@ pub async fn run(
         args.cache_max_mib.saturating_mul(1024 * 1024),
     )
     .with_context(|| format!("cache d'images {}", cache.display()))?;
-    let listener = TcpListener::bind(args.listen)
-        .await
-        .with_context(|| format!("écoute sur {}", args.listen))?;
     if !quiet {
         eprintln!("Shiori écoute sur http://{}", listener.local_addr()?);
+        eprintln!(
+            "Base : {}",
+            absolute(db.pool().connect_options().get_filename())
+        );
+        eprintln!("Cache : {}", absolute(&cache));
     }
     // Une passe restée `running` vient d'un arrêt brutal : elle ne reprendra pas.
     db.interrupt_running_runs().await?;
@@ -143,7 +161,27 @@ pub async fn run(
         args.scan_log_days,
         web_sources(),
     );
+    if args.open {
+        open_browser(listener.local_addr()?.port());
+    }
     serve(listener, Arc::new(app), args.allowed_hosts, shutdown).await
+}
+
+/// `localhost` : seul nom toujours accepté par la parade au DNS rebinding, quelle que soit
+/// l'adresse d'écoute.
+fn open_browser(port: u16) {
+    let url = format!("http://localhost:{port}");
+    if let Err(e) = webbrowser::open(&url) {
+        eprintln!("navigateur introuvable ({e}) : ouvrez {url}");
+    }
+}
+
+/// Chemin complet à montrer (une base donnée par un simple nom de fichier est relative).
+fn absolute(path: &std::path::Path) -> String {
+    std::path::absolute(path)
+        .unwrap_or_else(|_| path.to_path_buf())
+        .display()
+        .to_string()
 }
 
 pub async fn serve(
@@ -194,6 +232,7 @@ pub fn router(app: Arc<App>, hosts: Option<Vec<String>>) -> Router {
         .route("/api/metadata/thumbnail/{source}/{id}", get(thumbnail))
         .route("/api/covers/{id}", get(cover))
         .route("/api/admin/metadata", get(metadata_status))
+        .route("/api/admin/storage", get(storage))
         .route("/api/admin/metadata/identify", post(identify))
         .route("/api/volumes/{id}", get(volume).patch(patch_volume))
         .route(
@@ -340,6 +379,14 @@ fn volume_id(raw: &str) -> Result<VolumeId, ApiError> {
 
 async fn health() -> Json<serde_json::Value> {
     Json(json!({ "status": "ok", "version": env!("CARGO_PKG_VERSION") }))
+}
+
+/// Où sont la base et le cache (administration), pour les sauvegarder ou les retrouver.
+async fn storage(State(app): State<Arc<App>>) -> Json<serde_json::Value> {
+    Json(json!({
+        "database": absolute(app.db.pool().connect_options().get_filename()),
+        "cache": absolute(app.images.dir()),
+    }))
 }
 
 async fn settings(State(app): State<Arc<App>>) -> ApiResult<shiori_db::Settings> {

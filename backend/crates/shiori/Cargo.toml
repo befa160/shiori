@@ -29,6 +29,7 @@ tokio = { workspace = true, features = ["rt-multi-thread", "sync", "net", "signa
 tower-http.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+webbrowser.workspace = true
 
 [dev-dependencies]
 http-body-util.workspace = true

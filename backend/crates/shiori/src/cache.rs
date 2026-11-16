@@ -53,6 +53,10 @@ impl Images {
         })
     }
 
+    pub fn dir(&self) -> &Path {
+        &self.dir
+    }
+
     pub fn used(&self) -> u64 {
         self.used.load(Ordering::Relaxed)
     }

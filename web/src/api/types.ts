@@ -106,6 +106,12 @@ export interface SourceIssue {
   last_error: string | null
 }
 
+/** `GET /api/admin/storage` : chemins complets sur le serveur. */
+export interface StoragePaths {
+  database: string
+  cache: string
+}
+
 /** `GET /api/admin/metadata`. */
 export interface MetadataOverview {
   online: boolean

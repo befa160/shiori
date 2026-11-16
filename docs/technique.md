@@ -108,6 +108,7 @@ JSON sous `/api`, erreurs `{ "code", "message" }` avec un code stable que l'inte
 | `GET, POST /api/admin/scans`, `GET /api/admin/scans/{id}`, `.../logs` | historique, lancer un scan, une passe, son journal |
 | `GET /api/admin/scans/current`, `POST .../current/cancel` | scan en cours, annulation |
 | `GET /api/admin/metadata`, `POST /api/admin/metadata/identify` | état des sources, identification de toutes les séries |
+| `GET /api/admin/storage` | chemins complets de la base et du cache |
 
 Tout le reste est l'application web : un fichier de `web/dist`, ou `index.html` pour une route de l'application (React Router). En debug, `web/dist` est lu sur le disque ; en release, il est intégré au binaire (`rust-embed`) : `npm run build` avant `cargo build --release`.
 

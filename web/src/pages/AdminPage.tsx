@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { AdminLibraries } from '@/admin/Libraries'
 import { AdminMetadata } from '@/admin/Metadata'
 import { PageTurnSetting } from '@/admin/PageTurnSetting'
+import { AdminStorage } from '@/admin/Storage'
 import { CurrentScan } from '@/admin/scans'
 import { Button } from '@/components/ui/button'
 import { ThemeSetting } from '@/admin/ThemeSetting'
@@ -56,6 +57,7 @@ export function AdminPage() {
         </h2>
         <ThemeSetting />
       </section>
+      <AdminStorage />
     </section>
   )
 }
