@@ -44,6 +44,8 @@ async fn hashed_assets_are_immutable_and_other_files_revalidated() {
     assert_eq!(header(&asset, header::CACHE_CONTROL), IMMUTABLE);
     assert_eq!(header(&asset, header::CONTENT_TYPE), "text/javascript");
     assert_eq!(header(&asset, header::X_CONTENT_TYPE_OPTIONS), "nosniff");
+    assert_eq!(header(&asset, header::X_FRAME_OPTIONS), "DENY");
+    assert!(header(&asset, header::CONTENT_SECURITY_POLICY).contains("frame-ancestors 'none'"));
     assert_eq!(body(asset).await, "console.log(\"app\")\n");
     let icon = serve::<Fixture>("/favicon.svg", &HeaderMap::new());
     assert_eq!(header(&icon, header::CONTENT_TYPE), "image/svg+xml");

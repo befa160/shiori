@@ -143,6 +143,8 @@ export interface SeriesSummary {
   /** Pour la recherche : autres titres et noms des auteurs. */
   alt_titles: string[]
   authors: string[]
+  /** Genres puis tags, sans doublon. */
+  tags: string[]
   volume_count: number
   /** Tomes lus jusqu'au bout. */
   read_count: number

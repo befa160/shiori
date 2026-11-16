@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use anyhow::{Context, Result};
 use axum::extract::rejection::{JsonRejection, QueryRejection};
 use axum::extract::{Path, Query, Request, State};
-use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
+use axum::http::{HeaderMap, HeaderValue, Method, StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, patch, post, put};
@@ -257,6 +257,7 @@ pub fn router(app: Arc<App>, hosts: Option<Vec<String>>) -> Router {
         // Front (JS, CSS) et JSON compressés (brotli ou gzip, selon le navigateur) : environ trois
         // fois moins à transférer. Les images, déjà compressées, sont exclues par défaut.
         .layer(CompressionLayer::new())
+        .layer(middleware::from_fn(same_site_writes_only))
         .layer(TraceLayer::new_for_http())
         .with_state(app);
     match hosts {
@@ -265,6 +266,25 @@ pub fn router(app: Arc<App>, hosts: Option<Vec<String>>) -> Router {
             router.layer(middleware::from_fn_with_state(hosts, allowed_host_only))
         }
         None => router,
+    }
+}
+
+/// Parade au CSRF : un formulaire d'un autre site peut envoyer un POST sans corps JSON (annuler
+/// le scan, identifier), que CORS ne bloque pas. Le navigateur dit d'où vient la requête.
+async fn same_site_writes_only(request: Request, next: Next) -> Response {
+    let read = matches!(*request.method(), Method::GET | Method::HEAD);
+    let cross = request
+        .headers()
+        .get("sec-fetch-site")
+        .is_some_and(|v| v == "cross-site");
+    match read || !cross {
+        true => next.run(request).await,
+        false => ApiError::new(
+            StatusCode::FORBIDDEN,
+            "cross_site",
+            "requête d'un autre site refusée",
+        )
+        .into_response(),
     }
 }
 
@@ -975,7 +995,7 @@ async fn pages(
 }
 
 /// Une page ne change jamais sous un même ID (principe 2) : cache permanent.
-pub(crate) const IMMUTABLE: &str = "public, max-age=31536000, immutable";
+pub(crate) const IMMUTABLE: &str = "private, max-age=31536000, immutable";
 
 #[derive(Deserialize)]
 struct ImageQuery {
@@ -1118,8 +1138,9 @@ async fn resized(
     if let Ok(Some(bytes)) = hit {
         return Ok(bytes);
     }
-    let original = original.await?;
+    // Jeton d'abord : au plus `renders` originales en mémoire à la fois, pas une par requête.
     let _permit = app.renders.acquire().await.expect("sémaphore jamais fermé");
+    let original = original.await?;
     let cache = app.clone();
     let failed = |e: String| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "render_failed", e);
     tokio::task::spawn_blocking(move || {

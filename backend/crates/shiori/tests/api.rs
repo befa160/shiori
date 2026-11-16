@@ -440,6 +440,39 @@ async fn allowed_hosts_are_accepted_whatever_their_case() {
     }
 }
 
+/// Un autre site ne peut rien écrire (CSRF), même sans corps ; il peut toujours lire, comme
+/// une image intégrée ailleurs.
+#[tokio::test]
+async fn cross_site_writes_are_refused() {
+    let f = fixture().await;
+    let app = server::router(f.state.clone(), None);
+    for (method, site, expected) in [
+        ("POST", "cross-site", StatusCode::FORBIDDEN),
+        ("DELETE", "cross-site", StatusCode::FORBIDDEN),
+        ("GET", "cross-site", StatusCode::OK),
+        ("HEAD", "cross-site", StatusCode::OK),
+        ("POST", "same-origin", StatusCode::NOT_FOUND),
+        ("POST", "none", StatusCode::NOT_FOUND),
+    ] {
+        let uri = match method {
+            "GET" | "HEAD" => "/api/health",
+            "DELETE" => "/api/libraries/999",
+            _ => "/api/admin/scans/current/cancel",
+        };
+        let request = Request::builder()
+            .method(method)
+            .uri(uri)
+            .header("host", "localhost")
+            .header("sec-fetch-site", site);
+        let response = app.clone().oneshot(request.body(Body::empty()).unwrap());
+        assert_eq!(
+            response.await.unwrap().status(),
+            expected,
+            "{method} {site}"
+        );
+    }
+}
+
 /// Requête HTTP brute sur une vraie socket, réponse complète.
 async fn raw_get(addr: std::net::SocketAddr, host: &str) -> String {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -640,6 +673,18 @@ async fn library_series_continue_and_publication_status() {
     )
     .await;
     assert_eq!(detail["publication_status"], Value::Null);
+
+    // Genres puis tags, sans doublon, dans la liste : la recherche par tag s'en sert.
+    let tags = r#"{"genres":["Comédie","SF"],"tags":["SF","Cuisine"]}"#;
+    let (status, _) = call(&f.app, "PATCH", &uri, Some(tags)).await;
+    assert_eq!(status, StatusCode::OK);
+    let (_, all) = get(&f.app, "/api/series").await;
+    let listed = all
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["id"] == serie_a["id"]);
+    assert_eq!(listed.unwrap()["tags"], json!(["Comédie", "SF", "Cuisine"]));
     for bad in [
         r#"{"publication_status":"fini"}"#,
         r#"{"statut":"completed"}"#,
@@ -662,9 +707,12 @@ async fn library_series_continue_and_publication_status() {
     let (_, detail) = call(&f.app, "PATCH", &uri, Some(r#"{"title":"Autre titre"}"#)).await;
     assert_eq!(
         (detail["name"].as_str(), &detail["locked"]),
-        (Some("Autre titre"), &json!(["publication_status", "title"]))
+        (
+            Some("Autre titre"),
+            &json!(["genres", "publication_status", "tags", "title"])
+        )
     );
-    let body = r#"{"unlock":["title","publication_status"]}"#;
+    let body = r#"{"unlock":["title","publication_status","genres","tags"]}"#;
     let (_, detail) = call(&f.app, "PATCH", &uri, Some(body)).await;
     assert_eq!(
         (&detail["locked"], &detail["metadata"]["title"]),

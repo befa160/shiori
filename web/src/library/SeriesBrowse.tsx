@@ -1,15 +1,17 @@
-import { Search } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { ChevronDown, Search, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router'
 import { useAllSeries, useLibraries } from '@/api/queries'
 import { QueryState } from '@/browse/parts'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { CoverGrid, CoverSkeletons, SeriesCard } from './covers'
-import { applyFilters, isFiltered, READ_FILTERS, readFilters, SORTS, STATUS_FILTERS } from './filters'
+import { allTags, applyFilters, fold, isFiltered, READ_FILTERS, readFilters, SORTS, STATUS_FILTERS } from './filters'
 
 const ALL = 'all'
 
@@ -41,6 +43,18 @@ export function SeriesBrowse({ search = false }: { search?: boolean }) {
       },
       { replace: true },
     )
+  const setTags = (tags: string[]) =>
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current)
+        next.delete('tag')
+        for (const tag of tags) next.append('tag', tag)
+        return next
+      },
+      { replace: true },
+    )
+  // Pas à chaque frappe : des milliers de séries à replier (accents, casse).
+  const tags = useMemo(() => allTags(series.data ?? []), [series.data])
   const clear = () => {
     setQ('')
     setParams(filters.sort === 'name' ? {} : { sort: filters.sort }, { replace: true })
@@ -87,6 +101,9 @@ export function SeriesBrowse({ search = false }: { search?: boolean }) {
           options={[[ALL, t('browse.statusAll')], ...STATUS_FILTERS.map((v) => [v, t(`browse.status.${v}`)] as const)]}
           onChange={(v) => update('status', v === ALL ? null : v)}
         />
+        {(tags.length > 0 || filters.tags.length > 0) && (
+          <TagFilter tags={tags} selected={filters.tags} onChange={setTags} />
+        )}
         {/* Une seule bibliothèque : rien à choisir. */}
         {libraries.length > 1 && (
           <FilterSelect
@@ -109,6 +126,27 @@ export function SeriesBrowse({ search = false }: { search?: boolean }) {
           </Button>
         )}
       </div>
+      {filters.tags.length > 0 && (
+        <ul aria-label={t('browse.tagsChosen')} className="flex flex-wrap gap-2">
+          {filters.tags.map((tag) => {
+            // La graphie des séries plutôt que celle de l'adresse (`?tag=seinen` → « Seinen »).
+            const name = tags.find((known) => fold(known.tag) === fold(tag))?.tag ?? tag
+            return (
+              <li key={tag} className="max-w-full">
+                <Button
+                  variant="secondary"
+                  aria-label={t('browse.removeTag', { tag: name })}
+                  onClick={() => setTags(filters.tags.filter((other) => other !== tag))}
+                  className="max-w-full rounded-full border border-primary text-primary"
+                >
+                  <span className="truncate">{name}</span>
+                  <X aria-hidden />
+                </Button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
       <QueryState
         query={series}
         isEmpty={(list) => list.length === 0}
@@ -145,6 +183,73 @@ export function SeriesBrowse({ search = false }: { search?: boolean }) {
         }}
       </QueryState>
     </section>
+  )
+}
+
+/** Tags à cocher, avec une recherche : AniList en donne des dizaines par série. */
+function TagFilter({
+  tags,
+  selected,
+  onChange,
+}: {
+  tags: { tag: string; count: number }[]
+  selected: string[]
+  onChange: (tags: string[]) => void
+}) {
+  const { t } = useTranslation()
+  const [find, setFind] = useState('')
+  const chosen = new Set(selected.map(fold))
+  const shown = tags.filter(({ tag }) => fold(tag).includes(fold(find.trim())))
+  const toggle = (tag: string) =>
+    onChange(chosen.has(fold(tag)) ? selected.filter((s) => fold(s) !== fold(tag)) : [...selected, tag])
+  return (
+    <Popover onOpenChange={(open) => open || setFind('')}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          className={cn(
+            'w-full min-w-0 justify-between font-normal sm:w-fit',
+            selected.length > 0 && 'border-primary text-primary',
+          )}
+        >
+          <span className="truncate">
+            {selected.length > 0 ? t('browse.tagsSelected', { count: selected.length }) : t('browse.tagsLabel')}
+          </span>
+          <ChevronDown aria-hidden className="opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        side="bottom"
+        className="w-72 max-w-[calc(100vw-2rem)] p-2"
+        // Au doigt, le clavier virtuel cacherait la liste : le champ ne prend le focus que sur demande.
+        onOpenAutoFocus={(e) => matchMedia('(pointer: coarse)').matches && e.preventDefault()}
+      >
+        <Input
+          type="search"
+          autoComplete="off"
+          aria-label={t('browse.tagsFind')}
+          placeholder={t('browse.tagsFind')}
+          value={find}
+          onChange={(e) => setFind(e.target.value)}
+        />
+        {shown.length === 0 ? (
+          <p className="px-2 py-3 text-sm text-muted-foreground">{t('browse.tagsNone')}</p>
+        ) : (
+          <ul aria-label={t('browse.tagsLabel')} className="mt-2 max-h-72 overflow-y-auto">
+            {shown.map(({ tag, count }) => (
+              <li key={tag}>
+                <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 hover:bg-accent">
+                  <Checkbox checked={chosen.has(fold(tag))} onCheckedChange={() => toggle(tag)} />
+                  <span className="min-w-0 flex-1 truncate">{tag}</span>
+                  <span className="text-sm text-muted-foreground">{t('browse.tagCount', { count })}</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        )}
+      </PopoverContent>
+    </Popover>
   )
 }
 

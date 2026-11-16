@@ -40,12 +40,14 @@ Ce qui est entre crochets ou parenthèses est ignoré (`[Team]`, `(2019)`, `(Dig
 
 Formats lus : **CBZ** (zip, y compris les très gros fichiers) et **CBR** (RAR 4 et 5, y compris « solide », dont la première page s'ouvre un peu plus lentement). Images : JPEG, PNG, WebP, AVIF. Les pages sont triées dans l'ordre naturel de leurs noms (`2` avant `10`), quel que soit leur ordre dans l'archive. Shiori ne modifie jamais vos fichiers.
 
+Les liens symboliques ne sont pas suivis. Les tomes d'un sous-dossier illisible sont gardés tels quels, avec un avertissement au journal du scan. Un dossier de bibliothèque absent, illisible ou soudain vide (disque réseau non monté) fait échouer le scan : rien n'est retiré, les séries et leurs réglages sont gardés jusqu'au retour des fichiers.
+
 ## Accueil, séries, recherche
 
 - **Accueil** : « Continuer la lecture » (le tome en cours de chaque série, ou le suivant quand un tome est fini), puis une étagère par bibliothèque.
-- **Séries** : toutes les séries en couvertures, avec des filtres par lecture (non lu, en cours, lu), par statut de publication et par bibliothèque, et un tri (par titre, dernière lecture, récemment ajoutées).
-- **Recherche** : par titre, titre alternatif ou auteur, sans tenir compte des accents ni des majuscules.
-- **Page d'une série** : couverture, résumé, auteurs, genres, avancement en pages, bouton pour reprendre ou commencer, et la liste des tomes. Le menu d'un tome permet de le marquer lu ou non lu, de le télécharger pour le hors-ligne et de voir les problèmes de son dernier scan.
+- **Séries** : toutes les séries en couvertures, avec des filtres par lecture (non lu, en cours, lu), par statut de publication, par bibliothèque et par **tags** (genres et tags des fichiers ou des sources web : comédie, SF… ; plusieurs tags cochés = séries qui les ont tous), et un tri (par titre, dernière lecture, récemment ajoutées).
+- **Recherche** : par titre, titre alternatif, auteur ou tag, sans tenir compte des accents ni des majuscules.
+- **Page d'une série** : couverture, résumé, auteurs, genres et tags (chacun mène aux séries qui l'ont), avancement en pages, bouton pour reprendre ou commencer, et la liste des tomes. Le menu d'un tome permet de le marquer lu ou non lu, de le télécharger pour le hors-ligne et de voir les problèmes de son dernier scan.
 
 Une barre ambre en bas d'une couverture montre la progression d'un tome commencé.
 

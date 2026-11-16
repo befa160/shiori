@@ -1,0 +1,11 @@
+# `cargo deny check advisories` (job CI `advisories`). Toute exception dit pourquoi et quand
+# la lever ; elle se revoit à chaque PR Dependabot.
+[advisories]
+ignore = [
+  # SQLite < 3.54 embarqué par libsqlite3-sys 0.37 : seule une base et son `-wal` écrits par
+  # un tiers exposent ; Shiori n'ouvre que sa propre base. sqlx 0.9.0 (dernière) borne
+  # libsqlite3-sys < 0.38 : lever dès qu'une version de sqlx accepte 0.39.
+  { id = "RUSTSEC-2026-0459", reason = "base locale de confiance ; correctif bloqué par sqlx 0.9.0" },
+  # paste n'est plus maintenu (aucune faille) ; vient de rav1e (encodeur AVIF).
+  { id = "RUSTSEC-2024-0436", reason = "non maintenu, sans faille ; dépendance de rav1e" },
+]
