@@ -369,7 +369,6 @@ export const fr = {
     solid_archive: 'Archive RAR solide : la première page est plus lente à ouvrir',
     metadata_invalid: 'Fichier de métadonnées (ComicInfo.xml, index.json) illisible, ignoré',
   },
-  // Erreurs de l'API, par code stable (le message du serveur, en français, sert de secours).
   offline: {
     title: 'Tomes téléchargés',
     help: "Gardés sur cet appareil pour lire sans réseau : ouvrez-les d'ici quand vous êtes hors ligne. La page lue est envoyée au serveur au retour du réseau.",
@@ -392,6 +391,7 @@ export const fr = {
     openNamed: 'Lire {{label}}',
     failed: 'Téléchargement de {{label}} interrompu',
   },
+  // Erreurs de l'API, par code stable (le message du serveur, en français, sert de secours).
   errors: {
     invalid_name: 'Donnez un nom à la bibliothèque',
     name_taken: 'Une bibliothèque porte déjà ce nom',
