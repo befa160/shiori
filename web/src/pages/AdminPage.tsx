@@ -27,6 +27,15 @@ export function AdminPage() {
         <CurrentScan />
       </section>
       <AdminLibraries />
+      <section aria-labelledby="admin-offline" className="max-w-prose space-y-3 rounded-md bg-card p-4">
+        <h2 id="admin-offline" className="text-lg font-semibold">
+          {t('offline.title')}
+        </h2>
+        <p className="text-sm text-muted-foreground">{t('offline.adminHelp')}</p>
+        <Button asChild variant="secondary">
+          <Link to="/downloads">{t('offline.manage')}</Link>
+        </Button>
+      </section>
       <section aria-labelledby="admin-reading" className="max-w-prose space-y-3 rounded-md bg-card p-4">
         <h2 id="admin-reading" className="text-lg font-semibold">
           {t('admin.reading')}

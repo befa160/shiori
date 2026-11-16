@@ -21,7 +21,12 @@ globalThis.ResizeObserver ??= class {
 }
 
 // Les tests lisent les textes en français, quelle que soit la langue de la machine.
-beforeEach(() => i18n.changeLanguage('fr'))
+// Le stockage local repart vide aussi avant chaque test : le lecteur démonté à la fin du test
+// précédent garde sa dernière page hors ligne (fetch déjà restauré) après le nettoyage.
+beforeEach(() => {
+  localStorage.clear()
+  return i18n.changeLanguage('fr')
+})
 
 // Sans `globals: true`, Testing Library ne démonte pas tout seul le rendu d'un test.
 afterEach(cleanup)

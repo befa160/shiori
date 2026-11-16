@@ -4,6 +4,7 @@ import { SeriesPage } from '@/browse/SeriesPage'
 import { WithId } from '@/browse/parts'
 import { ScanPage, ScansPage } from '@/admin/scans'
 import { HomePage } from '@/library/HomePage'
+import { DownloadsPage } from '@/offline/DownloadsPage'
 import { SeriesBrowse } from '@/library/SeriesBrowse'
 import { AdminPage } from '@/pages/AdminPage'
 import { Layout } from '@/pages/Layout'
@@ -30,6 +31,7 @@ export const routes: RouteObject[] = [
       // Même écran, champ de recherche au focus ; `key` : passer de l'un à l'autre le remonte.
       { path: 'search', element: <SeriesBrowse key="search" search /> },
       { path: 'series/:id', element: <WithId>{(id) => <SeriesPage id={id} />}</WithId> },
+      { path: 'downloads', element: <DownloadsPage /> },
       { path: 'admin', element: <AdminPage /> },
       { path: 'admin/scans', element: <ScansPage /> },
       { path: 'admin/scans/:id', element: <WithId>{(id) => <ScanPage id={id} />}</WithId> },

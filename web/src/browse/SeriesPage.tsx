@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { EllipsisVertical, Pencil, Play, ScanSearch } from 'lucide-react'
+import { Download, EllipsisVertical, Pencil, Play, ScanSearch } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation } from 'react-router'
@@ -13,6 +13,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Progress } from '@/components/ui/progress'
 import { errorText, issueText } from '@/i18n/errors'
 import { Cover, CoverCard, CoverGrid } from '@/library/covers'
+import { cancel, enqueue, remove, useOffline } from '@/offline/downloads'
 import { volumeLabel } from './labels'
 import { BackLink, QueryState } from './parts'
 import { IdentifyDialog } from './IdentifyDialog'
@@ -58,7 +59,7 @@ export function SeriesPage({ id }: { id: number }) {
                   {s.volumes.map((v, i) => (
                     // Ancre : les journaux de scan mènent directement au tome (`#volume-…`).
                     <li key={v.volume_id} id={`volume-${v.volume_id}`} className="scroll-mt-6">
-                      <VolumeCard volume={v} eager={i < 12} />
+                      <VolumeCard volume={v} series={s} eager={i < 12} />
                     </li>
                   ))}
                 </CoverGrid>
@@ -122,6 +123,7 @@ function SeriesHeader({ series }: { series: SeriesDetail }) {
             <Pencil aria-hidden />
             {t('series.edit')}
           </Button>
+          <DownloadSeries series={series} />
           {online && (
             <Button size="lg" variant="secondary" onClick={() => setIdentifying(true)}>
               <ScanSearch aria-hidden />
@@ -148,16 +150,51 @@ function resumeAction(volume: SeriesVolume, allRead: boolean) {
   return allRead ? 'series.reread' : 'series.read'
 }
 
-function VolumeCard({ volume, eager }: { volume: SeriesVolume; eager: boolean }) {
+/** Demande de téléchargement d'un tome, avec ce qu'il faut pour le retrouver hors ligne. */
+function offlineRequest(series: SeriesDetail, volume: SeriesVolume, label: string) {
+  return { volumeId: volume.volume_id, seriesId: series.id, series: series.name, label }
+}
+
+/** Tous les tomes lisibles de la série pas encore gardés, dans l'ordre de la série. */
+function DownloadSeries({ series }: { series: SeriesDetail }) {
+  const { t, i18n } = useTranslation()
+  const { downloads, queue } = useOffline()
+  const known = new Set([...downloads, ...queue].map((d) => d.volumeId))
+  const missing = series.volumes.filter((v) => v.page_count > 0 && !known.has(v.volume_id))
+  if (missing.length === 0) return null
+  return (
+    <Button
+      size="lg"
+      variant="secondary"
+      onClick={() => enqueue(missing.map((v) => offlineRequest(series, v, volumeLabel(v, t, i18n.language))))}
+    >
+      <Download aria-hidden />
+      {t('offline.downloadSeries')}
+    </Button>
+  )
+}
+
+function VolumeCard({ volume, series, eager }: { volume: SeriesVolume; series: SeriesDetail; eager: boolean }) {
   const { t, i18n } = useTranslation()
   const label = volumeLabel(volume, t, i18n.language)
   const p = volume.progress
   const reading = p !== undefined && !p.finished
+  const { downloads, queue } = useOffline()
+  const job = queue.findIndex((j) => j.volumeId === volume.volume_id)
+  const offline =
+    job === 0
+      ? { text: t('offline.percent', { percent: queue[0].total ? queue[0].done / queue[0].total : 0 }) }
+      : job > 0
+        ? { text: t('offline.waiting') }
+        : downloads.some((d) => d.volumeId === volume.volume_id)
+          ? { text: t('offline.downloaded') }
+          : null
   // Problème du scan et « Lu » ensemble : l'un n'efface pas l'autre.
   const badges = [
     ...(volume.status === 'error' ? [{ text: t('volume.statusError'), tone: 'error' as const }] : []),
     ...(volume.status === 'warning' ? [{ text: t('volume.statusWarning') }] : []),
     ...(p?.finished ? [{ text: t('volume.read') }] : []),
+    ...(offline ? [offline] : []),
   ]
   return (
     <CoverCard
@@ -170,14 +207,25 @@ function VolumeCard({ volume, eager }: { volume: SeriesVolume; eager: boolean })
       progress={reading ? (p.ordinal + 1) / p.page_count : null}
       progressLabel={t('volume.progress', { label })}
       badges={badges}
-      actions={<VolumeMenu volume={volume} label={label} />}
+      actions={<VolumeMenu volume={volume} label={label} request={offlineRequest(series, volume, label)} state={job >= 0 ? 'queued' : offline ? 'downloaded' : 'none'} />}
       eager={eager}
     />
   )
 }
 
-/** Actions d'un tome : marquer lu ou non lu, voir les problèmes du dernier scan. */
-function VolumeMenu({ volume, label }: { volume: SeriesVolume; label: string }) {
+/** Actions d'un tome : marquer lu ou non lu, le garder pour lire hors ligne, voir les problèmes du
+ * dernier scan. */
+function VolumeMenu({
+  volume,
+  label,
+  request,
+  state,
+}: {
+  volume: SeriesVolume
+  label: string
+  request: ReturnType<typeof offlineRequest>
+  state: 'none' | 'queued' | 'downloaded'
+}) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [issuesOpen, setIssuesOpen] = useState(false)
@@ -209,6 +257,11 @@ function VolumeMenu({ volume, label }: { volume: SeriesVolume; label: string }) 
             <DropdownMenuItem onSelect={() => mark.mutate(true)}>{t('series.markRead')}</DropdownMenuItem>
           )}
           {volume.progress && <DropdownMenuItem onSelect={() => mark.mutate(false)}>{t('series.markUnread')}</DropdownMenuItem>}
+          {state === 'none' && volume.page_count > 0 && (
+            <DropdownMenuItem onSelect={() => enqueue([request])}>{t('offline.download')}</DropdownMenuItem>
+          )}
+          {state === 'queued' && <DropdownMenuItem onSelect={() => cancel(id)}>{t('offline.cancel')}</DropdownMenuItem>}
+          {state === 'downloaded' && <DropdownMenuItem onSelect={() => void remove(id)}>{t('offline.remove')}</DropdownMenuItem>}
           <DropdownMenuItem onSelect={() => setIssuesOpen(true)}>{t('series.issues')}</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

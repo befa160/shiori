@@ -12,6 +12,7 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 | 4 | Bibliothèque façon Plex + statuts/filtres + menu d'administration (scans, journaux) + DESIGN_SYSTEM.md | ✅ |
 | 5 | Métadonnées web + édition manuelle | ✅ |
 | 6 | Distribution : image Docker, PWA finalisée, binaires Linux/Windows en release, Dependabot, documentation (technique, installation, fonctionnelle), thèmes de l'interface (sombre, clair, OLED, sépia) | 🚧 |
+| 7 | Authentification et comptes : comptes locaux, rôles, progression et réglages par compte, accès depuis l'extérieur sans dépendre du reverse proxy | ⏳ |
 
 ## Méthode de travail
 
@@ -1110,7 +1111,7 @@ Rendre Shiori installable et maintenable par quelqu'un d'autre que son développ
 - ✅ **6.3 `feat/docker`** : arrêt propre sur SIGTERM (Unix) ; `--allowed-host` / `SHIORI_ALLOWED_HOSTS` (Q35 : localhost toujours accepté, noms insensibles à la casse, valeurs vides ignorées ; en écoute réseau, en donner un active la parade) ; `Dockerfile` (distroless static nonroot, binaires musl de la release, `/data` et `/cache` inscriptibles par tout utilisateur, `SHIORI_ALLOWED_HOSTS=localhost` par défaut, 40 Mo) ; `compose.yaml` d'exemple (écoute sur `127.0.0.1`, volumes nommés pour `/data` et `/cache`, bibliothèques en lecture seule ; d'abord avec des dossiers de l'hôte et `user:`, mais Docker crée un dossier absent en root et Shiori ne démarrait pas, vu au premier essai de la rc.2) ; job `docker` de `release.yml` : image essayée (interface, hôte refusé, `docker stop` → code 0) puis poussée sur ghcr.io en amd64 + arm64 sur tag (`0.1.0`, `0.1`, `latest` pour une version finale). Défauts trouvés en route : `SHIORI_ALLOWED_HOSTS=` vide aurait laissé passer une requête sans `Host` ; `--user` sans volume `/cache` empêchait le démarrage.
 - ✅ **6.4 `feat/web-themes`** : thèmes sombre, clair, noir OLED, sépia et « Système » (suit l'appareil en direct) : un bloc `[data-theme]` par thème dans `index.css`, ambre amber-700 (clair) et amber-800 (sépia) sur fond clair ; réglage `theme` (migration `0013_theme.sql`, `/api/settings`) ; sélecteur dans l'administration avec un aperçu dessiné par les jetons du thème lui-même ; `theme-color` suivant le thème, dernier thème gardé localement pour ne pas clignoter au chargement ; lecteur toujours sombre ; logo clair sur les thèmes clairs ; pastilles sur couverture et couverture de repli toujours sombres ; contrastes de chaque thème mesurés par `theme.test.ts` (texte 4,5:1, champ et focus 3:1) ; DESIGN_SYSTEM.md et CLAUDE.md mis à jour. Captures : clair 1440×900 et 390×844, sépia 390×844 et 800×1280, OLED 1280×800 ; lecteur sombre vérifié en thème clair.
 - ✅ **6.5a `feat/web-pwa`** : PWA de lecture en streaming. Manifeste complet (`id`, `scope`, orientation libre, catégories), demandé avec `crossorigin="use-credentials"` ; service worker (`web/public/sw.js`) : pages et couvertures en cache borné (500 entrées, réponses 200 seulement : une page en erreur reste une erreur), fichiers `assets/` gardés, navigation jamais interceptée en ligne (le navigateur garde la main sur la connexion du reverse proxy : mot de passe, redirection), copie de l'interface servie hors ligne, le reste de l'API jamais en cache ; indicateur « Hors ligne ». Préchargement mesuré sur 4G lente simulée (1,6 Mbit/s, 150 ms) avec le vrai tome One Piece et le binaire release : à 4 s de lecture par page, page suivante en 14 à 30 ms ; dans le pire cas (rendus à froid, une page par seconde) 250 à 380 ms sur quelques pages : **2 pages d'avance gardées** (plus ralentirait la première page). Essai réel derrière Caddy avec mot de passe : manifeste 200, service worker actif, installable selon Chrome. Test de bout en bout : service worker, pages gardées, interface hors ligne.
-- ⏳ **6.5b `feat/web-offline`** : tomes téléchargés pour le hors-ligne, sur demande. Télécharger un tome ou une série depuis la page série, **page par page** à la taille qu'utiliserait le lecteur, avec les fiches nécessaires pour l'ouvrir sans réseau ; cache dédié jamais purgé seul, stockage persistant demandé ; hors ligne, le service worker sert la page téléchargée, dans une autre taille au besoin (même page, jamais une autre) ; progression lue hors ligne envoyée au retour du réseau ; page « Téléchargés » (taille, espace disponible, suppression), téléchargement annulable. Hors périmètre : synchronisation automatique, choix de la qualité.
+- ✅ **6.5b `feat/web-offline`** : tomes téléchargés pour lire hors ligne, sur demande. Menu d'un tome (« Télécharger pour lire hors ligne », « Annuler », « Supprimer ») et bouton « Télécharger la série » ; badges « ↓ n % », « En attente », « Téléchargé » ; page « Tomes téléchargés » (sidebar, administration, lien dans l'avis hors ligne) : taille, place utilisée et disponible, file annulable, reprise à la page lue hors ligne. Téléchargement **page par page** (3 à la fois) à la taille que demanderait le lecteur sur l'écran en portrait, avec les fiches qu'il lit, dans un cache dédié (`shiori-offline-v1`) jamais vidé seul, stockage persistant demandé ; une page en erreur interrompt le tome (rien n'en reste). Service worker : hors réseau, la page téléchargée, dans une autre taille au besoin (même page, jamais une autre), et les fiches gardées. Progression lue hors ligne gardée sur l'appareil et envoyée au retour du réseau (coupures seulement : réseau, 401, 502+). File gardée sur l'appareil : après une fermeture, le tome interrompu est effacé puis la file reprend ; le code du lecteur est préchargé au téléchargement. Défauts trouvés en route : tailles additionnées en parallèle (`bytes += await …` perdait des pages), file perdue et pages orphelines à la fermeture, lecteur jamais chargé donc illisible hors ligne. Test de bout en bout : télécharger par l'interface, couper le réseau, lire depuis « Tomes téléchargés », progression envoyée au retour.
 - ⏳ **6.6 `fix/phase6-leftovers`** : journal d'un scan en cours rafraîchi, titres de tome venus de ComicInfo affichés, purge des couvertures abandonnées.
 - ⏳ **6.7 `docs/final`** : `docs/installation.fr.md`, `docs/installation.en.md`, `docs/technique.md`, `docs/fonctionnel.md` (codes de diagnostic, rangement conseillé), rédigés à partir du graphe Graphify, puis `/graphify . --update`. Relecture : suivre l'installation à la lettre avec l'image et le binaire publiés.
 - ⏳ **6.8 `chore/phase6-review`** : bilan de la phase 6, tag `v0.1.0`, release et image vérifiées de bout en bout.
@@ -1127,6 +1128,27 @@ Aucune nouvelle prévue (service worker fait main, `tokio::signal::unix` déjà 
 ### Reste ouvert des phases précédentes (hors phase 6)
 
 Édition d'un tome dans l'interface, MangaUpdates et Comic Vine, actualisation périodique des fiches, autres `shortcut:` notés au bilan de la phase 5, `:root:has()` sur un vrai Safari iOS, essai sur la tablette réelle, registre shadcn et le paquet `cn`.
+
+## Phase 7 : authentification et comptes (à planifier)
+
+Demandée le 2026-11-16 : Shiori sera ouvert depuis l'extérieur (reverse proxy sur un sous-domaine, Cloudflare) ; aujourd'hui seule l'authentification du reverse proxy le protège, et toute la progression est commune. Plan détaillé à valider en début de phase, comme les autres.
+
+### Pistes (à confirmer)
+
+- **Comptes locaux** : premier lancement = création du compte administrateur ; mots de passe hachés en Argon2id (crate `argon2`, pur Rust) ; connexion limitée en débit contre les essais en rafale.
+- **Sessions** : cookie `HttpOnly`, `Secure`, `SameSite=Lax`, de longue durée sur la PWA (on ne se reconnecte pas à chaque ouverture de la tablette) ; déconnexion et révocation des sessions ; protection CSRF des requêtes qui modifient.
+- **Rôles** : administrateur (bibliothèques, scans, métadonnées, comptes) et lecteur ; accès par bibliothèque.
+- **Par compte** : progression, « Continuer la lecture », langue et thème (aujourd'hui globaux), sens des pages ; la progression actuelle est rattachée au premier administrateur à la migration.
+- **Hors ligne** (lot 6.5b) : les tomes téléchargés appartiennent à l'appareil ; à la déconnexion, proposer de les effacer ; la progression gardée hors ligne est envoyée au nom du compte connecté.
+- **Accès** : `--allowed-host` reste nécessaire (parade au DNS rebinding) ; la documentation d'installation (lot 6.7) décrit d'ici là l'authentification par le reverse proxy.
+
+### Questions à trancher au début de la phase
+
+- Faire confiance, en option, à l'en-tête d'un reverse proxy d'authentification (Authelia, Authentik : `Remote-User`) au lieu des comptes locaux ?
+- Jetons d'API (lecteurs tiers, OPDS) dans cette phase ou plus tard ?
+- Double authentification (TOTP) : dans cette phase ou plus tard ?
+- Inscription : seulement par l'administrateur, ou invitation par lien ?
+
 
 ## Fonctionnalités ajoutées en cours de route
 
@@ -1185,3 +1207,4 @@ L'ordre de lecture ne dépend jamais de l'ordre dans l'archive : le lecteur reç
 - 2026-11-13 : plan de la phase 6 validé (Q35 à Q41) : Dependabot, release sur tag, image Docker distroless avec `--allowed-host`, système de thèmes (sombre, clair, OLED, sépia) au lieu du seul mode clair, PWA hors ligne limitée aux pages déjà lues, documentation dans `docs/`.
 - 2026-11-16 : binaire lancé sans argument (double-clic sous Windows) = `shiori serve`, une erreur reste affichée jusqu'à Entrée ; bascule adresse locale / publique par DNS local (split DNS), la bascule dans l'application attendra une application native.
 - 2026-11-16 : PWA recentrée sur le streaming (Q38 révisée) ; hors ligne sur demande, tome par tome, page par page (lot 6.5b) ; 2 pages préchargées, d'après une mesure sur 4G lente.
+- 2026-11-16 : tomes téléchargés pour le hors-ligne (lot 6.5b) ; authentification et comptes ajoutés en phase 7 (à planifier).
