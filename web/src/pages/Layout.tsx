@@ -1,4 +1,4 @@
-import { BookCopy, House, Loader2, RefreshCw, Search, Settings, WifiOff } from 'lucide-react'
+import { BookCopy, HardDriveDownload, House, Loader2, RefreshCw, Search, Settings, WifiOff } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link, NavLink, Outlet } from 'react-router'
 import { useLibraries } from '@/api/queries'
@@ -33,6 +33,8 @@ const NAV = [
   { to: '/search', label: 'nav.search', icon: Search },
   { to: '/admin', label: 'nav.admin', icon: Settings },
 ] as const
+// Pas dans la barre d'onglets (4 au plus) : lien dans l'administration et dans l'avis hors ligne.
+const DOWNLOADS = { to: '/downloads', label: 'nav.downloads', icon: HardDriveDownload } as const
 
 /** Cadre commun hors lecteur (DESIGN_SYSTEM.md, « Cadre et breakpoints »). */
 export function Layout() {
@@ -114,6 +116,7 @@ function AppSidebar() {
           )}
           <SidebarGroup className="mt-auto">
             <SidebarMenu>
+              <NavItem {...DOWNLOADS} />
               <NavItem {...NAV[3]} />
             </SidebarMenu>
           </SidebarGroup>
@@ -144,7 +147,7 @@ function ScanButton({ library }: { library: Library }) {
   )
 }
 
-function NavItem({ to, label, icon: Icon }: (typeof NAV)[number]) {
+function NavItem({ to, label, icon: Icon }: (typeof NAV)[number] | typeof DOWNLOADS) {
   const { t } = useTranslation()
   return (
     <SidebarMenuItem>
@@ -191,7 +194,12 @@ function Offline() {
   return (
     <p role="status" className="mb-4 flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
       <WifiOff aria-hidden className="size-4 shrink-0" />
-      {t('layout.offline')}
+      <span>
+        {t('layout.offline')}{' '}
+        <Link to="/downloads" className="font-medium text-foreground underline underline-offset-4">
+          {t('offline.title')}
+        </Link>
+      </span>
     </p>
   )
 }

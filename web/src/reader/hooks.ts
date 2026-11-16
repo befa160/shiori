@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { api } from '@/api/client'
+import { flushProgress, queueProgress, retryable } from '@/offline/progress'
 import i18n from '@/i18n'
 import { errorText } from '@/i18n/errors'
 
@@ -67,12 +68,16 @@ export function useSaveProgress(volumeId: string, pageId: string | undefined) {
         // Les listes qui montrent la progression la redemanderont à leur prochain affichage :
         // détail et liste des séries, séries d'une bibliothèque, « Continuer la lecture ».
         .then(() => {
+          // Le serveur répond de nouveau : ce qui a été lu hors ligne part aussi.
+          void flushProgress()
           for (const queryKey of [['series'], ['libraries'], ['continue']]) {
             void queryClient.invalidateQueries({ queryKey, refetchType: 'none' })
           }
           void queryClient.invalidateQueries({ queryKey: ['volumes', volumeId], exact: true, refetchType: 'none' })
         })
         .catch((error: Error) => {
+          // Sans réseau : gardée sur l'appareil, envoyée au retour du réseau (lecture hors ligne).
+          if (retryable(error)) return queueProgress(volumeId, page)
           if (s.saved === page) s.saved = undefined
           // Un seul message, même si chaque page suivante échoue aussi.
           toast.error(i18n.t('reader.progressNotSaved'), { id: 'progress', description: errorText(error, i18n.t) })
