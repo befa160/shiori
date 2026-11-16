@@ -238,3 +238,69 @@ async fn database_failure_marks_the_pass_failed() {
         row.get::<String, _>("error")
     );
 }
+
+/// Racine démontée (absente) ou vidée : la passe échoue et ne retire rien, séries comprises.
+#[tokio::test]
+async fn a_missing_or_emptied_root_removes_nothing() {
+    let f = Fixture::new().await;
+    let scanner = Scanner::new(1, 30);
+    f.pass(&scanner, f.request(None)).await;
+    let before = f.series().await;
+    let parked = f.dir.path().join("parked");
+    std::fs::rename(f.root(), &parked).unwrap();
+
+    let row = f.pass(&scanner, f.request(None)).await;
+    assert_eq!(row.get::<String, _>("status"), "failed");
+    assert!(row.get::<String, _>("error").contains("illisible"));
+    assert_eq!(f.series().await, before);
+
+    std::fs::create_dir(f.root()).unwrap(); // point de montage vide
+    let row = f.pass(&scanner, f.request(None)).await;
+    assert_eq!(row.get::<String, _>("status"), "failed");
+    assert!(row.get::<String, _>("error").contains("aucun fichier"));
+    assert_eq!(f.series().await, before);
+
+    // Retour des fichiers : tout redevient normal.
+    std::fs::remove_dir(f.root()).unwrap();
+    std::fs::rename(&parked, f.root()).unwrap();
+    let row = f.pass(&scanner, f.request(None)).await;
+    assert_eq!(row.get::<String, _>("status"), "completed");
+    assert_eq!(f.series().await, before);
+}
+
+/// Sous-dossier illisible (`lost+found`) : ses tomes sont gardés, le reste suit le scan, la
+/// passe se termine avec un avertissement au journal.
+#[cfg(unix)]
+#[tokio::test]
+async fn an_unreadable_folder_keeps_its_volumes() {
+    use std::os::unix::fs::PermissionsExt;
+    let f = Fixture::new().await;
+    let scanner = Scanner::new(1, 30);
+    f.pass(&scanner, f.request(None)).await;
+    let before = f.series().await;
+    let locked = f.root().join("Série A");
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000)).unwrap();
+    if std::fs::read_dir(&locked).is_ok() {
+        return; // root lit tout : rien à vérifier
+    }
+    let row = f.pass(&scanner, f.request(None)).await;
+    assert_eq!(row.get::<String, _>("status"), "completed");
+    assert_eq!(counts(&row)[0], 1, "bad-crc reste scanné");
+    assert_eq!(f.series().await, before, "les tomes illisibles sont gardés");
+    let warning: String = sqlx::query(
+        "SELECT message FROM scan_run_logs WHERE scan_run_id = ? AND level = 'warning'",
+    )
+    .bind(row.get::<i64, _>("id"))
+    .fetch_one(f.db.pool())
+    .await
+    .unwrap()
+    .get("message");
+    assert!(warning.contains("Série A"), "{warning}");
+
+    // Plus rien de lisible que ce dossier : la racine paraît vide, rien n'est retiré.
+    std::fs::remove_file(f.root().join("bad-crc.cbz")).unwrap();
+    let row = f.pass(&scanner, f.request(None)).await;
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(row.get::<String, _>("status"), "failed");
+    assert_eq!(f.series().await, before);
+}

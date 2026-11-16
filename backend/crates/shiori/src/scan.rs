@@ -268,8 +268,9 @@ fn collect(roots: &[PathBuf]) -> Result<Vec<Target>> {
             found.insert(root.clone(), root.display().to_string());
             continue;
         }
+        // Dossiers illisibles : signalés par `walk` sur la sortie d'erreur, le scan continue.
         let mut files = Vec::new();
-        walk(root, &mut files);
+        walk(root, &mut files, &mut Vec::new());
         for file in files {
             let shown = file
                 .strip_prefix(root)
@@ -288,21 +289,23 @@ fn collect(roots: &[PathBuf]) -> Result<Vec<Target>> {
         .collect())
 }
 
-pub(crate) fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
+pub(crate) fn walk(dir: &Path, out: &mut Vec<PathBuf>, unreadable: &mut Vec<PathBuf>) {
     let entries = match fs::read_dir(dir) {
         Ok(entries) => entries,
         Err(e) => {
             tracing::warn!("dossier illisible, ignoré : {} ({e})", dir.display());
+            unreadable.push(dir.to_path_buf());
             return;
         }
     };
-    for entry in entries.flatten() {
-        let Ok(kind) = entry.file_type() else {
+    for entry in entries {
+        let Ok((path, kind)) = entry.and_then(|e| Ok((e.path(), e.file_type()?))) else {
+            tracing::warn!("entrée illisible dans {}", dir.display());
+            unreadable.push(dir.to_path_buf());
             continue;
         };
-        let path = entry.path();
         if kind.is_dir() {
-            walk(&path, out);
+            walk(&path, out, unreadable);
         } else if kind.is_file() && is_comic(&path) {
             out.push(path);
         }
