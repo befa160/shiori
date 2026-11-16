@@ -11,7 +11,7 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 | 3 | Lecteur web (sens de lecture, webtoon, doubles pages) + front embarqué + progression de lecture | ✅ |
 | 4 | Bibliothèque façon Plex + statuts/filtres + menu d'administration (scans, journaux) + DESIGN_SYSTEM.md | ✅ |
 | 5 | Métadonnées web + édition manuelle | ✅ |
-| 6 | Distribution : image Docker, PWA finalisée, binaires Linux/Windows en release, Dependabot, documentation (technique, installation, fonctionnelle), thèmes de l'interface (sombre, clair, OLED, sépia) | 🚧 |
+| 6 | Distribution : image Docker, PWA finalisée, binaires Linux/Windows en release, Dependabot, documentation (technique, installation, fonctionnelle), thèmes de l'interface (sombre, clair, OLED, sépia) | ✅ |
 | 7 | Authentification et comptes : comptes locaux, rôles, progression et réglages par compte, accès depuis l'extérieur sans dépendre du reverse proxy | ⏳ |
 
 ## Méthode de travail
@@ -1079,7 +1079,7 @@ Restent des séries distinctes : déplacement partiel, fusion dans une série ex
 - **Q33 Réseau et vie privée** ✅ : désactivé par défaut, activé dans l'administration avec une explication de ce qui est envoyé ; agent générique ; débit sous les limites publiées ; hors ligne = état visible, jamais bloquant ; miniatures relayées. Conditions relues le 2026-11-13 (lot 5.5a) : AniList 90 requêtes/min, **30 en ce moment** (confirmé par `X-RateLimit-Limit`), 1 min de blocage au-delà avec `Retry-After`, ni collecte massive ni usage comme stockage, gratuit sous 150 $/mois de revenus ; MangaDex environ 5 requêtes/s par IP, agent honnête obligatoire, pas de lien direct vers ses images, **créditer MangaDex** (lot 5.7), pas de publicité.
 - **Q34 Titre affiché** ✅ (précisé le 2026-11-13) : titre édité, sinon celui des fichiers (`index.json`, puis `ComicInfo.xml`), sinon celui des métadonnées web, sinon le nom du dossier. La langue ne sert qu'à choisir parmi les titres d'une source web : celui de la langue de l'interface s'il existe, sinon romaji. Les autres titres (nom du dossier compris) restent cherchables comme titres alternatifs.
 
-## Phase 6 : distribution, documentation et thèmes (plan validé le 2026-11-13)
+## Phase 6 : distribution, documentation et thèmes (plan validé le 2026-11-13, terminée le 2026-11-16)
 
 ### Objectif
 
@@ -1114,16 +1114,36 @@ Rendre Shiori installable et maintenable par quelqu'un d'autre que son développ
 - ✅ **6.5b `feat/web-offline`** : tomes téléchargés pour lire hors ligne, sur demande. Menu d'un tome (« Télécharger pour lire hors ligne », « Annuler », « Supprimer ») et bouton « Télécharger la série » ; badges « ↓ n % », « En attente », « Téléchargé » ; page « Tomes téléchargés » (sidebar, administration, lien dans l'avis hors ligne) : taille, place utilisée et disponible, file annulable, reprise à la page lue hors ligne. Téléchargement **page par page** (3 à la fois) à la taille que demanderait le lecteur sur l'écran en portrait, avec les fiches qu'il lit, dans un cache dédié (`shiori-offline-v1`) jamais vidé seul, stockage persistant demandé ; une page en erreur interrompt le tome (rien n'en reste). Service worker : hors réseau, la page téléchargée, dans une autre taille au besoin (même page, jamais une autre), et les fiches gardées. Progression lue hors ligne gardée sur l'appareil et envoyée au retour du réseau (coupures seulement : réseau, 401, 502+). File gardée sur l'appareil : après une fermeture, le tome interrompu est effacé puis la file reprend ; le code du lecteur est préchargé au téléchargement. Défauts trouvés en route : tailles additionnées en parallèle (`bytes += await …` perdait des pages), file perdue et pages orphelines à la fermeture, lecteur jamais chargé donc illisible hors ligne. Test de bout en bout : télécharger par l'interface, couper le réseau, lire depuis « Tomes téléchargés », progression envoyée au retour.
 - ✅ **6.6 `fix/phase6-leftovers`** : journal d'une passe en cours redemandé avec elle (toutes les 2 s), puis relu en entier à sa fin ; titre de chaque tome (ComicInfo, `index.json` ou édité) dans le détail d'une série, calculé pour toute la série en deux requêtes, affiché après le numéro sur la carte, sans répéter la série ni le simple numéro (vrai ComicInfo : « Shangri-la Frontier - Tome 12 ») ; couvertures qu'aucune série n'a choisies purgées au démarrage du serveur, après une heure de grâce (le `shortcut:` du lot 5.6 disparaît).
 - ✅ **6.7 `docs/final`** : `docs/installation.fr.md` et `docs/installation.en.md` (Docker ou programme seul, premiers pas, réseau local, Internet derrière un reverse proxy avec mot de passe, DNS local, PWA et HTTPS, mise à jour, sauvegarde, dépannage), `docs/fonctionnel.md` (bibliothèques, rangement des fichiers, lecture, hors-ligne, métadonnées, scans, chaque code de diagnostic avec sa gravité et quoi faire), `docs/technique.md` (architecture, invariants, base, API, images, métadonnées, serveur, front, tests, distribution, choix de dépendances) ; README recentré (état, liens, démarrage rapide). Rédigés d'après le code (codes, options, libellés vérifiés) et Graphify.
-- ⏳ **6.8 `chore/phase6-review`** : bilan de la phase 6, tag `v0.1.0`, release et image vérifiées de bout en bout.
+- ✅ **6.8 `chore/phase6-review`** : bilan de la phase 6 (ci-dessous) ; tag `v0.1.0` posé sur `main` après la fusion, release et image vérifiées de bout en bout.
 
 ### Dépendances
 
 Aucune nouvelle prévue (service worker fait main, `tokio::signal::unix` déjà disponible) ; dernière version vérifiée au lot si le besoin apparaît.
 
-### Risques
+### Risques (au plan)
 
-- Compilation musl aarch64 de `ring` et `ravif` non encore essayée (lot 6.2).
-- L'image Docker reste sans authentification : Q35 réduit le risque sans l'éliminer, la documentation doit le dire clairement.
+- Compilation musl aarch64 de `ring` et `ravif` non encore essayée (lot 6.2) : **levé**, compilée du premier coup sur runner ARM natif.
+- L'image Docker reste sans authentification : Q35 réduit le risque sans l'éliminer ; **la documentation d'installation le dit en tête**, avec le reverse proxy à mot de passe. Les comptes sont la phase 7.
+
+### Bilan de la phase 6
+
+- Livré :
+  - **Maintenance** : Dependabot hebdomadaire (cargo, npm, actions), mineures groupées, majeures à part.
+  - **Distribution** : release sur tag `v*` (Linux x86_64 et aarch64 musl statiques, Windows x86_64, macOS aarch64 non signé), chaque binaire lancé et sa version comparée au tag, `SHA256SUMS`, préversion pour un tag à suffixe ; release créée dans l'interface de GitHub acceptée ; image Docker `distroless/static:nonroot` amd64 + arm64 sur ghcr.io, essayée avant publication (interface, hôte refusé, arrêt propre) ; `compose.yaml` qui démarre sans préparation (volumes nommés) ; `--allowed-host` / `SHIORI_ALLOWED_HOSTS` ; arrêt sur SIGTERM ; double-clic sur le binaire = serveur.
+  - **Thèmes** : sombre, clair, noir OLED, sépia et Système, un bloc de jetons par thème, contrastes de chaque thème testés au build, lecteur toujours sombre.
+  - **PWA** : application installable, service worker fait main (pages vues et interface en cache, navigations jamais interceptées en ligne pour l'authentification d'un reverse proxy), indicateur hors ligne ; **tomes téléchargés pour lire hors ligne**, page par page, progression hors ligne envoyée au retour du réseau.
+  - **Restes** : journal d'un scan en cours rafraîchi, titres de tome sur la page série, couvertures abandonnées purgées, couverture de la fiche série à son format, autres titres masqués.
+  - **Documentation** : installation (français et anglais), documentation fonctionnelle (dont chaque code de diagnostic) et technique, README recentré.
+  - **Roadmap** : phase 7 « Authentification et comptes », signature des binaires et attestations, adresse locale / publique par DNS local.
+- Validé : préversions `v0.1.0-rc.1` à `rc.3` publiées (binaires, sommes de contrôle vérifiées, image) ; binaire musl lancé à la main (statique, interface embarquée) ; image amd64 tirée de ghcr.io et lancée ; `compose.yaml` réel avec une vraie bibliothèque ; essais par l'utilisateur (compose, binaire Windows) ; Caddy avec mot de passe devant Shiori : manifeste servi, service worker actif, application installable selon Chrome ; préchargement mesuré sur 4G lente avec le vrai tome One Piece ; vrai ComicInfo de Shangri-la Frontier ; captures aux tailles des appareils de l'utilisateur (Galaxy A55, Galaxy Tab A9) et du bureau.
+- Qualité : 247 tests Rust, 273 tests Vitest, 11 tests de bout en bout ; 13 PR (#60 à #72), chacune passée en review Ponytail.
+- Défauts trouvés et corrigés en route : `SHIORI_ALLOWED_HOSTS=` vide qui aurait laissé passer une requête sans `Host` ; `--user` sans volume `/cache` qui empêchait le démarrage ; dossiers du compose créés en root par Docker (vu par l'utilisateur, deux fois) ; release en échec quand le tag vient de l'interface, rc.2 marquée « Latest » ; double-clic Windows qui affichait l'aide et se refermait (vu par l'utilisateur) ; logo et notifications illisibles en thème clair ; navigations interceptées par le service worker (risque pour l'authentification d'un proxy) ; tailles de téléchargement additionnées en parallèle (`bytes += await`) ; file de téléchargement perdue et pages orphelines à la fermeture ; lecteur jamais chargé donc tome illisible hors ligne ; reprise des téléchargements lancée sans réseau ; couverture de la fiche série étirée (vu par l'utilisateur) ; titres ComicInfo qui répètent la série et le numéro.
+- Reste ouvert pour la suite :
+  - à vérifier sur du vrai matériel : image arm64 (NAS, Raspberry Pi), double-clic sur un vrai Windows avec `v0.1.0`, installation de la PWA et lecture hors ligne sur la Galaxy Tab A9 et le Galaxy A55, `:root:has()` sur un vrai Safari iOS ;
+  - phase 7 (comptes), signature des binaires et attestations, bascule d'adresse dans une future application native ;
+  - édition d'un tome dans l'interface ; MangaUpdates et Comic Vine ; actualisation périodique des fiches liées ;
+  - `shortcut:` notés dans le code : CRC et tailles zip64 > 4 Gio, deux lectures du fichier au scan, chiffres pleine chasse dans les noms, chemins non UTF-8, liste des séries sans pagination, défaut `page_turn` hors bibliothèque, `NOCASE` limité à l'ASCII, mémoire des vignettes bornée à 1 000 adresses, 4 rendus au plus, arrêt qui attend l'identification en cours, rendus de couvertures sans cache disque, résumé replié d'après sa longueur, caches du service worker bornés en nombre d'entrées ;
+  - de la phase 4 : registre shadcn et le paquet `cn`.
 
 ### Reste ouvert des phases précédentes (hors phase 6)
 
@@ -1219,3 +1239,4 @@ L'ordre de lecture ne dépend jamais de l'ordre dans l'archive : le lecteur reç
 - 2026-11-16 : PWA recentrée sur le streaming (Q38 révisée) ; hors ligne sur demande, tome par tome, page par page (lot 6.5b) ; 2 pages préchargées, d'après une mesure sur 4G lente.
 - 2026-11-16 : tomes téléchargés pour le hors-ligne (lot 6.5b) ; authentification et comptes ajoutés en phase 7 (à planifier).
 - 2026-11-16 : signature des binaires (Windows, macOS) et attestations des artefacts (Linux, image Docker) ajoutées à la roadmap, à planifier.
+- 2026-11-16 : phase 6 terminée (distribution, thèmes, PWA et hors-ligne, documentation) ; version `v0.1.0`.

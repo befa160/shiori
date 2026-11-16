@@ -11,7 +11,7 @@
 
 Lecteur de mangas, BD et webtoons auto-hébergé. Un seul binaire Rust sert la bibliothèque et une application web installable (PWA), pensée d'abord pour la lecture sur tablette.
 
-> **État : première version en préparation (fin de la phase 6).** Bibliothèque en couvertures avec « Continuer la lecture », recherche et filtres ; lecteur manga, BD et webtoon (double page, zoom, reprise) ; administration des bibliothèques et des scans ; métadonnées des fichiers (ComicInfo.xml, `index.json`) et, si vous l'autorisez, d'AniList et de MangaDex, modifiables champ par champ ; application installable (PWA) avec lecture hors ligne des tomes téléchargés ; thèmes sombre, clair, noir OLED et sépia ; français et anglais. Image Docker et binaires Linux, Windows et macOS. Pas encore de comptes (phase 7). L'avancement détaillé est dans [ROADMAP.md](ROADMAP.md).
+> **État : version 0.1.0 (phase 6 terminée).** Bibliothèque en couvertures avec « Continuer la lecture », recherche et filtres ; lecteur manga, BD et webtoon (double page, zoom, reprise) ; administration des bibliothèques et des scans ; métadonnées des fichiers (ComicInfo.xml, `index.json`) et, si vous l'autorisez, d'AniList et de MangaDex, modifiables champ par champ ; application installable (PWA) avec lecture hors ligne des tomes téléchargés ; thèmes sombre, clair, noir OLED et sépia ; français et anglais. Image Docker et binaires Linux, Windows et macOS. Pas encore de comptes (phase 7). L'avancement détaillé est dans [ROADMAP.md](ROADMAP.md).
 
 ## Documentation
 
