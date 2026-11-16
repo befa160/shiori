@@ -14,7 +14,7 @@ import { Progress } from '@/components/ui/progress'
 import { errorText, issueText } from '@/i18n/errors'
 import { Cover, CoverCard, CoverGrid } from '@/library/covers'
 import { cancel, enqueue, remove, useOffline } from '@/offline/downloads'
-import { volumeLabel } from './labels'
+import { volumeLabel, volumeTitle } from './labels'
 import { BackLink, QueryState } from './parts'
 import { IdentifyDialog } from './IdentifyDialog'
 import { LISTS } from './series'
@@ -179,6 +179,7 @@ function VolumeCard({ volume, series, eager }: { volume: SeriesVolume; series: S
   const label = volumeLabel(volume, t, i18n.language)
   const p = volume.progress
   const reading = p !== undefined && !p.finished
+  const title = volumeTitle(volume.title, series.name)
   const { downloads, queue } = useOffline()
   const job = queue.findIndex((j) => j.volumeId === volume.volume_id)
   const offline =
@@ -199,7 +200,7 @@ function VolumeCard({ volume, series, eager }: { volume: SeriesVolume; series: S
   return (
     <CoverCard
       to={`/read/${volume.volume_id}`}
-      title={label}
+      title={title ? `${label} · ${title}` : label}
       subtitle={
         reading ? t('home.pageOf', { current: p.ordinal + 1, total: p.page_count }) : t('counts.pages', { count: volume.page_count })
       }

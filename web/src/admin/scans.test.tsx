@@ -206,6 +206,25 @@ describe('détail d’une passe', () => {
     await waitFor(() => expect(journal.queryByText(/scanné : ok/)).toBeNull())
   })
 
+  it('suit le journal d’une passe en cours, puis le relit en entier à sa fin', async () => {
+    let status: RunSummary['status'] = 'running'
+    let lines = [logs[0]]
+    mockApi({
+      '/api/libraries': () => json(libraries),
+      '/api/admin/scans/current': none,
+      '/api/admin/scans/9': () => json(run(9, { status })),
+      '/api/admin/scans/9/logs?level=info&limit=100': () => json(lines),
+    })
+    renderAt('/admin/scans/9')
+    const journal = within(await main().findByRole('region', { name: 'Journal' }))
+    expect(await journal.findByText(/scanné : ok, 12 page\(s\)/)).toBeInTheDocument()
+    expect(journal.queryByText(/Aucune page lisible/)).toBeNull()
+    // Une nouvelle ligne pendant la passe, puis la passe se termine : tout est affiché.
+    lines = logs
+    status = 'completed'
+    expect(await journal.findByText(/Aucune page lisible dans le fichier/, {}, { timeout: 5000 })).toBeInTheDocument()
+  })
+
   it('dit qu’une passe n’existe pas', async () => {
     mockApi({
       '/api/libraries': () => json(libraries),

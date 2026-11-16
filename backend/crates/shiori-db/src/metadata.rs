@@ -506,6 +506,51 @@ impl Db {
     }
 
     /// Métadonnées fusionnées d'un tome et ses champs verrouillés.
+    /// Titre de chaque tome d'une série qui en a un, par la même fusion que
+    /// [`Db::volume_metadata`], en deux requêtes pour toute la série (une série peut compter
+    /// des milliers de chapitres).
+    pub(crate) async fn volume_titles(
+        &self,
+        series: i64,
+    ) -> Result<HashMap<String, String>, Error> {
+        let mut locals: HashMap<String, Vec<(MetadataSource, LocalMetadata)>> = HashMap::new();
+        let rows = sqlx::query(
+            "SELECT volume_id, source, data FROM volume_metadata
+             WHERE volume_id IN (SELECT volume_id FROM file_locations WHERE series_id = ?)",
+        )
+        .bind(series)
+        .fetch_all(&self.pool)
+        .await?;
+        for row in &rows {
+            locals
+                .entry(row.get("volume_id"))
+                .or_default()
+                .push(local(row)?);
+        }
+        let mut edits: HashMap<String, Edited> = HashMap::new();
+        let rows = sqlx::query(
+            "SELECT volume_id, edited FROM volume_edits
+             WHERE volume_id IN (SELECT volume_id FROM file_locations WHERE series_id = ?)",
+        )
+        .bind(series)
+        .fetch_all(&self.pool)
+        .await?;
+        for row in &rows {
+            edits.insert(row.get("volume_id"), parse_edited(Some(row.get("edited")))?);
+        }
+        let ids: std::collections::HashSet<String> =
+            locals.keys().chain(edits.keys()).cloned().collect();
+        let mut titles = HashMap::new();
+        for id in ids {
+            let base = volume_from_locals(locals.get(&id).map_or(&[][..], Vec::as_slice));
+            let merged = overlay(base, edits.get(&id).unwrap_or(&Edited::new())).map_err(decode)?;
+            if let Some(title) = merged.title {
+                titles.insert(id, title);
+            }
+        }
+        Ok(titles)
+    }
+
     pub(crate) async fn volume_metadata(
         &self,
         id: &str,

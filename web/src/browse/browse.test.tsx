@@ -101,7 +101,9 @@ describe('page d’une série', () => {
   const card = (name: string) => main().getByRole('link', { name: new RegExp(`^${name}`) }).closest('li') as HTMLElement
 
   it('montre la série, sa progression, le tome à reprendre et chaque tome dans l’ordre', async () => {
-    mockApi({ '/api/series/7': () => json(detail) })
+    // Titre venu du ComicInfo du tome 2, après son numéro.
+    const titled = { ...detail, volumes: detail.volumes.map((v) => (v.volume_id === 'b' ? { ...v, title: 'Le Gourmet' } : v)) }
+    mockApi({ '/api/series/7': () => json(titled) })
     const { router } = renderAt('/series/7')
     expect(await main().findByRole('heading', { level: 1, name: 'Toriko' })).toBeInTheDocument()
     // En pages : tome 1 fini (200), tome 2 à la page 45 (sur 180), tome 3 jamais ouvert (12) : 245 / 392, 62,5 % arrondi vers le bas.
@@ -112,7 +114,7 @@ describe('page d’une série', () => {
     const titles = within(main().getByRole('region', { name: 'Tomes' }))
       .getAllByRole('listitem')
       .map((li) => within(li).getAllByTitle(/./)[0].textContent)
-    expect(titles).toEqual(['Tome 1', 'Tome 2', 'bonus.cbr'])
+    expect(titles).toEqual(['Tome 1', 'Tome 2 · Le Gourmet', 'bonus.cbr'])
     expect(card('Tome 1')).toHaveAttribute('id', 'volume-a')
     expect(card('Tome 1')).toHaveTextContent('Lu')
     expect(within(card('Tome 2')).getByRole('progressbar', { name: 'Progression de Tome 2' })).toBeInTheDocument()

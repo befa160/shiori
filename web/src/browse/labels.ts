@@ -20,3 +20,15 @@ export function volumeLabel(v: SeriesVolume, t: TFunction, language: string): st
       return t('volume.unknown', { range })
   }
 }
+
+/** Titre d'un tome à montrer après son numéro, ou `null` s'il n'apporte rien : les ComicInfo
+ * répètent souvent la série et le numéro (« Shangri-la Frontier - Tome 12 »). Le nom de la série
+ * en tête est retiré ; ce qui n'est plus qu'un numéro de tome ou de chapitre est masqué. */
+export function volumeTitle(title: string | undefined, series: string): string | null {
+  if (!title) return null
+  let rest = title.trim()
+  if (rest.toLocaleLowerCase().startsWith(series.toLocaleLowerCase())) rest = rest.slice(series.length)
+  rest = rest.replace(/^[\s\-–—:·,.]+/, '').trim()
+  const onlyNumber = /^(tome|t\.?|vol(ume)?\.?|chap(itre|ter)?\.?|ch\.?|#)?\s*\d+([.,]\d+)?$/i
+  return rest === '' || onlyNumber.test(rest) ? null : rest
+}

@@ -125,6 +125,9 @@ pub struct SeriesVolume {
     /// Rempli seulement dans le détail d'une série.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub progress: Option<Progress>,
+    /// Titre du tome (ComicInfo, `index.json` ou édité) ; rempli seulement dans le détail d'une série.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -233,6 +236,7 @@ fn located(row: &SqliteRow) -> Result<Located, Error> {
             cover_page_id: row.get("cover"),
             file_name,
             progress: None,
+            title: None,
         },
         path,
     })
@@ -511,6 +515,7 @@ impl Db {
         let resume_volume_id = resume(&all, &progress);
         let (pages_read, page_count) = pages(&all, &progress);
         let (metadata, locked) = self.series_metadata(id).await?;
+        let mut titles = self.volume_titles(id).await?;
         Ok(Some(SeriesDetail {
             id,
             library_id: series.get("library_id"),
@@ -531,6 +536,7 @@ impl Db {
                 .into_iter()
                 .map(|r| SeriesVolume {
                     progress: progress.remove(&r.volume.volume_id),
+                    title: titles.remove(&r.volume.volume_id),
                     ..r.volume
                 })
                 .collect(),

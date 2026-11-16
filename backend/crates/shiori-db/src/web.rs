@@ -268,7 +268,24 @@ pub struct Cover {
 impl Db {
     /// Garde une couverture téléchargée et rend son identifiant (hash du contenu) ; `None` si
     /// ce n'est pas une image JPEG, PNG ou WebP lisible, de 4 096 px de côté au plus.
-    // shortcut: une couverture remplacée ou d'une source déliée reste en base (quelques centaines de Ko) ; purger celles qu'aucune série ne référence si la base grossit.
+    /// Une couverture remplacée ou d'une source déliée part avec [`Db::purge_covers`].
+    /// Efface les couvertures qu'aucune série n'a choisies (remplacées, source déliée, série
+    /// supprimée). Gardée une heure au moins : choisir une couverture la garde d'abord, puis
+    /// l'associe à la série, et une purge entre les deux ne doit pas la perdre.
+    pub async fn purge_covers(&self) -> Result<u64, Error> {
+        let done = sqlx::query(
+            "DELETE FROM covers
+             WHERE created_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour')
+               AND id NOT IN (
+                 SELECT json_extract(edited, '$.cover_image_id') FROM series_metadata
+                 WHERE json_extract(edited, '$.cover_image_id') IS NOT NULL
+               )",
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(done.rows_affected())
+    }
+
     pub async fn store_cover(&self, bytes: Vec<u8>) -> Result<Option<String>, Error> {
         use imagesize::ImageType;
         let media_type = match imagesize::image_type(&bytes) {
