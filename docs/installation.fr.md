@@ -65,7 +65,7 @@ Pour les déplacer : variables `SHIORI_DATA_DIR` et `SHIORI_CACHE_DIR`, ou optio
 
 1. **Administration → Ajouter une bibliothèque** : un nom, le chemin complet du dossier (avec Docker : le chemin de droite, par exemple `/bibliotheques/mangas`) et son type (manga, BD ou webtoon, qui donne le sens de lecture par défaut).
 2. Le scan démarre tout seul ; son avancement s'affiche dans l'administration. Un premier scan lit chaque fichier en entier : comptez quelques minutes pour une grande bibliothèque. Les suivants ne relisent que ce qui a changé.
-3. Vos séries apparaissent sur l'accueil. Rangez vos fichiers **un dossier par série** : voir [Ranger ses fichiers](fonctionnel.md#ranger-ses-fichiers).
+3. Vos séries apparaissent sur l'accueil. Rangez vos fichiers **un dossier par série** : voir [Ranger ses fichiers](fonctionnel.md#ranger-ses-fichiers). Les **liens symboliques** ne sont pas suivis : montez le dossier lui-même (volume Docker, lien dur, montage réseau). Si le dossier d'une bibliothèque est absent ou illisible (disque réseau non monté), le scan échoue sans rien retirer.
 
 Facultatif : **Administration → Métadonnées web** complète vos séries (résumé, auteurs, genres, couvertures) avec AniList et MangaDex. C'est désactivé par défaut ; seul le titre des séries est envoyé.
 

@@ -65,7 +65,7 @@ To move them: the `SHIORI_DATA_DIR` and `SHIORI_CACHE_DIR` variables, or the `--
 
 1. **Administration → Add a library**: a name, the full path of the folder (with Docker: the right-hand path, for example `/bibliotheques/mangas`) and its type (manga, comic or webtoon, which sets the default reading direction).
 2. The scan starts on its own; its progress shows in the administration page. A first scan reads every file in full: allow a few minutes for a large library. Later scans only read what changed.
-3. Your series appear on the home page. Store your files **one folder per series**: see [Organising your files](fonctionnel.md#ranger-ses-fichiers) (French).
+3. Your series appear on the home page. Store your files **one folder per series**: see [Organising your files](fonctionnel.md#ranger-ses-fichiers) (French). **Symbolic links** are not followed: mount the folder itself (Docker volume, hard link, network mount). If a library folder is missing or unreadable (network drive not mounted), the scan fails and removes nothing.
 
 Optional: **Administration → Web metadata** completes your series (summary, authors, genres, covers) from AniList and MangaDex. It is off by default; only series titles are sent.
 

@@ -268,6 +268,37 @@ impl Db {
         Ok(true)
     }
 
+    /// Marque comme vus dans `run` les emplacements sous `under`, que `remove_missing` garde.
+    pub async fn keep_under(&self, library: &Library, under: &Path, run: i64) -> Result<(), Error> {
+        let prefix = root_key(under) + "/";
+        sqlx::query(
+            "UPDATE file_locations SET last_seen_run = ?
+             WHERE library_id = ? AND substr(path, 1, length(?)) = ?",
+        )
+        .bind(run)
+        .bind(library.id)
+        .bind(&prefix)
+        .bind(&prefix)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    /// La bibliothèque connaît-elle des fichiers sous `under` ?
+    pub async fn has_files_under(&self, library: &Library, under: &Path) -> Result<bool, Error> {
+        let prefix = root_key(under) + "/";
+        Ok(sqlx::query(
+            "SELECT 1 FROM file_locations
+             WHERE library_id = ? AND substr(path, 1, length(?)) = ? LIMIT 1",
+        )
+        .bind(library.id)
+        .bind(&prefix)
+        .bind(&prefix)
+        .fetch_optional(&self.pool)
+        .await?
+        .is_some())
+    }
+
     /// Supprime les emplacements de la bibliothèque situés sous `under` que la passe `run`
     /// n'a pas vus. Renvoie leur nombre. On compare des numéros de passe et non des
     /// horodatages : deux passes peuvent tomber dans la même milliseconde.

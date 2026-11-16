@@ -125,7 +125,7 @@ async fn resized_pages_are_the_right_pages_at_the_right_size() {
         );
         assert_eq!(
             response.headers()[header::CACHE_CONTROL],
-            "public, max-age=31536000, immutable"
+            "private, max-age=31536000, immutable"
         );
         let ordinal = page["ordinal"].as_u64().unwrap() as usize;
         assert_eq!(nearest(&body(response).await), (ordinal, (320, 480)));

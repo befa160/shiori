@@ -34,6 +34,12 @@ pub async fn fallback(method: Method, uri: axum::http::Uri, headers: HeaderMap) 
 /// Le fichier demandé, ou `index.html` pour une route de l'application (`/read/…`), que
 /// React Router résout côté navigateur. Un chemin avec extension introuvable (ancien
 /// `assets/index-abc.js` après une mise à jour) reste un vrai 404, jamais `index.html`.
+/// `unsafe-inline` pour les styles seulement : Radix pose des balises `<style>` (blocage du
+/// défilement sous une fenêtre). Petites ressources de Vite intégrées en `data:`.
+const CSP: &str = "default-src 'self'; img-src 'self' data: blob:; font-src 'self' data:; \
+     style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; form-action 'self'; \
+     frame-ancestors 'none'";
+
 pub fn serve<E: RustEmbed>(path: &str, headers: &HeaderMap) -> Response {
     let path = path.trim_start_matches('/');
     let app_route = path
@@ -74,6 +80,9 @@ pub fn serve<E: RustEmbed>(path: &str, headers: &HeaderMap) -> Response {
         (header::CACHE_CONTROL, cache.into()),
         (header::ETAG, etag),
         (header::X_CONTENT_TYPE_OPTIONS, "nosniff".into()),
+        // Pas d'intégration dans un cadre d'un autre site (clickjacking), aucun script d'ailleurs.
+        (header::X_FRAME_OPTIONS, "DENY".into()),
+        (header::CONTENT_SECURITY_POLICY, CSP.into()),
     ];
     (headers, Body::from(file.data)).into_response()
 }

@@ -440,6 +440,39 @@ async fn allowed_hosts_are_accepted_whatever_their_case() {
     }
 }
 
+/// Un autre site ne peut rien écrire (CSRF), même sans corps ; il peut toujours lire, comme
+/// une image intégrée ailleurs.
+#[tokio::test]
+async fn cross_site_writes_are_refused() {
+    let f = fixture().await;
+    let app = server::router(f.state.clone(), None);
+    for (method, site, expected) in [
+        ("POST", "cross-site", StatusCode::FORBIDDEN),
+        ("DELETE", "cross-site", StatusCode::FORBIDDEN),
+        ("GET", "cross-site", StatusCode::OK),
+        ("HEAD", "cross-site", StatusCode::OK),
+        ("POST", "same-origin", StatusCode::NOT_FOUND),
+        ("POST", "none", StatusCode::NOT_FOUND),
+    ] {
+        let uri = match method {
+            "GET" | "HEAD" => "/api/health",
+            "DELETE" => "/api/libraries/999",
+            _ => "/api/admin/scans/current/cancel",
+        };
+        let request = Request::builder()
+            .method(method)
+            .uri(uri)
+            .header("host", "localhost")
+            .header("sec-fetch-site", site);
+        let response = app.clone().oneshot(request.body(Body::empty()).unwrap());
+        assert_eq!(
+            response.await.unwrap().status(),
+            expected,
+            "{method} {site}"
+        );
+    }
+}
+
 /// Requête HTTP brute sur une vraie socket, réponse complète.
 async fn raw_get(addr: std::net::SocketAddr, host: &str) -> String {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};

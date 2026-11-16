@@ -1162,6 +1162,30 @@ Demandée le 2026-11-16 : Shiori sera ouvert depuis l'extérieur (reverse proxy 
 - **Hors ligne** (lot 6.5b) : les tomes téléchargés appartiennent à l'appareil ; à la déconnexion, proposer de les effacer ; la progression gardée hors ligne est envoyée au nom du compte connecté.
 - **Accès** : `--allowed-host` reste nécessaire (parade au DNS rebinding) ; la documentation d'installation (lot 6.7) décrit d'ici là l'authentification par le reverse proxy.
 
+### Notes de l'audit du 2026-11-16 (avant la phase 7)
+
+Audit complet après la phase 6 (couverture backend 96,85 % lignes / 91,64 % branches, front 98,91 % / 94,75 %, aucun code mort). Corrigé dans la branche `fix/audit-phase6` (points 1 à 9) ; le point 10 se fera avec l'authentification.
+
+À corriger, dans l'ordre :
+
+1. ✅ **Scan sur un dossier illisible** (`job.rs` `Pass::scan`, `scan.rs` `walk`), corrigé : racine absente, illisible ou vide alors que la bibliothèque a des fichiers → la passe échoue sans rien retirer ; sous-dossier illisible (`lost+found` d'un disque monté) → ses tomes sont gardés (`keep_under`), avertissement au journal, le reste suit le scan ; `shiori scan` l'avertit sur la sortie d'erreur, comme avant. Constat : une racine vide ou illisible (NAS non monté) fait retirer tous les emplacements, puis supprimer toutes les séries (métadonnées éditées, liens aux sources, réglages). `walk` doit signaler un dossier illisible ; la passe saute alors `remove_missing` et finit en échec ; refuser aussi de vider une bibliothèque qui avait des fichiers quand le scan n'en voit aucun. Avec un test.
+2. ✅ **CSRF sur les POST sans corps** (annuler le scan, identifier, relire les métadonnées) : middleware `same_site_writes_only`, actif même sans `--allowed-host`, qui refuse (403 `cross_site`) toute requête autre que GET/HEAD dont `Sec-Fetch-Site` vaut `cross-site`.
+3. ✅ **Images en `Cache-Control: private`** au lieu de `public` (`IMMUTABLE` dans `server.rs`, pages et `assets/` du front) ; reste, en phase 7, à vider les caches du service worker (`shiori-images-v1`, `shiori-shell-v1`, `shiori-offline-v1`) et la liste des téléchargements à la déconnexion.
+4. ✅ **En-têtes de l'interface** (`web.rs` `serve`) : `X-Frame-Options: DENY` et CSP `default-src 'self'` avec `frame-ancestors 'none'`, validés avec Playwright (e2e verts, console sans violation) ; `style-src 'unsafe-inline'` reste nécessaire pour les balises `<style>` de Radix.
+5. ✅ **Failles connues des crates** : job CI `advisories` (`cargo deny check advisories`), relancé chaque semaine par les PR Dependabot. Deux exceptions dans `backend/deny.toml`, chacune avec sa raison : RUSTSEC-2026-0459 (SQLite embarqué < 3.54 ; correctif bloqué par sqlx 0.9.0, sans risque pour une base locale de confiance) et RUSTSEC-2024-0436 (`paste` non maintenu, via rav1e).
+6. ✅ **Actions GitHub épinglées par SHA** (`ci.yml`, `release.yml`), version en commentaire.
+7. ✅ `npm update` (6 paquets en retard le 2026-11-16) et `cargo update`.
+8. ✅ `resized` (`server.rs`) : prendre le jeton de rendu avant de lire l'originale (mémoire bornée à 4 originales).
+9. ✅ Documentation d'installation : les liens symboliques ne sont pas suivis par le scan.
+10. ⏳ Sortir le service des images de `server.rs` (1 320 lignes) au moment d'ajouter l'authentification.
+
+À intégrer au plan de la phase 7 :
+
+- La progression a pour clé le tome seul (`reading_progress.volume_id`), langue et thème sont globaux (`app_settings`) : migration vers une clé par compte.
+- Créer une bibliothèque accepte n'importe quel dossier du serveur : réservé au rôle administrateur.
+- Aucun délai de connexion ni limite de débit dans `serve` : vérifier les défauts d'axum avant une exposition sans reverse proxy ; limiter les essais de connexion.
+- Non vérifié pendant l'audit : `cargo audit`, clippy, `cargo fmt`, tests Playwright ; `sw.js` n'est couvert que par eux.
+
 ### Questions à trancher au début de la phase
 
 - Faire confiance, en option, à l'en-tête d'un reverse proxy d'authentification (Authelia, Authentik : `Remote-User`) au lieu des comptes locaux ?

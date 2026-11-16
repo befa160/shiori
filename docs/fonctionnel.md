@@ -40,6 +40,8 @@ Ce qui est entre crochets ou parenthèses est ignoré (`[Team]`, `(2019)`, `(Dig
 
 Formats lus : **CBZ** (zip, y compris les très gros fichiers) et **CBR** (RAR 4 et 5, y compris « solide », dont la première page s'ouvre un peu plus lentement). Images : JPEG, PNG, WebP, AVIF. Les pages sont triées dans l'ordre naturel de leurs noms (`2` avant `10`), quel que soit leur ordre dans l'archive. Shiori ne modifie jamais vos fichiers.
 
+Les liens symboliques ne sont pas suivis. Les tomes d'un sous-dossier illisible sont gardés tels quels, avec un avertissement au journal du scan. Un dossier de bibliothèque absent, illisible ou soudain vide (disque réseau non monté) fait échouer le scan : rien n'est retiré, les séries et leurs réglages sont gardés jusqu'au retour des fichiers.
+
 ## Accueil, séries, recherche
 
 - **Accueil** : « Continuer la lecture » (le tome en cours de chaque série, ou le suivant quand un tome est fini), puis une étagère par bibliothèque.

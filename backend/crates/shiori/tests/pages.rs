@@ -175,7 +175,7 @@ async fn images_are_immutable_with_a_strong_etag() {
     assert_eq!(etag, format!("\"{page}\""));
     assert_eq!(
         response.headers()[header::CACHE_CONTROL],
-        "public, max-age=31536000, immutable"
+        "private, max-age=31536000, immutable"
     );
     assert_eq!(
         response.headers()[header::X_CONTENT_TYPE_OPTIONS],

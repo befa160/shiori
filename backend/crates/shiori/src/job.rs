@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::Serialize;
-use shiori_core::ScanOptions;
+use shiori_core::{ScanOptions, Severity};
 use shiori_db::{Db, Library, RunCounts, RunOrigin, RunStatus};
 use tokio::sync::{Mutex, RwLock};
 use tokio::task::{JoinHandle, JoinSet};
@@ -243,15 +243,35 @@ impl Pass {
 
     /// `Ok(false)` si la passe a été annulée avant d'avoir vu tous les fichiers.
     async fn scan(&self, target: Target) -> Result<bool, shiori_db::Error> {
-        let (files, folder) = match target {
+        let (files, folder, unreadable) = match target {
             Target::Folder(dir) => {
-                let mut files = Vec::new();
-                crate::scan::walk(&dir, &mut files);
+                let (mut files, mut unreadable) = (Vec::new(), Vec::new());
+                crate::scan::walk(&dir, &mut files, &mut unreadable);
                 files.sort();
-                (files, Some(dir))
+                (files, Some(dir), unreadable)
             }
-            Target::File(file) => (vec![file], None),
+            Target::File(file) => (vec![file], None, Vec::new()),
         };
+        // Racine démontée ou illisible (NAS) : sans ce garde-fou, la fin de passe retirerait
+        // tous les emplacements, puis les séries avec leurs métadonnées éditées.
+        let lost = |what: String| Err(shiori_db::Error::Io(std::io::Error::other(what)));
+        if let Some(dir) = folder.as_ref().filter(|d| unreadable.contains(d)) {
+            return lost(format!(
+                "dossier illisible : {} ; rien n'est retiré de la bibliothèque",
+                dir.display()
+            ));
+        }
+        if let Some(dir) = folder
+            .as_ref()
+            .filter(|d| **d == Path::new(&self.library.root))
+            && files.is_empty()
+            && self.db.has_files_under(&self.library, dir).await?
+        {
+            return lost(format!(
+                "aucun fichier trouvé dans {} alors que la bibliothèque en contient : dossier démonté ? rien n'est retiré",
+                dir.display()
+            ));
+        }
         self.db.set_run_total(self.run, files.len() as u64).await?;
         self.progress.write().await.total = files.len() as u64;
 
@@ -281,6 +301,19 @@ impl Pass {
         }
         if stopped {
             return Ok(false);
+        }
+        // Sous-dossier illisible (`lost+found` d'un disque monté) : ses tomes sont gardés tels
+        // quels, le reste de la bibliothèque suit le scan.
+        for dir in &unreadable {
+            self.db.keep_under(&self.library, dir, self.run).await?;
+            let message = format!(
+                "dossier illisible, ses tomes sont gardés : {}",
+                dir.display()
+            );
+            let logged = self
+                .db
+                .log(self.run, Severity::Warning, None, None, &message);
+            logged.await?;
         }
         if let Some(dir) = folder {
             let removed = self
