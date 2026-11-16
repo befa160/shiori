@@ -55,9 +55,6 @@ export function SeriesAbout({ series }: { series: SeriesDetail }) {
           ))}
         </ul>
       )}
-      {m.alt_titles.length > 0 && (
-        <p className="text-sm break-words text-muted-foreground">{t('series.alsoKnown', { titles: m.alt_titles.join(' · ') })}</p>
-      )}
       {links.length > 0 && (
         <ul className="flex flex-wrap gap-x-4">
           {links.map((url) => (

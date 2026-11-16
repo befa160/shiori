@@ -162,7 +162,6 @@ export const en: Translations = {
     reread: 'Read again · {{label}}',
     read: 'Read · {{label}}',
     publication: 'Publication status',
-    alsoKnown: 'Also known as: {{titles}}',
     genresAndTags: 'Genres and tags',
     more: 'Read more',
     less: 'Show less',
