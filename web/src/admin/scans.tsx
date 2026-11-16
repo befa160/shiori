@@ -330,8 +330,12 @@ export function ScanPage({ id }: { id: number }) {
     queryFn: ({ signal }) => api.scan(id, { signal }),
     refetchInterval: (query) => (query.state.data?.status === 'running' ? 2000 : false),
   })
+  const running = run.data?.status === 'running'
+  // Passe en cours : son journal se redemande avec elle ; `running` dans la clé fait relire une
+  // dernière fois le journal complet quand elle se termine.
   const logs = useInfiniteQuery({
-    queryKey: ['scans', 'logs', id, level],
+    queryKey: ['scans', 'logs', id, level, running],
+    refetchInterval: running ? 2000 : false,
     queryFn: ({ pageParam, signal }) => {
       const q = new URLSearchParams({ level, limit: String(LOG_PAGE) })
       if (pageParam !== null) q.set('after', String(pageParam))

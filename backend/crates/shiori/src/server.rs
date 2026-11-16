@@ -131,6 +131,7 @@ pub async fn run(
     // Une passe restée `running` vient d'un arrêt brutal : elle ne reprendra pas.
     db.interrupt_running_runs().await?;
     db.purge_runs(args.scan_log_days).await?;
+    db.purge_covers().await?;
     let jobs = args
         .jobs
         .or_else(|| std::thread::available_parallelism().ok())

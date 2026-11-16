@@ -380,3 +380,26 @@ async fn covers_are_kept_once_and_found_back() {
     );
     assert_eq!(db.cover_url(SourceId::Mangadex, "7").await.unwrap(), None);
 }
+
+#[tokio::test]
+async fn unused_covers_are_purged_after_an_hour() {
+    let (_dir, db, one, _akira) = setup().await;
+    let cover = |n| shiori_testkit::png(30, 45, shiori_testkit::page_color(n));
+    let chosen = db.store_cover(cover(1)).await.unwrap().unwrap();
+    let replaced = db.store_cover(cover(2)).await.unwrap().unwrap();
+    let edit = serde_json::json!({ "cover_image_id": chosen });
+    assert!(
+        db.edit_series(one, edit.as_object().unwrap().clone())
+            .await
+            .unwrap()
+    );
+    // Juste gardées : aucune ne part, même celle qu'aucune série n'a encore choisie.
+    assert_eq!(db.purge_covers().await.unwrap(), 0);
+    sqlx::query("UPDATE covers SET created_at = '2026-01-01T00:00:00.000Z'")
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    assert_eq!(db.purge_covers().await.unwrap(), 1);
+    assert!(db.cover(&chosen).await.unwrap().is_some());
+    assert_eq!(db.cover(&replaced).await.unwrap(), None);
+}

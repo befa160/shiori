@@ -177,6 +177,8 @@ export interface SeriesVolume {
   file_name: string
   /** Absent si le tome n'a jamais été ouvert. */
   progress?: Progress
+  /** Titre du tome (ComicInfo, `index.json` ou édité), dans le détail d'une série seulement. */
+  title?: string
 }
 
 /** Ni scénario ni dessin : rôle inconnu. */

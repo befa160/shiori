@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { SeriesVolume } from '@/api/types'
 import i18n from '@/i18n'
-import { volumeLabel } from './labels'
+import { volumeLabel, volumeTitle } from './labels'
 
 const volume = (v: Partial<SeriesVolume>): SeriesVolume => ({
   volume_id: 'v',
@@ -41,5 +41,19 @@ describe('pluriels et nombres', () => {
     expect([0, 1, 2].map((count) => en('counts.volumes', { count }))).toEqual(['0 volumes', '1 volume', '2 volumes'])
     expect(fr('counts.pages', { count: 12760 })).toBe('12 760 pages')
     expect(en('counts.pages', { count: 12760 })).toBe('12,760 pages')
+  })
+})
+
+describe('titre d’un tome', () => {
+  it('ne répète ni la série ni le numéro', () => {
+    expect(volumeTitle('Shangri-la Frontier - Tome 12', 'Shangri-la Frontier')).toBeNull()
+    expect(volumeTitle('ONE PIECE : Romance Dawn', 'One Piece')).toBe('Romance Dawn')
+    expect(volumeTitle('Vol. 3', 'Toriko')).toBeNull()
+    expect(volumeTitle('Chapitre 12.5', 'Toriko')).toBeNull()
+    expect(volumeTitle('#7', 'Toriko')).toBeNull()
+    expect(volumeTitle('Le Gourmet', 'Toriko')).toBe('Le Gourmet')
+    expect(volumeTitle('Toriko', 'Toriko')).toBeNull()
+    expect(volumeTitle(undefined, 'Toriko')).toBeNull()
+    expect(volumeTitle('', 'Toriko')).toBeNull()
   })
 })

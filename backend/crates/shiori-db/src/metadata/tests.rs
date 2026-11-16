@@ -266,6 +266,9 @@ mod db {
         // Tome : ComicInfo, puis titre édité.
         let v = db.volume_detail(&volume).await.unwrap().unwrap();
         assert_eq!(v.metadata.title.as_deref(), Some("Romance Dawn"));
+        // La liste des tomes de la série montre le même titre.
+        let listed = &db.series_detail(id).await.unwrap().unwrap().volumes[0];
+        assert_eq!(listed.title.as_deref(), Some("Romance Dawn"));
         assert!(
             db.edit_volume(&volume, patch(json!({"title": "Tome 1"})))
                 .await
@@ -276,6 +279,8 @@ mod db {
             (v.metadata.title.as_deref(), v.locked.as_slice()),
             (Some("Tome 1"), &["title".to_owned()][..])
         );
+        let listed = &db.series_detail(id).await.unwrap().unwrap().volumes[0];
+        assert_eq!(listed.title.as_deref(), Some("Tome 1"));
         assert!(matches!(
             db.edit_volume(&volume, patch(json!({"genres": []}))).await,
             Err(crate::EditError::Invalid(_))
