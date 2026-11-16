@@ -163,7 +163,6 @@ export const fr = {
     reread: 'Relire · {{label}}',
     read: 'Lire · {{label}}',
     publication: 'Statut de publication',
-    alsoKnown: 'Autres titres : {{titles}}',
     genresAndTags: 'Genres et tags',
     more: 'Lire la suite',
     less: 'Réduire',

@@ -86,7 +86,7 @@ function SeriesHeader({ series }: { series: SeriesDetail }) {
   const online = useQuery({ queryKey: ['settings'], queryFn: ({ signal }) => api.settings({ signal }) }).data?.metadata_online
   return (
     <div className="flex flex-col gap-6 sm:flex-row">
-      <div className="relative aspect-[2/3] w-36 shrink-0 overflow-hidden rounded-md bg-card sm:w-48">
+      <div className="relative aspect-[2/3] w-36 shrink-0 self-start overflow-hidden rounded-md bg-card sm:w-48">
         <Cover
           key={series.metadata.cover_image_id ?? cover}
           pageId={cover}
