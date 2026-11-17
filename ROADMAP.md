@@ -1198,7 +1198,7 @@ Ouvrir Shiori hors de chez soi et le partager en famille : comptes locaux (admin
 
 ### Lots
 
-- **7.1 `refactor/images`** : sortir le service des images de `server.rs` (point 10 de l'audit), sans changement de comportement.
+- ✅ **7.1 `refactor/images`** : sortir le service des images de `server.rs` (point 10 de l'audit), sans changement de comportement.
 - **7.2 `feat/accounts-db`** : migration 0014, `shiori-db` (comptes, sessions, accès, préférences, progression par compte, `legacy_progress`), CLI `shiori user`.
 - **7.3 `feat/auth`** : installation, connexion, déconnexion, cookie, middleware de session, limite de débit, délais du serveur.
 - **7.4 `feat/roles`** : routes réservées, accès par bibliothèque sur toutes les lectures, `/api/me`, `/api/admin/users`.
@@ -1233,7 +1233,7 @@ Audit complet après la phase 6 (couverture backend 96,85 % lignes / 91,64 % bra
 7. ✅ `npm update` (6 paquets en retard le 2026-11-16) et `cargo update`.
 8. ✅ `resized` (`server.rs`) : prendre le jeton de rendu avant de lire l'originale (mémoire bornée à 4 originales).
 9. ✅ Documentation d'installation : les liens symboliques ne sont pas suivis par le scan.
-10. ⏳ Sortir le service des images de `server.rs` (1 320 lignes) au moment d'ajouter l'authentification.
+10. ✅ Service des images sorti de `server.rs` (1 388 → 1 061 lignes) dans `server/images.rs` (lot 7.1).
 
 À intégrer au plan de la phase 7 :
 
