@@ -11,7 +11,7 @@ use shiori_core::{Author, LocalMetadata, MetadataSource, VolumeId};
 use shiori_meta::{SourceId, Text, WebMetadata};
 use sqlx::Row;
 
-use crate::{Db, Error, PublicationStatus, from_db, to_db};
+use crate::{Db, Error, Language, PublicationStatus, Settings, from_db, to_db};
 
 /// Champs édités : nom → valeur (`null` compris, c'est une valeur verrouillée).
 pub type Edited = Map<String, Value>;
@@ -300,7 +300,6 @@ impl Db {
             };
         }
         let settings = self.settings().await?;
-        let order = settings.source_order();
         let mut tx = self.pool.begin_with("BEGIN IMMEDIATE").await?;
         let rows = sqlx::query(concat!(
             "SELECT s.id, s.name, m.edited FROM series s
@@ -332,7 +331,7 @@ impl Db {
                 .or_default()
                 .push(local(&row)?);
         }
-        let mut webs: HashMap<i64, Vec<(usize, SourceId, WebMetadata)>> = HashMap::new();
+        let mut webs: HashMap<i64, Vec<(SourceId, WebMetadata)>> = HashMap::new();
         let sql = concat!(
             "SELECT w.series_id, w.source, w.data FROM series_sources w
              JOIN series s ON s.id = w.series_id WHERE w.data IS NOT NULL AND ",
@@ -345,15 +344,11 @@ impl Db {
             .await?
         {
             let source: SourceId = from_db(row.get("source"))?;
-            // Une source retirée de l'ordre ne compte plus.
-            let Some(rank) = order.iter().position(|s| *s == source) else {
-                continue;
-            };
             let data =
                 serde_json::from_str(row.get("data")).map_err(|e| Error::Decode(Box::new(e)))?;
             webs.entry(row.get("series_id"))
                 .or_default()
-                .push((rank, source, data));
+                .push((source, data));
         }
         for row in rows {
             let id: i64 = row.get("id");
@@ -364,29 +359,50 @@ impl Db {
             let main: Option<SourceId> = edited
                 .get("main_source")
                 .and_then(|v| serde_json::from_value(v.clone()).ok());
-            let mut linked = webs.remove(&id).unwrap_or_default();
+            let linked = webs.remove(&id).unwrap_or_default();
             // Seulement si elle est liée : une source principale déliée ne pèse plus.
-            let main = main.filter(|m| linked.iter().any(|(_, s, _)| s == m));
-            linked.sort_by_key(|(rank, source, _)| (Some(*source) != main, *rank));
-            let linked: Vec<WebMetadata> = linked.into_iter().map(|(_, _, w)| w).collect();
-            let base = with_web(base, name, &linked, settings.lang(), main.is_some());
-            let mut merged = overlay(base, &edited).map_err(decode)?;
-            // Une couverture choisie disparaît avec sa page (fichier modifié : nouveaux IDs).
-            if let Some(page) = &merged.cover_page_id
-                && !page_in_series(&mut tx, page, id).await?
-            {
-                merged.cover_page_id = None;
+            let main = main.filter(|m| linked.iter().any(|(s, _)| s == m));
+            // Une vue par langue de l'interface (Q34) : titre, résumé et ordre des sources.
+            let mut views = Vec::new();
+            for language in [Language::Fr, Language::En] {
+                let order = settings.order_for(language);
+                // Une source retirée de l'ordre ne compte plus.
+                let mut ranked: Vec<(usize, &SourceId, &WebMetadata)> = linked
+                    .iter()
+                    .filter_map(|(s, w)| Some((order.iter().position(|o| o == s)?, s, w)))
+                    .collect();
+                ranked.sort_by_key(|(rank, source, _)| (Some(**source) != main, *rank));
+                let webs: Vec<WebMetadata> =
+                    ranked.into_iter().map(|(_, _, w)| w.clone()).collect();
+                let lang = Settings::code(language);
+                let base = with_web(base.clone(), name, &webs, lang, main.is_some());
+                let mut merged = overlay(base, &edited).map_err(decode)?;
+                // Une couverture choisie disparaît avec sa page (fichier modifié : nouveaux IDs).
+                if let Some(page) = &merged.cover_page_id
+                    && !page_in_series(&mut tx, page, id).await?
+                {
+                    merged.cover_page_id = None;
+                }
+                views.push(merged);
             }
+            let [fr, en] = <[SeriesMetadata; 2]>::try_from(views).expect("deux langues");
             sqlx::query(
-                "INSERT INTO series_metadata (series_id, merged) VALUES (?, ?)
-                 ON CONFLICT (series_id) DO UPDATE SET merged = excluded.merged",
+                "INSERT INTO series_metadata (series_id, merged, merged_en) VALUES (?, ?, ?)
+                 ON CONFLICT (series_id) DO UPDATE SET merged = excluded.merged,
+                   merged_en = excluded.merged_en",
             )
             .bind(id)
-            .bind(serde_json::to_string(&merged).expect("une structure se sérialise"))
+            .bind(serde_json::to_string(&fr).expect("une structure se sérialise"))
+            .bind(serde_json::to_string(&en).expect("une structure se sérialise"))
             .execute(&mut *tx)
             .await?;
+            // Le statut sert aux filtres : celui de la langue de l'instance.
+            let status = match settings.language {
+                Some(Language::En) => &en.publication_status,
+                _ => &fr.publication_status,
+            };
             sqlx::query("UPDATE series SET publication_status = ? WHERE id = ?")
-                .bind(merged.publication_status.as_ref().map(to_db))
+                .bind(status.as_ref().map(to_db))
                 .bind(id)
                 .execute(&mut *tx)
                 .await?;
@@ -457,11 +473,16 @@ impl Db {
     pub(crate) async fn series_metadata(
         &self,
         id: i64,
+        language: Language,
     ) -> Result<(SeriesMetadata, Vec<String>), Error> {
-        let row = sqlx::query("SELECT edited, merged FROM series_metadata WHERE series_id = ?")
-            .bind(id)
-            .fetch_optional(&self.pool)
-            .await?;
+        let row = sqlx::query(
+            "SELECT edited, CASE WHEN ? = 'en' THEN merged_en ELSE merged END AS merged
+             FROM series_metadata WHERE series_id = ?",
+        )
+        .bind(to_db(&language))
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
         let Some(row) = row else {
             return Ok(Default::default());
         };

@@ -207,7 +207,11 @@ mod db {
         };
         pass().await;
 
-        let [s] = &db.all_series().await.unwrap()[..] else {
+        let [s] = &db
+            .all_series(&crate::tests::viewer(&db).await)
+            .await
+            .unwrap()[..]
+        else {
             panic!()
         };
         let id = s.id;
@@ -216,7 +220,12 @@ mod db {
         assert_eq!(s.name, "ONE PIECE");
         assert!(s.alt_titles.is_empty());
         assert_eq!(s.authors, ["Eiichiro Oda"]);
-        let volume = db.series_detail(id).await.unwrap().unwrap().volumes[0]
+        let volume = db
+            .series_detail(&crate::tests::viewer(&db).await, id)
+            .await
+            .unwrap()
+            .unwrap()
+            .volumes[0]
             .volume_id
             .clone();
         let volume: shiori_core::VolumeId = volume.parse().unwrap();
@@ -227,14 +236,22 @@ mod db {
             patch(json!({"title": "Wan Pīsu", "cover_page_id": pages[1].id, "summary": null}));
         assert!(db.edit_series(id, edit).await.unwrap());
         pass().await;
-        let [s] = &db.all_series().await.unwrap()[..] else {
+        let [s] = &db
+            .all_series(&crate::tests::viewer(&db).await)
+            .await
+            .unwrap()[..]
+        else {
             panic!()
         };
         assert_eq!(
             (s.name.as_str(), s.cover_page_id.as_deref()),
             ("Wan Pīsu", Some(pages[1].id.as_str()))
         );
-        let detail = db.series_detail(id).await.unwrap().unwrap();
+        let detail = db
+            .series_detail(&crate::tests::viewer(&db).await, id)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(detail.name, "Wan Pīsu");
         assert_eq!(detail.metadata.summary, None);
         assert_eq!(detail.locked, ["cover_page_id", "summary", "title"]);
@@ -245,7 +262,11 @@ mod db {
                 .await
                 .unwrap()
         );
-        let detail = db.series_detail(id).await.unwrap().unwrap();
+        let detail = db
+            .series_detail(&crate::tests::viewer(&db).await, id)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(
             (detail.name.as_str(), detail.metadata.summary.as_deref()),
             ("ONE PIECE", Some("Luffy."))
@@ -264,22 +285,40 @@ mod db {
         }
 
         // Tome : ComicInfo, puis titre édité.
-        let v = db.volume_detail(&volume).await.unwrap().unwrap();
+        let v = db
+            .volume_detail(&crate::tests::viewer(&db).await, &volume)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(v.metadata.title.as_deref(), Some("Romance Dawn"));
         // La liste des tomes de la série montre le même titre.
-        let listed = &db.series_detail(id).await.unwrap().unwrap().volumes[0];
+        let listed = &db
+            .series_detail(&crate::tests::viewer(&db).await, id)
+            .await
+            .unwrap()
+            .unwrap()
+            .volumes[0];
         assert_eq!(listed.title.as_deref(), Some("Romance Dawn"));
         assert!(
             db.edit_volume(&volume, patch(json!({"title": "Tome 1"})))
                 .await
                 .unwrap()
         );
-        let v = db.volume_detail(&volume).await.unwrap().unwrap();
+        let v = db
+            .volume_detail(&crate::tests::viewer(&db).await, &volume)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(
             (v.metadata.title.as_deref(), v.locked.as_slice()),
             (Some("Tome 1"), &["title".to_owned()][..])
         );
-        let listed = &db.series_detail(id).await.unwrap().unwrap().volumes[0];
+        let listed = &db
+            .series_detail(&crate::tests::viewer(&db).await, id)
+            .await
+            .unwrap()
+            .unwrap()
+            .volumes[0];
         assert_eq!(listed.title.as_deref(), Some("Tome 1"));
         assert!(matches!(
             db.edit_volume(&volume, patch(json!({"genres": []}))).await,
@@ -296,7 +335,11 @@ mod db {
             &[("01.png", &png(4, 6, page_color(1)), DEFLATED)],
         );
         pass().await;
-        let [s] = &db.all_series().await.unwrap()[..] else {
+        let [s] = &db
+            .all_series(&crate::tests::viewer(&db).await)
+            .await
+            .unwrap()[..]
+        else {
             panic!()
         };
         assert_ne!(s.cover_page_id.as_deref(), Some(pages[1].id.as_str()));
@@ -320,14 +363,23 @@ mod db {
         .execute(db.pool())
         .await
         .unwrap();
-        let id = db.all_series().await.unwrap()[0].id;
+        let id = db
+            .all_series(&crate::tests::viewer(&db).await)
+            .await
+            .unwrap()[0]
+            .id;
         for round in 0..10 {
             let (a, b) = tokio::join!(
                 db.edit_series(id, patch(json!({"summary": format!("r{round}")}))),
                 db.edit_series(id, patch(json!({"genres": [format!("g{round}")]}))),
             );
             assert!(a.unwrap() && b.unwrap());
-            let m = db.series_detail(id).await.unwrap().unwrap().metadata;
+            let m = db
+                .series_detail(&crate::tests::viewer(&db).await, id)
+                .await
+                .unwrap()
+                .unwrap()
+                .metadata;
             assert_eq!(
                 (m.summary, m.genres),
                 (Some(format!("r{round}")), vec![format!("g{round}")])
@@ -356,10 +408,18 @@ mod db {
         pool.close().await;
 
         let db = Db::open(&path).await.unwrap();
-        let a = db.series_detail(1).await.unwrap().unwrap();
+        let a = db
+            .series_detail(&crate::tests::viewer(&db).await, 1)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(a.publication_status, Some(PublicationStatus::Hiatus));
         assert_eq!(a.locked, ["publication_status"]);
-        let b = db.series_detail(2).await.unwrap().unwrap();
+        let b = db
+            .series_detail(&crate::tests::viewer(&db).await, 2)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!((b.publication_status, b.locked.len()), (None, 0));
     }
 }

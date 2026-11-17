@@ -72,12 +72,15 @@ SQLite (`sqlx`, `sqlite-bundled`), un fichier `shiori.db`, migrations appliquée
 | `volumes` | un tome par contenu : hash, taille, format, statut, nombre de pages, date du scan |
 | `pages` | une ligne par page : `page_id`, tome, nom d'entrée, `ordinal`, index dans l'archive, largeur, hauteur, type, statut |
 | `file_locations` | où se trouve chaque tome : chemin, taille, date, série, résultat du parseur de noms |
-| `libraries`, `series` | bibliothèques (racine, type) et séries (dossier, réglages de lecture propres) |
+| `libraries`, `series` | bibliothèques (racine, type) et séries (dossier, nom, statut) |
 | `scan_runs`, `scan_issues`, `scan_run_logs` | passes de scan, problèmes par tome, journal de chaque passe (conservé `--scan-log-days`) |
-| `reading_progress` | page lue par tome (une seule progression tant qu'il n'y a pas de comptes) |
-| `app_settings` | réglages globaux : langue, thème, sens des pages, métadonnées web |
+| `users`, `sessions`, `user_libraries` | comptes (Argon2id, rôle), sessions (hash BLAKE3 du jeton, 90 jours glissants), bibliothèques ouvertes à un lecteur |
+| `reading_progress` | page lue par compte et par tome |
+| `user_series_settings`, `user_settings` | réglages de lecture d'une série et préférences (langue, thème, sens des pages), par compte |
+| `legacy_progress`, `legacy_series_settings` | progression et réglages d'avant les comptes, repris par le premier administrateur |
+| `app_settings` | réglages de l'instance : langue, thème et sens des pages par défaut, métadonnées web |
 | `volume_metadata`, `volume_edits` | métadonnées des fichiers par tome, et champs édités à la main |
-| `series_metadata` | champs édités d'une série (`edited`) et vue fusionnée (`merged`) |
+| `series_metadata` | champs édités d'une série (`edited`) et vue fusionnée, en français (`merged`) et en anglais (`merged_en`) |
 | `series_sources` | fiches web liées ou candidates par série et par source |
 | `covers` | couvertures des sources choisies, gardées en base (BLAKE3 du contenu) ; celles qu'aucune série ne référence sont purgées au démarrage, après une heure de grâce |
 
@@ -85,7 +88,7 @@ Une série garde son identité quand son dossier est renommé : elle est retrouv
 
 ## API
 
-JSON sous `/api`, erreurs `{ "code", "message" }` avec un code stable que l'interface traduit. Pas d'authentification (phase 7).
+JSON sous `/api`, erreurs `{ "code", "message" }` avec un code stable que l'interface traduit. Session exigée sauf `/api/health` et `/api/auth/*` (cookie `shiori_session` ou `Authorization: Bearer`) ; progression, réglages de lecture et langue des titres sont ceux du compte connecté.
 
 | Route | Rôle |
 |---|---|
@@ -121,7 +124,7 @@ Tout le reste est l'application web : un fichier de `web/dist`, ou `index.html` 
 
 ## Métadonnées
 
-Fusion **champ par champ** (`shiori-db::metadata`) : champ édité (verrouillé) > fichiers (`index.json`, puis `ComicInfo.xml`) > sources web dans l'ordre choisi. La vue fusionnée d'une série est recalculée et stockée (`merged`) à chaque changement ; celle d'un tome est calculée à la lecture (pour toute une série en deux requêtes).
+Fusion **champ par champ** (`shiori-db::metadata`) : champ édité (verrouillé) > fichiers (`index.json`, puis `ComicInfo.xml`) > sources web dans l'ordre choisi. La vue fusionnée d'une série est recalculée et stockée à chaque changement, une fois par langue de l'interface (`merged`, `merged_en`), chaque compte lisant celle de sa langue ; celle d'un tome est calculée à la lecture (pour toute une série en deux requêtes).
 
 Sources web (`shiori-meta`, désactivées par défaut) : AniList (GraphQL) et MangaDex (REST), appelées hors du runtime async, débit sous les limites publiées, `Retry-After` respecté, nom de client générique, seul le titre de la série envoyé. Identification automatique après chaque scan : un lien seulement si un seul candidat a exactement le même titre normalisé. Couvertures téléchargées depuis les seuls hôtes connus de chaque source, sans suivre de redirection (parade SSRF), 4 096 px de côté au plus.
 

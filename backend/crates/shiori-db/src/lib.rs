@@ -51,7 +51,7 @@ pub use library::{Library, LibraryError};
 pub use metadata::{EditError, Edited, SeriesMetadata, VolumeMetadata};
 pub use reading::{
     LibraryKind, PageLayout, PageTurn, Progress, ReadingMode, ReadingSettings, SaveProgress,
-    SettingsChange,
+    SettingsChange, Viewer,
 };
 pub use runs::{LogLine, RunCounts, RunFilter, RunOrigin, RunStatus, RunSummary};
 pub use settings::{Language, Settings, Theme};

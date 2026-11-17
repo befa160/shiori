@@ -215,7 +215,12 @@ async fn log_lines_point_to_their_volume() {
     .await
     .unwrap();
     let lines = db.run_logs(run, Severity::Info, None, 50).await.unwrap();
-    let series = db.series_of(library.id).await.unwrap().unwrap()[0].id;
+    let series = db
+        .series_of(&crate::tests::viewer(&db).await, library.id)
+        .await
+        .unwrap()
+        .unwrap()[0]
+        .id;
     let volume = scanned.report.volume_id.unwrap().to_string();
     assert_eq!(
         (lines[0].series_id, lines[0].volume_id.as_ref()),
