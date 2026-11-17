@@ -336,3 +336,28 @@ async fn the_first_admin_is_created_only_while_no_account_exists() {
         Err(AccountError::InvalidName)
     ));
 }
+
+/// Une session récente se lit sans écrire : pendant un scan (longues écritures), chaque image
+/// demandée ne doit pas attendre son tour pour écrire.
+#[tokio::test]
+async fn a_recent_session_is_read_even_while_another_write_holds_the_lock() {
+    let (_dir, db) = db().await;
+    let bob = db
+        .create_user("bob", "mot de passe", Role::Reader)
+        .await
+        .unwrap();
+    let session = db.create_session(bob.id, "Firefox").await.unwrap();
+    let mut lock = db.pool().begin().await.unwrap();
+    sqlx::query("UPDATE app_settings SET id = id")
+        .execute(&mut *lock)
+        .await
+        .unwrap();
+    let found = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        db.session_user(&session.token),
+    )
+    .await
+    .expect("lecture bloquée par le verrou d'écriture");
+    assert_eq!(found.unwrap().unwrap().user, bob);
+    lock.rollback().await.unwrap();
+}

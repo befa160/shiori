@@ -202,6 +202,13 @@ async fn follow_and_cancel_a_running_scan() {
         .await;
     assert_eq!(status, StatusCode::ACCEPTED);
     let run = started["run"].as_i64().unwrap();
+    // Verrou d'écriture tenu par le test : la passe attend pour enregistrer son premier fichier
+    // et ne peut pas finir avant l'annulation (suivre et annuler ne font que lire).
+    let mut lock = f.state.db.pool().begin().await.unwrap();
+    sqlx::query("UPDATE app_settings SET id = id")
+        .execute(&mut *lock)
+        .await
+        .unwrap();
 
     let (status, progress) = f.call("GET", "/api/admin/scans/current", None).await;
     assert_eq!(status, StatusCode::OK);
@@ -220,6 +227,7 @@ async fn follow_and_cancel_a_running_scan() {
         (status, body),
         (StatusCode::ACCEPTED, json!({ "cancelling": true }))
     );
+    lock.rollback().await.unwrap();
     f.state.scanner.wait().await;
     let (_, detail) = f
         .call("GET", &format!("/api/admin/scans/{run}"), None)

@@ -339,7 +339,9 @@ impl Db {
         }
         let hash = token_hash(token);
         let sql = concat!(
-            "SELECT s.id AS session_id, u.* FROM sessions s JOIN users u ON u.id = s.user_id
+            "SELECT s.id AS session_id, u.*,
+                    s.last_seen_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour') AS stale
+             FROM sessions s JOIN users u ON u.id = s.user_id
              WHERE s.token_hash = ? AND u.disabled_at IS NULL AND s.expires_at > ",
             now!()
         );
@@ -350,19 +352,18 @@ impl Db {
         else {
             return Ok(None);
         };
-        let sql = concat!(
-            "UPDATE sessions SET last_seen_at = ",
-            now!(),
-            ", expires_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+90 days')
-             WHERE token_hash = ?
-               AND last_seen_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour')"
-        );
-        let renewed = sqlx::query(sql)
-            .bind(&hash)
-            .execute(&self.pool)
-            .await?
-            .rows_affected()
-            > 0;
+        // Écrire seulement quand il le faut : même sans ligne touchée, un UPDATE prend le verrou
+        // d'écriture, et chaque image attendrait la fin d'une écriture de scan.
+        let renewed: bool = row.get("stale");
+        if renewed {
+            let sql = concat!(
+                "UPDATE sessions SET last_seen_at = ",
+                now!(),
+                ", expires_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+90 days')
+                 WHERE token_hash = ?"
+            );
+            sqlx::query(sql).bind(&hash).execute(&self.pool).await?;
+        }
         Ok(Some(Session {
             id: row.get("session_id"),
             user: user(&row)?,
