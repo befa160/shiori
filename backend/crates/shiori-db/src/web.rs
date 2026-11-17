@@ -318,6 +318,25 @@ impl Db {
         Ok(Some(id))
     }
 
+    /// La couverture est choisie pour une série visible du compte (un administrateur voit
+    /// toutes celles gardées).
+    pub async fn cover_visible(&self, viewer: &crate::Viewer, id: &str) -> Result<bool, Error> {
+        if viewer.admin {
+            return Ok(true);
+        }
+        let sql = concat!(
+            "SELECT 1 FROM series_metadata m JOIN series s ON s.id = m.series_id
+             WHERE json_extract(m.edited, '$.cover_image_id') = ?1 AND ",
+            crate::reading::visible!("s.library_id", "0", "?2")
+        );
+        Ok(sqlx::query(sql)
+            .bind(id)
+            .bind(viewer.user)
+            .fetch_optional(&self.pool)
+            .await?
+            .is_some())
+    }
+
     pub async fn cover(&self, id: &str) -> Result<Option<Cover>, Error> {
         let row = sqlx::query("SELECT media_type, width, data FROM covers WHERE id = ?")
             .bind(id)

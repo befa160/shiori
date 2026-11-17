@@ -21,7 +21,7 @@ use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use serde::{Deserialize, Serialize};
-use shiori_db::{AccountError, SESSION_SECONDS, Session, User, Viewer};
+use shiori_db::{AccountError, Role, SESSION_SECONDS, Session, User, Viewer};
 use tokio::sync::Semaphore;
 
 use super::{ApiError, App, invalid_body};
@@ -34,6 +34,8 @@ const PUBLIC: [&str; 5] = [
     "/api/auth/login",
     "/api/auth/logout",
 ];
+/// Routes permises avec un mot de passe provisoire : de quoi le changer.
+const MUST_CHANGE_OPEN: [&str; 2] = ["/api/me", "/api/me/password"];
 const COOKIE: &str = "shiori_session";
 /// Essais ratés tolérés avant la première pause, pour un nom puis pour une adresse (plusieurs
 /// personnes peuvent partager une adresse, derrière une box).
@@ -156,8 +158,8 @@ pub(crate) async fn require_session(
     mut request: Request,
     next: Next,
 ) -> Response {
-    let path = request.uri().path();
-    if !path.starts_with("/api/") || PUBLIC.contains(&path) {
+    let path = request.uri().path().to_owned();
+    if !path.starts_with("/api/") || PUBLIC.contains(&path.as_str()) {
         return next.run(request).await;
     }
     let session = match presented_token(request.headers()) {
@@ -171,6 +173,15 @@ pub(crate) async fn require_session(
     let Some((session, token, from_cookie)) = session else {
         return unauthenticated().into_response();
     };
+    // Mot de passe provisoire (Q45) : rien d'autre tant qu'il n'est pas changé.
+    if session.user.must_change_password && !MUST_CHANGE_OPEN.contains(&path.as_str()) {
+        return ApiError::new(
+            StatusCode::FORBIDDEN,
+            "password_change_required",
+            "mot de passe provisoire : le changer d'abord",
+        )
+        .into_response();
+    }
     let renew = (session.renewed && from_cookie)
         .then(|| cookie(request.headers(), &token, SESSION_SECONDS));
     request.extensions_mut().insert(session);
@@ -205,6 +216,28 @@ impl FromRequestParts<Arc<App>> for Me {
     }
 }
 
+/// Route réservée à l'administrateur : 403 `forbidden` pour un lecteur.
+pub(crate) struct Admin;
+
+impl FromRequestParts<Arc<App>> for Admin {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(parts: &mut Parts, _: &Arc<App>) -> Result<Self, ApiError> {
+        let session = parts
+            .extensions
+            .get::<Session>()
+            .ok_or_else(unauthenticated)?;
+        match session.user.role {
+            Role::Admin => Ok(Admin),
+            Role::Reader => Err(ApiError::new(
+                StatusCode::FORBIDDEN,
+                "forbidden",
+                "réservé à l'administrateur",
+            )),
+        }
+    }
+}
+
 impl From<AccountError> for ApiError {
     fn from(e: AccountError) -> Self {
         let (status, code) = match &e {
@@ -212,6 +245,7 @@ impl From<AccountError> for ApiError {
             AccountError::WeakPassword => (StatusCode::BAD_REQUEST, "weak_password"),
             AccountError::NameTaken(_) => (StatusCode::CONFLICT, "name_taken"),
             AccountError::UnknownUser(_) => (StatusCode::NOT_FOUND, "not_found"),
+            AccountError::LastAdmin => (StatusCode::CONFLICT, "last_admin"),
             AccountError::Db(_) => (StatusCode::INTERNAL_SERVER_ERROR, "internal"),
         };
         if status.is_server_error() {
@@ -261,6 +295,17 @@ pub(crate) struct AuthState {
     /// Aucun compte : l'interface montre la page d'installation.
     setup_required: bool,
     user: Option<User>,
+}
+
+/// 429 `rate_limited`, avec `Retry-After` en secondes.
+fn rate_limited(wait: Duration) -> ApiError {
+    let seconds = wait.as_secs() + 1;
+    ApiError::new(
+        StatusCode::TOO_MANY_REQUESTS,
+        "rate_limited",
+        format!("trop d'essais : réessayer dans {seconds} s"),
+    )
+    .retry_after(seconds)
 }
 
 /// Ouvre une session et la remet au client : cookie, ou jeton dans la réponse.
@@ -359,17 +404,7 @@ pub(crate) async fn login(
         ),
     ];
     if let Some(wait) = app.auth.paused(&keys) {
-        let seconds = wait.as_secs() + 1;
-        let mut response = ApiError::new(
-            StatusCode::TOO_MANY_REQUESTS,
-            "rate_limited",
-            format!("trop d'essais : réessayer dans {seconds} s"),
-        )
-        .into_response();
-        response
-            .headers_mut()
-            .insert(header::RETRY_AFTER, HeaderValue::from(seconds));
-        return Ok(response);
+        return Err(rate_limited(wait));
     }
     let user = {
         let _permit = app
@@ -392,6 +427,52 @@ pub(crate) async fn login(
     };
     app.auth.succeeded(&name_key);
     sign_in(&app, &headers, user, credentials.client).await
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct PasswordChange {
+    current: String,
+    new: String,
+}
+
+/// Change son mot de passe (obligatoire après un mot de passe provisoire) : l'ancien est
+/// exigé, sous la même limite d'essais que la connexion (une session volée ne doit pas
+/// permettre de le deviner). Les autres appareils sont déconnectés.
+pub(crate) async fn change_password(
+    State(app): State<Arc<App>>,
+    axum::Extension(session): axum::Extension<Session>,
+    body: Result<Json<PasswordChange>, JsonRejection>,
+) -> Result<StatusCode, ApiError> {
+    let Json(change) = body.map_err(invalid_body)?;
+    let name = session.user.username.as_str();
+    let name_key = format!("nom:{}", name.to_lowercase());
+    let keys = [(name_key.clone(), FREE_PER_NAME)];
+    if let Some(wait) = app.auth.paused(&keys) {
+        return Err(rate_limited(wait));
+    }
+    let checked = {
+        let _permit = app
+            .auth
+            .hashing
+            .acquire()
+            .await
+            .expect("sémaphore jamais fermé");
+        app.db.check_password(name, &change.current).await?
+    };
+    if checked.is_none() {
+        app.auth.failed(&keys);
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "wrong_password",
+            "mot de passe actuel incorrect",
+        ));
+    }
+    app.auth.succeeded(&name_key);
+    app.db
+        .set_password(name, &change.new, false, Some(session.id))
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Ferme la session présentée et efface le cookie ; répond 204 même sans session.

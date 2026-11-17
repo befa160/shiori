@@ -14,6 +14,7 @@ use shiori_core::{Archive, PageId, PageStatus, open_archive as open_file};
 use shiori_db::{PageFile, PageSource};
 use shiori_meta::FetchError;
 
+use super::auth::{Admin, Me};
 use super::{ApiError, App, invalid_query, source_id};
 use crate::cache::Images;
 use crate::meta::MetaError;
@@ -70,6 +71,7 @@ fn wanted(query: &ImageQuery) -> Result<Option<(u32, Format)>, ApiError> {
 /// erreur explicite.
 pub(super) async fn page_image(
     State(app): State<Arc<App>>,
+    Me(me): Me,
     Path(id): Path<String>,
     query: Result<Query<ImageQuery>, QueryRejection>,
     headers: HeaderMap,
@@ -81,7 +83,7 @@ pub(super) async fn page_image(
         .map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, "invalid_query", e.body_text()))?;
     let wanted = wanted(&query)?;
     let page =
-        app.db.page_source(&id).await?.ok_or_else(|| {
+        app.db.page_source(&me, &id).await?.ok_or_else(|| {
             ApiError::new(StatusCode::NOT_FOUND, "page_not_found", "page inconnue")
         })?;
     if page.status == PageStatus::Broken {
@@ -284,6 +286,7 @@ pub(crate) fn etag_matches(headers: &HeaderMap, etag: &str) -> bool {
 
 /// Vignette d'une fiche, relayée ; gardée un jour par le navigateur.
 pub(super) async fn thumbnail(
+    _: Admin,
     State(app): State<Arc<App>>,
     Path((source, id)): Path<(String, String)>,
 ) -> Result<Response, ApiError> {
@@ -305,6 +308,7 @@ pub(super) async fn thumbnail(
 /// identifiant est le hash de son contenu.
 pub(super) async fn cover(
     State(app): State<Arc<App>>,
+    Me(me): Me,
     Path(id): Path<String>,
     query: Result<Query<ImageQuery>, QueryRejection>,
     headers: HeaderMap,
@@ -313,6 +317,9 @@ pub(super) async fn cover(
     let wanted = wanted(&query)?;
     // L'identifiant est un hash hexadécimal : rien d'autre n'est cherché.
     if id.len() != 64 || !id.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(ApiError::not_found("couverture"));
+    }
+    if !app.db.cover_visible(&me, &id).await? {
         return Err(ApiError::not_found("couverture"));
     }
     let found = app

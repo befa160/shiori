@@ -229,7 +229,11 @@ mod db {
             .volume_id
             .clone();
         let volume: shiori_core::VolumeId = volume.parse().unwrap();
-        let pages = db.pages_of(&volume).await.unwrap().unwrap();
+        let pages = db
+            .pages_of(&crate::tests::viewer(&db).await, &volume)
+            .await
+            .unwrap()
+            .unwrap();
 
         // Titre et couverture édités : la liste suit ; le rescan ne les touche pas.
         let edit =

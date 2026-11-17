@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use sqlx::sqlite::SqliteRow;
 
-use crate::{Db, Error, from_db, to_db};
+use crate::{Db, Error, Language, PageTurn, Theme, from_db, to_db};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -43,6 +43,8 @@ pub enum AccountError {
     NameTaken(String),
     #[error("aucun compte « {0} »")]
     UnknownUser(String),
+    #[error("dernier administrateur actif : le garder")]
+    LastAdmin,
     #[error(transparent)]
     Db(#[from] Error),
 }
@@ -61,6 +63,33 @@ pub struct Session {
     pub user: User,
     /// Prolongée de 90 jours par cette requête : le cookie doit l'être aussi.
     pub renewed: bool,
+}
+
+/// Appareil connecté : une session, sans son jeton.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Device {
+    pub id: i64,
+    /// Navigateur et système (`User-Agent`).
+    pub label: String,
+    pub created_at: String,
+    pub last_seen_at: String,
+}
+
+/// Modification d'un compte par l'administrateur ; `None` = inchangé.
+#[derive(Debug, Default, Clone)]
+pub struct UserChange {
+    pub role: Option<Role>,
+    pub disabled: Option<bool>,
+    /// Bibliothèques ouvertes (remplace la liste).
+    pub libraries: Option<Vec<i64>>,
+}
+
+/// Préférences d'un compte ; `None` = défaut de l'instance.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Preferences {
+    pub language: Option<Language>,
+    pub theme: Option<Theme>,
+    pub page_turn: Option<PageTurn>,
 }
 
 /// Durée d'une session sans usage, en secondes (Q47), pour le cookie.
@@ -95,6 +124,15 @@ fn name_key(username: &str) -> Result<String, AccountError> {
         true => Ok(username.to_lowercase()),
         false => Err(AccountError::InvalidName),
     }
+}
+
+async fn active_admins(tx: &mut sqlx::SqliteConnection) -> Result<i64, Error> {
+    Ok(
+        sqlx::query("SELECT COUNT(*) AS n FROM users WHERE role = 'admin' AND disabled_at IS NULL")
+            .fetch_one(tx)
+            .await?
+            .get("n"),
+    )
 }
 
 fn random<const N: usize>() -> [u8; N] {
@@ -306,6 +344,7 @@ impl Db {
         username: &str,
         password: &str,
         temporary: bool,
+        keep: Option<i64>,
     ) -> Result<(), AccountError> {
         let hash = hash_password(password).await?;
         let mut tx = self.pool.begin().await?;
@@ -323,11 +362,204 @@ impl Db {
             .await?
             .ok_or_else(|| AccountError::UnknownUser(username.to_owned()))?
             .get("id");
-        sqlx::query("DELETE FROM sessions WHERE user_id = ?")
+        sqlx::query("DELETE FROM sessions WHERE user_id = ? AND id IS NOT ?")
+            .bind(id)
+            .bind(keep)
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    pub async fn user_by_id(&self, id: i64) -> Result<Option<User>, Error> {
+        sqlx::query("SELECT * FROM users WHERE id = ?")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?
+            .as_ref()
+            .map(user)
+            .transpose()
+    }
+
+    /// Rôle, désactivation, bibliothèques ; `None` si le compte n'existe pas. Le dernier
+    /// administrateur actif ne peut être ni rétrogradé ni désactivé. Désactiver ferme ses
+    /// sessions.
+    pub async fn update_user(
+        &self,
+        id: i64,
+        change: UserChange,
+    ) -> Result<Option<User>, AccountError> {
+        let mut tx = self.pool.begin_with("BEGIN IMMEDIATE").await?;
+        let Some(current) = sqlx::query("SELECT role, disabled_at FROM users WHERE id = ?")
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await?
+        else {
+            return Ok(None);
+        };
+        let was_active_admin = current.get::<&str, _>("role") == "admin"
+            && current.get::<Option<&str>, _>("disabled_at").is_none();
+        let demoted = change.role == Some(Role::Reader) || change.disabled == Some(true);
+        if was_active_admin && demoted && active_admins(&mut tx).await? <= 1 {
+            return Err(AccountError::LastAdmin);
+        }
+        if let Some(role) = change.role {
+            sqlx::query("UPDATE users SET role = ? WHERE id = ?")
+                .bind(to_db(&role))
+                .bind(id)
+                .execute(&mut *tx)
+                .await?;
+        }
+        if let Some(disabled) = change.disabled {
+            let sql = concat!(
+                "UPDATE users SET disabled_at = CASE WHEN ? THEN COALESCE(disabled_at, ",
+                now!(),
+                ") END WHERE id = ?"
+            );
+            sqlx::query(sql)
+                .bind(disabled)
+                .bind(id)
+                .execute(&mut *tx)
+                .await?;
+            if disabled {
+                sqlx::query("DELETE FROM sessions WHERE user_id = ?")
+                    .bind(id)
+                    .execute(&mut *tx)
+                    .await?;
+            }
+        }
+        if let Some(libraries) = change.libraries {
+            sqlx::query("DELETE FROM user_libraries WHERE user_id = ?")
+                .bind(id)
+                .execute(&mut *tx)
+                .await?;
+            for library in libraries {
+                // Une bibliothèque inconnue est ignorée plutôt que d'échouer sur la clé étrangère.
+                sqlx::query(
+                    "INSERT OR IGNORE INTO user_libraries (user_id, library_id)
+                     SELECT ?, id FROM libraries WHERE id = ?",
+                )
+                .bind(id)
+                .bind(library)
+                .execute(&mut *tx)
+                .await?;
+            }
+        }
+        tx.commit().await?;
+        Ok(self.user_by_id(id).await?)
+    }
+
+    /// Supprime un compte, sa progression et ses sessions ; `false` s'il n'existe pas. Le
+    /// dernier administrateur actif reste.
+    pub async fn delete_user(&self, id: i64) -> Result<bool, AccountError> {
+        let mut tx = self.pool.begin_with("BEGIN IMMEDIATE").await?;
+        let Some(row) = sqlx::query("SELECT role, disabled_at FROM users WHERE id = ?")
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await?
+        else {
+            return Ok(false);
+        };
+        let active_admin = row.get::<&str, _>("role") == "admin"
+            && row.get::<Option<&str>, _>("disabled_at").is_none();
+        if active_admin && active_admins(&mut tx).await? <= 1 {
+            return Err(AccountError::LastAdmin);
+        }
+        sqlx::query("DELETE FROM users WHERE id = ?")
             .bind(id)
             .execute(&mut *tx)
             .await?;
         tx.commit().await?;
+        Ok(true)
+    }
+
+    /// Appareils connectés d'un compte, du plus récemment vu au plus ancien.
+    pub async fn devices(&self, user_id: i64) -> Result<Vec<Device>, Error> {
+        let sql = concat!(
+            "SELECT id, label, created_at, last_seen_at FROM sessions
+             WHERE user_id = ? AND expires_at > ",
+            now!(),
+            " ORDER BY last_seen_at DESC, id DESC"
+        );
+        Ok(sqlx::query(sql)
+            .bind(user_id)
+            .fetch_all(&self.pool)
+            .await?
+            .iter()
+            .map(|r| Device {
+                id: r.get("id"),
+                label: r.get("label"),
+                created_at: r.get("created_at"),
+                last_seen_at: r.get("last_seen_at"),
+            })
+            .collect())
+    }
+
+    /// Déconnecte un appareil du compte ; `false` s'il n'est pas à lui.
+    pub async fn revoke_device(&self, user_id: i64, session: i64) -> Result<bool, Error> {
+        let done = sqlx::query("DELETE FROM sessions WHERE user_id = ? AND id = ?")
+            .bind(user_id)
+            .bind(session)
+            .execute(&self.pool)
+            .await?;
+        Ok(done.rows_affected() > 0)
+    }
+
+    /// Déconnecte tous les appareils du compte.
+    pub async fn revoke_devices(&self, user_id: i64) -> Result<(), Error> {
+        sqlx::query("DELETE FROM sessions WHERE user_id = ?")
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn preferences(&self, user_id: i64) -> Result<Preferences, Error> {
+        let row =
+            sqlx::query("SELECT language, theme, page_turn FROM user_settings WHERE user_id = ?")
+                .bind(user_id)
+                .fetch_optional(&self.pool)
+                .await?;
+        let Some(row) = row else {
+            return Ok(Preferences::default());
+        };
+        let field = |c| row.get::<Option<&str>, _>(c);
+        Ok(Preferences {
+            language: field("language").map(from_db).transpose()?,
+            theme: field("theme").map(from_db).transpose()?,
+            page_turn: field("page_turn").map(from_db).transpose()?,
+        })
+    }
+
+    /// Remplace les préférences du compte (`None` = défaut de l'instance).
+    pub async fn set_preferences(
+        &self,
+        user_id: i64,
+        preferences: Preferences,
+    ) -> Result<Preferences, Error> {
+        sqlx::query(
+            "INSERT INTO user_settings (user_id, language, theme, page_turn) VALUES (?, ?, ?, ?)
+             ON CONFLICT (user_id) DO UPDATE SET language = excluded.language,
+               theme = excluded.theme, page_turn = excluded.page_turn",
+        )
+        .bind(user_id)
+        .bind(preferences.language.as_ref().map(to_db))
+        .bind(preferences.theme.as_ref().map(to_db))
+        .bind(preferences.page_turn.as_ref().map(to_db))
+        .execute(&self.pool)
+        .await?;
+        self.preferences(user_id).await
+    }
+
+    /// Ouvre une bibliothèque à tous les lecteurs existants (case cochée à sa création).
+    pub async fn share_library(&self, library: i64) -> Result<(), Error> {
+        sqlx::query(
+            "INSERT OR IGNORE INTO user_libraries (user_id, library_id)
+             SELECT id, ? FROM users WHERE role = 'reader'",
+        )
+        .bind(library)
+        .execute(&self.pool)
+        .await?;
         Ok(())
     }
 

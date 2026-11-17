@@ -13,6 +13,7 @@ use shiori_core::{
 use sqlx::Row;
 use sqlx::sqlite::SqliteRow;
 
+use crate::reading::visible;
 use crate::{
     Db, Error, LibraryKind, Progress, ReadingSettings, SeriesMetadata, Viewer, VolumeMetadata,
     from_db, stamp, to_db,
@@ -326,14 +327,19 @@ fn by_name(a: &str, b: &str) -> Ordering {
 }
 
 impl Db {
-    pub async fn library_summaries(&self) -> Result<Vec<LibrarySummary>, Error> {
-        let rows = sqlx::query(
+    /// Bibliothèques visibles du compte.
+    pub async fn library_summaries(&self, viewer: &Viewer) -> Result<Vec<LibrarySummary>, Error> {
+        let rows = sqlx::query(concat!(
             "SELECT b.id, b.name, b.root, b.kind,
                     (SELECT COUNT(*) FROM series s WHERE s.library_id = b.id) AS series_count,
                     (SELECT COUNT(DISTINCT l.volume_id) FROM file_locations l
                      WHERE l.library_id = b.id) AS volume_count
-             FROM libraries b ORDER BY b.name, b.id",
-        )
+             FROM libraries b WHERE ",
+            visible!("b.id", "?1", "?2"),
+            " ORDER BY b.name, b.id"
+        ))
+        .bind(viewer.admin)
+        .bind(viewer.user)
         .fetch_all(&self.pool)
         .await?;
         rows.iter()
@@ -356,11 +362,16 @@ impl Db {
         viewer: &Viewer,
         library_id: i64,
     ) -> Result<Option<Vec<SeriesSummary>>, Error> {
-        if sqlx::query("SELECT 1 FROM libraries WHERE id = ?")
-            .bind(library_id)
-            .fetch_optional(&self.pool)
-            .await?
-            .is_none()
+        if sqlx::query(concat!(
+            "SELECT 1 FROM libraries b WHERE b.id = ?1 AND ",
+            visible!("b.id", "?2", "?3")
+        ))
+        .bind(library_id)
+        .bind(viewer.admin)
+        .bind(viewer.user)
+        .fetch_optional(&self.pool)
+        .await?
+        .is_none()
         {
             return Ok(None);
         }
@@ -378,20 +389,26 @@ impl Db {
         viewer: &Viewer,
         library: Option<i64>,
     ) -> Result<Vec<SeriesSummary>, Error> {
-        let series = sqlx::query(
+        let series = sqlx::query(concat!(
             "SELECT s.id, s.library_id, s.name, s.publication_status, s.created_at,
                     CASE WHEN ?2 = 'en' THEN m.merged_en ELSE m.merged END AS merged
              FROM series s LEFT JOIN series_metadata m ON m.series_id = s.id
-             WHERE ?1 IS NULL OR s.library_id = ?1",
-        )
+             WHERE (?1 IS NULL OR s.library_id = ?1) AND ",
+            visible!("s.library_id", "?3", "?4")
+        ))
         .bind(library)
         .bind(to_db(&viewer.language))
+        .bind(viewer.admin)
+        .bind(viewer.user)
         .fetch_all(&self.pool)
         .await?;
         let rows = sqlx::query(located_volumes!(
-            "l.series_id IN (SELECT id FROM series WHERE ?1 IS NULL OR library_id = ?1)"
+            "l.series_id IN (SELECT s.id FROM series s WHERE (?1 IS NULL OR s.library_id = ?1)
+             AND (?2 OR s.library_id IN (SELECT library_id FROM user_libraries WHERE user_id = ?3)))"
         ))
         .bind(library)
+        .bind(viewer.admin)
+        .bind(viewer.user)
         .fetch_all(&self.pool)
         .await?
         .iter()
@@ -476,11 +493,14 @@ impl Db {
             "SELECT s.id, s.library_id, COALESCE(json_extract(
                       CASE WHEN ?2 = 'en' THEN m.merged_en ELSE m.merged END, '$.title'),
                     s.name) AS name
-             FROM series s LEFT JOIN series_metadata m ON m.series_id = s.id WHERE s.id IN ",
+             FROM series s LEFT JOIN series_metadata m ON m.series_id = s.id WHERE ",
+            visible!("s.library_id", "?3", "?1"),
+            " AND s.id IN ",
             started!()
         ))
         .bind(viewer.user)
         .bind(to_db(&viewer.language))
+        .bind(viewer.admin)
         .fetch_all(&self.pool)
         .await?;
         let rows = sqlx::query(concat!(located_volumes!("l.series_id IN "), started!()))
@@ -524,6 +544,9 @@ impl Db {
         viewer: &Viewer,
         id: i64,
     ) -> Result<Option<SeriesDetail>, Error> {
+        if !self.series_visible(viewer, id).await? {
+            return Ok(None);
+        }
         let Some(series) = sqlx::query(
             "SELECT library_id, name, folder, publication_status FROM series WHERE id = ?",
         )
@@ -580,6 +603,9 @@ impl Db {
         viewer: &Viewer,
         volume: &VolumeId,
     ) -> Result<Option<VolumeDetail>, Error> {
+        if !self.volume_visible(viewer, volume).await? {
+            return Ok(None);
+        }
         let id = volume.to_string();
         let Some(v) = sqlx::query(
             "SELECT size, format, status, page_count, scanned_at FROM volumes WHERE id = ?",
@@ -590,11 +616,15 @@ impl Db {
         else {
             return Ok(None);
         };
-        let locations = sqlx::query(
-            "SELECT path, library_id, series_id FROM file_locations WHERE volume_id = ?
-             ORDER BY path",
-        )
+        // Un lecteur ne voit que les emplacements de ses bibliothèques.
+        let locations = sqlx::query(concat!(
+            "SELECT path, library_id, series_id FROM file_locations WHERE volume_id = ?1 AND ",
+            visible!("library_id", "?2", "?3"),
+            " ORDER BY path"
+        ))
         .bind(&id)
+        .bind(viewer.admin)
+        .bind(viewer.user)
         .fetch_all(&self.pool)
         .await?
         .iter()
@@ -640,8 +670,12 @@ impl Db {
         }))
     }
 
-    /// Page et fichier où la lire ; `None` si l'ID est inconnu.
-    pub async fn page_source(&self, id: &PageId) -> Result<Option<PageSource>, Error> {
+    /// Page et fichier où la lire ; `None` si l'ID est inconnu ou le tome invisible du compte.
+    pub async fn page_source(
+        &self,
+        viewer: &Viewer,
+        id: &PageId,
+    ) -> Result<Option<PageSource>, Error> {
         let Some(page) = sqlx::query(
             "SELECT volume_id, status, media_type, width, archive_index, entry_name_raw, crc32, size
              FROM pages WHERE id = ?",
@@ -652,6 +686,12 @@ impl Db {
         else {
             return Ok(None);
         };
+        if !self
+            .volume_visible_str(viewer, page.get("volume_id"))
+            .await?
+        {
+            return Ok(None);
+        }
         let locations = sqlx::query(
             "SELECT path, size, mtime_ns FROM file_locations WHERE volume_id = ? ORDER BY path",
         )
@@ -684,16 +724,15 @@ impl Db {
     }
 
     /// Pages d'un tome par ordinal ; `None` si le tome n'existe pas.
-    pub async fn pages_of(&self, id: &VolumeId) -> Result<Option<Vec<PageInfo>>, Error> {
-        let id = id.to_string();
-        if sqlx::query("SELECT 1 FROM volumes WHERE id = ?")
-            .bind(&id)
-            .fetch_optional(&self.pool)
-            .await?
-            .is_none()
-        {
+    pub async fn pages_of(
+        &self,
+        viewer: &Viewer,
+        id: &VolumeId,
+    ) -> Result<Option<Vec<PageInfo>>, Error> {
+        if !self.volume_visible(viewer, id).await? {
             return Ok(None);
         }
+        let id = id.to_string();
         let rows = sqlx::query(
             "SELECT id, ordinal, width, height, media_type, status FROM pages
              WHERE volume_id = ? ORDER BY ordinal",

@@ -63,6 +63,21 @@ async fn call(
     (parts.status, parts.headers, value)
 }
 
+/// Lecteur au mot de passe définitif (`mot de passe`).
+async fn reader(f: &Fixture, name: &str) -> shiori_db::User {
+    f.state
+        .db
+        .create_user(name, "mot de passe", Role::Reader)
+        .await
+        .unwrap();
+    f.state
+        .db
+        .set_password(name, "mot de passe", false, None)
+        .await
+        .unwrap();
+    f.state.db.user_by_name(name).await.unwrap().unwrap()
+}
+
 fn set_cookie(headers: &HeaderMap) -> &str {
     headers.get(header::SET_COOKIE).unwrap().to_str().unwrap()
 }
@@ -163,11 +178,7 @@ async fn setup_needs_the_token_creates_the_admin_once_and_signs_in() {
 #[tokio::test]
 async fn login_gives_a_cookie_or_an_app_token_and_logout_closes_it() {
     let f = fixture().await;
-    f.state
-        .db
-        .create_user("bob", "mot de passe", Role::Reader)
-        .await
-        .unwrap();
+    reader(&f, "bob").await;
     let bad = json!({ "username": "bob", "password": "faux" });
     let (status, headers, body) = call(&f.app, "POST", "/api/auth/login", Some(bad), &[]).await;
     assert_eq!(
@@ -196,7 +207,7 @@ async fn login_gives_a_cookie_or_an_app_token_and_logout_closes_it() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
-    assert_eq!(body["user"]["must_change_password"], true);
+    assert_eq!(body["user"]["must_change_password"], false);
     assert!(set_cookie(&headers).ends_with("; Secure"));
     let browser = cookie_of(&headers);
 
@@ -261,11 +272,7 @@ async fn login_gives_a_cookie_or_an_app_token_and_logout_closes_it() {
 async fn repeated_failures_pause_the_name_without_blocking_others() {
     let f = fixture().await;
     for name in ["bob", "alice"] {
-        f.state
-            .db
-            .create_user(name, "mot de passe", Role::Reader)
-            .await
-            .unwrap();
+        reader(&f, name).await;
     }
     let bad = json!({ "username": "bob", "password": "faux" });
     for _ in 0..6 {
@@ -293,12 +300,7 @@ async fn repeated_failures_pause_the_name_without_blocking_others() {
 #[tokio::test]
 async fn a_session_used_after_an_hour_renews_its_cookie() {
     let f = fixture().await;
-    let bob = f
-        .state
-        .db
-        .create_user("bob", "mot de passe", Role::Reader)
-        .await
-        .unwrap();
+    let bob = reader(&f, "bob").await;
     let session = f.state.db.create_session(bob.id, "tests").await.unwrap();
     let cookie = format!("shiori_session={}", session.token);
     let (_, headers, _) = call(
@@ -365,11 +367,7 @@ async fn serve(f: &Fixture) -> (std::net::SocketAddr, tokio::sync::oneshot::Send
 #[tokio::test]
 async fn login_works_over_tcp() {
     let f = fixture().await;
-    f.state
-        .db
-        .create_user("bob", "mot de passe", Role::Reader)
-        .await
-        .unwrap();
+    reader(&f, "bob").await;
     let (addr, _stop) = serve(&f).await;
     let body = r#"{"username":"bob","password":"mot de passe"}"#;
     let request = format!(

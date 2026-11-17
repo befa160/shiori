@@ -13,11 +13,20 @@ use shiori_db::Role;
 pub async fn router(state: Arc<App>) -> Router {
     let admin = match state.db.user_by_name("admin").await.unwrap() {
         Some(admin) => admin,
-        None => state
-            .db
-            .create_user("admin", "mot de passe", Role::Admin)
-            .await
-            .unwrap(),
+        None => {
+            state
+                .db
+                .create_user("admin", "mot de passe", Role::Admin)
+                .await
+                .unwrap();
+            // Mot de passe définitif : un provisoire bloquerait toutes les routes.
+            state
+                .db
+                .set_password("admin", "mot de passe", false, None)
+                .await
+                .unwrap();
+            state.db.user_by_name("admin").await.unwrap().unwrap()
+        }
     };
     let session = state.db.create_session(admin.id, "tests").await.unwrap();
     let cookie = HeaderValue::from_str(&format!("shiori_session={}", session.token)).unwrap();

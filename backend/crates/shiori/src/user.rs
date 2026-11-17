@@ -40,7 +40,7 @@ pub async fn run(args: UserArgs) -> Result<()> {
             println!("Compte « {} » créé ({role}).", user.username);
         }
         UserCommand::Password { name } => {
-            db.set_password(&name, &password, true).await?;
+            db.set_password(&name, &password, true, None).await?;
             println!("Mot de passe de « {name} » remplacé, sessions fermées.");
         }
     }

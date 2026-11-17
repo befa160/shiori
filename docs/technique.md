@@ -88,23 +88,27 @@ Une série garde son identité quand son dossier est renommé : elle est retrouv
 
 ## API
 
-JSON sous `/api`, erreurs `{ "code", "message" }` avec un code stable que l'interface traduit. Session exigée sauf `/api/health` et `/api/auth/*` (cookie `shiori_session` ou `Authorization: Bearer`) ; progression, réglages de lecture et langue des titres sont ceux du compte connecté.
+JSON sous `/api`, erreurs `{ "code", "message" }` avec un code stable que l'interface traduit. Session exigée sauf `/api/health` et `/api/auth/*` (cookie `shiori_session` ou `Authorization: Bearer`) ; progression, réglages de lecture et langue des titres sont ceux du compte connecté. Un lecteur ne voit que les bibliothèques qui lui sont ouvertes (404 pour le reste) ; les routes marquées **admin**, et toutes celles sous `/api/admin`, répondent 403 `forbidden` à un lecteur. Avec un mot de passe provisoire, seules `/api/me` et `/api/me/password` répondent (403 `password_change_required`).
 
 | Route | Rôle |
 |---|---|
 | `GET /api/health` | état et version |
-| `GET, PUT /api/settings` | réglages (mise à jour partielle) |
-| `GET, POST /api/libraries`, `DELETE /api/libraries/{id}` | bibliothèques (supprimer ne touche pas aux fichiers) |
+| `GET /api/auth/state`, `POST /api/auth/setup`, `.../login`, `.../logout` | installation (premier administrateur, jeton affiché au démarrage), connexion, déconnexion |
+| `GET, PUT /api/me`, `POST /api/me/password` | compte connecté et ses préférences, changer son mot de passe (ferme les autres appareils) |
+| `GET /api/me/sessions`, `DELETE /api/me/sessions/{id}` | appareils connectés, en déconnecter un |
+| `GET, POST /api/admin/users`, `PATCH, DELETE .../{id}`, `POST .../{id}/password`, `DELETE .../{id}/sessions` | **admin** : comptes (mot de passe provisoire montré une fois), rôle, bibliothèques, désactivation, nouveau mot de passe, déconnexion de tous ses appareils ; le dernier administrateur actif reste |
+| `GET, PUT /api/settings` | réglages de l'instance (mise à jour partielle, **admin**) |
+| `GET, POST /api/libraries`, `DELETE /api/libraries/{id}` | bibliothèques visibles ; créer (**admin**, `share` l'ouvre aux lecteurs existants) ; supprimer (**admin**, ne touche pas aux fichiers) |
 | `GET /api/libraries/{id}/series`, `GET /api/series` | séries d'une bibliothèque, toutes les séries (filtres côté client) |
-| `GET, PATCH /api/series/{id}` | détail d'une série (tomes, progression, métadonnées), modification de ses métadonnées |
-| `PATCH /api/series/{id}/settings` | réglages de lecture propres à la série |
+| `GET, PATCH /api/series/{id}` | détail d'une série (tomes, progression, métadonnées), modification de ses métadonnées (**admin**) |
+| `PATCH /api/series/{id}/settings` | réglages de lecture de la série pour le compte |
 | `GET /api/continue` | « Continuer la lecture » |
-| `GET /api/series/{id}/metadata/search` | recherche dans une source web |
-| `PUT, DELETE /api/series/{id}/metadata/links/{source}` | lier ou délier une fiche |
-| `POST /api/series/{id}/metadata/refresh`, `.../metadata/cover` | relire les fiches liées, prendre la couverture d'une source |
-| `GET /api/metadata/thumbnail/{source}/{id}` | vignette d'un candidat, relayée par le serveur |
+| `GET /api/series/{id}/metadata/search` | **admin** : recherche dans une source web |
+| `PUT, DELETE /api/series/{id}/metadata/links/{source}` | **admin** : lier ou délier une fiche |
+| `POST /api/series/{id}/metadata/refresh`, `.../metadata/cover` | **admin** : relire les fiches liées, prendre la couverture d'une source |
+| `GET /api/metadata/thumbnail/{source}/{id}` | **admin** : vignette d'un candidat, relayée par le serveur |
 | `GET /api/covers/{id}` | couverture gardée, originale ou redimensionnée |
-| `GET, PATCH /api/volumes/{id}` | détail d'un tome (emplacements, problèmes, réglages effectifs, progression), modification de ses métadonnées |
+| `GET, PATCH /api/volumes/{id}` | détail d'un tome (emplacements, problèmes, réglages effectifs, progression), modification de ses métadonnées (**admin**) |
 | `GET, PUT, DELETE /api/volumes/{id}/progress` | page lue |
 | `GET /api/volumes/{id}/pages` | pages dans l'ordre de lecture |
 | `GET /api/pages/{id}/image` | une page : originale, ou `?w=<largeur>&f=avif\|jpeg` |

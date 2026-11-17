@@ -174,7 +174,13 @@ async fn the_library_kind_gives_the_default_reading_mode() {
             }
         );
         assert_eq!(f.db.libraries().await.unwrap()[0].kind, kind);
-        assert_eq!(f.db.library_summaries().await.unwrap()[0].kind, kind);
+        assert_eq!(
+            f.db.library_summaries(&crate::tests::viewer(&f.db).await)
+                .await
+                .unwrap()[0]
+                .kind,
+            kind
+        );
         let volume =
             f.db.volume_detail(&crate::tests::viewer(&f.db).await, &f.volume)
                 .await
@@ -288,7 +294,11 @@ async fn series_and_volume_details_carry_the_progress() {
 #[tokio::test]
 async fn a_volume_outside_any_series_gets_the_manga_default() {
     let f = fixture(LibraryKind::Webtoon).await;
-    let page = f.db.page_source(&f.other_page).await.unwrap().unwrap();
+    let page =
+        f.db.page_source(&crate::tests::viewer(&f.db).await, &f.other_page)
+            .await
+            .unwrap()
+            .unwrap();
     let detail =
         f.db.volume_detail(&crate::tests::viewer(&f.db).await, &page.volume_id)
             .await

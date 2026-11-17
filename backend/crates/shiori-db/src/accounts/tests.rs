@@ -142,7 +142,7 @@ async fn a_new_password_closes_every_session() {
         .await
         .unwrap();
     let session = db.create_session(bob.id, "Firefox").await.unwrap();
-    db.set_password("Bob", "nouveau secret", false)
+    db.set_password("Bob", "nouveau secret", false, None)
         .await
         .unwrap();
     assert_eq!(db.session_user(&session.token).await.unwrap(), None);
@@ -156,7 +156,9 @@ async fn a_new_password_closes_every_session() {
         .unwrap()
         .unwrap();
     assert!(!bob.must_change_password);
-    db.set_password("bob", "provisoire", true).await.unwrap();
+    db.set_password("bob", "provisoire", true, None)
+        .await
+        .unwrap();
     assert!(
         db.user_by_name("bob")
             .await
@@ -165,11 +167,11 @@ async fn a_new_password_closes_every_session() {
             .must_change_password
     );
     assert!(matches!(
-        db.set_password("inconnu", "nouveau secret", false).await,
+        db.set_password("inconnu", "nouveau secret", false, None).await,
         Err(AccountError::UnknownUser(n)) if n == "inconnu"
     ));
     assert!(matches!(
-        db.set_password("bob", "court", false).await,
+        db.set_password("bob", "court", false, None).await,
         Err(AccountError::WeakPassword)
     ));
 }
@@ -451,4 +453,143 @@ async fn an_admin_created_from_the_cli_takes_it_back_at_migration() {
     before_accounts(&path, true).await;
     let db = Db::open(&path).await.unwrap();
     assert_eq!(counts(&db).await, (0, 0, 1, 1));
+}
+
+#[tokio::test]
+async fn the_last_active_admin_cannot_be_demoted_disabled_or_deleted() {
+    let (dir, db) = db().await;
+    let manga = library(&db, dir.path(), "Manga").await;
+    let alice = db
+        .create_user("alice", "mot de passe", Role::Admin)
+        .await
+        .unwrap();
+    let demote = |role, disabled| UserChange {
+        role,
+        disabled,
+        ..Default::default()
+    };
+    for change in [demote(Some(Role::Reader), None), demote(None, Some(true))] {
+        assert!(matches!(
+            db.update_user(alice.id, change).await,
+            Err(AccountError::LastAdmin)
+        ));
+    }
+    assert!(matches!(
+        db.delete_user(alice.id).await,
+        Err(AccountError::LastAdmin)
+    ));
+    assert_eq!(
+        db.update_user(9999, UserChange::default()).await.unwrap(),
+        None
+    );
+    assert!(!db.delete_user(9999).await.unwrap());
+
+    // Avec un second administrateur, l'un peut devenir lecteur et recevoir des bibliothèques.
+    let bob = db
+        .create_user("bob", "mot de passe", Role::Admin)
+        .await
+        .unwrap();
+    let session = db.create_session(alice.id, "Firefox").await.unwrap();
+    let change = UserChange {
+        role: Some(Role::Reader),
+        libraries: Some(vec![manga, 4242]),
+        ..Default::default()
+    };
+    let alice = db.update_user(alice.id, change).await.unwrap().unwrap();
+    assert_eq!(alice.role, Role::Reader);
+    assert_eq!(
+        db.user_libraries(alice.id).await.unwrap(),
+        [manga],
+        "inconnue ignorée"
+    );
+    assert!(db.session_user(&session.token).await.unwrap().is_some());
+
+    // Désactivé : ses sessions sont fermées ; réactivé, il peut se reconnecter.
+    let off = db
+        .update_user(alice.id, demote(None, Some(true)))
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(off.disabled);
+    assert_eq!(db.session_user(&session.token).await.unwrap(), None);
+    let on = db
+        .update_user(alice.id, demote(None, Some(false)))
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(!on.disabled);
+    assert!(
+        db.check_password("alice", "mot de passe")
+            .await
+            .unwrap()
+            .is_some()
+    );
+
+    assert!(db.delete_user(alice.id).await.unwrap());
+    assert_eq!(db.user_by_id(alice.id).await.unwrap(), None);
+    assert!(matches!(
+        db.delete_user(bob.id).await,
+        Err(AccountError::LastAdmin)
+    ));
+}
+
+#[tokio::test]
+async fn devices_are_listed_and_closed_one_by_one_or_all_but_the_current() {
+    let (_dir, db) = db().await;
+    let bob = db
+        .create_user("bob", "mot de passe", Role::Reader)
+        .await
+        .unwrap();
+    let phone = db.create_session(bob.id, "Téléphone").await.unwrap();
+    let tablet = db.create_session(bob.id, "Tablette").await.unwrap();
+    let laptop = db.create_session(bob.id, "Portable").await.unwrap();
+    let labels: Vec<String> = db
+        .devices(bob.id)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|d| d.label)
+        .collect();
+    assert_eq!(labels, ["Portable", "Tablette", "Téléphone"]);
+    assert!(db.revoke_device(bob.id, tablet.id).await.unwrap());
+    assert!(!db.revoke_device(bob.id, tablet.id).await.unwrap());
+    assert!(
+        !db.revoke_device(bob.id + 1, phone.id).await.unwrap(),
+        "pas à lui"
+    );
+
+    // Changer son mot de passe ferme les autres appareils, pas celui d'où on le change.
+    db.set_password("bob", "nouveau secret", false, Some(phone.id))
+        .await
+        .unwrap();
+    assert!(db.session_user(&phone.token).await.unwrap().is_some());
+    assert_eq!(db.session_user(&laptop.token).await.unwrap(), None);
+    db.revoke_devices(bob.id).await.unwrap();
+    assert!(db.devices(bob.id).await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn preferences_override_the_instance_defaults() {
+    let (_dir, db) = db().await;
+    let bob = db
+        .create_user("bob", "mot de passe", Role::Reader)
+        .await
+        .unwrap();
+    assert_eq!(
+        db.preferences(bob.id).await.unwrap(),
+        Preferences::default()
+    );
+    let chosen = Preferences {
+        language: Some(Language::En),
+        theme: Some(Theme::Oled),
+        page_turn: Some(PageTurn::Rtl),
+    };
+    assert_eq!(db.set_preferences(bob.id, chosen).await.unwrap(), chosen);
+    assert_eq!(db.viewer(bob.id).await.unwrap().language, Language::En);
+    let back = Preferences {
+        language: None,
+        ..chosen
+    };
+    assert_eq!(db.set_preferences(bob.id, back).await.unwrap(), back);
+    assert_eq!(db.viewer(bob.id).await.unwrap().language, Language::Fr);
 }

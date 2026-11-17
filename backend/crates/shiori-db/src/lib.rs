@@ -41,7 +41,8 @@ mod settings;
 mod web;
 
 pub use accounts::{
-    AccountError, NewSession, Role, SESSION_SECONDS, Session, User, temporary_password,
+    AccountError, Device, NewSession, Preferences, Role, SESSION_SECONDS, Session, User,
+    UserChange, temporary_password,
 };
 pub use browse::{
     ContinueItem, LibrarySummary, PageFile, PageInfo, PageSource, PublicationStatus, ReadingStatus,
