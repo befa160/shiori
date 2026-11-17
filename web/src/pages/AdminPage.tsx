@@ -9,7 +9,8 @@ import { Button } from '@/components/ui/button'
 import { ThemeSetting } from '@/admin/ThemeSetting'
 import { LanguageSelect } from './LanguageSelect'
 
-/** Administration : passe en cours, bibliothèques, langue ; l'historique des scans a sa page. */
+/** Administration : passe en cours, comptes, bibliothèques, défauts des comptes (langue, thème,
+ * sens des pages) ; l'historique des scans et les comptes ont leur page. */
 export function AdminPage() {
   const { t } = useTranslation()
   return (
@@ -27,6 +28,15 @@ export function AdminPage() {
         </div>
         <CurrentScan />
       </section>
+      <section aria-labelledby="admin-accounts" className="max-w-prose space-y-3 rounded-md bg-card p-4">
+        <h2 id="admin-accounts" className="text-lg font-semibold">
+          {t('accounts.title')}
+        </h2>
+        <p className="text-sm text-muted-foreground">{t('accounts.adminHelpLink')}</p>
+        <Button asChild variant="secondary">
+          <Link to="/admin/users">{t('accounts.manage')}</Link>
+        </Button>
+      </section>
       <AdminLibraries />
       <section aria-labelledby="admin-offline" className="max-w-prose space-y-3 rounded-md bg-card p-4">
         <h2 id="admin-offline" className="text-lg font-semibold">
@@ -41,7 +51,7 @@ export function AdminPage() {
         <h2 id="admin-reading" className="text-lg font-semibold">
           {t('admin.reading')}
         </h2>
-        <PageTurnSetting />
+        <PageTurnSetting scope="instance" />
       </section>
       <AdminMetadata />
       <section aria-labelledby="admin-language" className="max-w-prose space-y-3 rounded-md bg-card p-4">
@@ -49,13 +59,13 @@ export function AdminPage() {
           {t('admin.language')}
         </h2>
         <p className="text-sm text-muted-foreground">{t('admin.languageHelp')}</p>
-        <LanguageSelect />
+        <LanguageSelect scope="instance" label={t('admin.language')} />
       </section>
       <section aria-labelledby="admin-theme" className="max-w-prose space-y-3 rounded-md bg-card p-4">
         <h2 id="admin-theme" className="text-lg font-semibold">
           {t('admin.theme')}
         </h2>
-        <ThemeSetting />
+        <ThemeSetting scope="instance" />
       </section>
       <AdminStorage />
     </section>

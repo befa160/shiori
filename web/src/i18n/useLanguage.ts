@@ -1,34 +1,33 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { toast } from 'sonner'
-import { api } from '@/api/client'
+import { type Scope, usePreference } from '@/account/preferences'
 import i18n, { type Language, browserLanguage } from '.'
 import { errorText } from './errors'
 
-/** Langue enregistrée sur le serveur (global tant qu'il n'y a pas de comptes), appliquée à
- * l'interface ; sans choix enregistré, la langue du navigateur. */
-export function useLanguage() {
-  const queryClient = useQueryClient()
-  const settings = useQuery({ queryKey: ['settings'], queryFn: ({ signal }) => api.settings({ signal }) })
-  const saved = settings.data?.language
+/** Langue du compte (sinon celle de l'instance, sinon celle du navigateur), appliquée à
+ * l'interface ; `scope` dit laquelle `choose` enregistre. */
+export function useLanguage(scope: Scope = 'account') {
+  const { value, ready, save } = usePreference('language', 'account')
+  const instance = usePreference('language', 'instance')
   useEffect(() => {
-    if (settings.isSuccess) void i18n.changeLanguage(saved ?? browserLanguage())
-  }, [settings.isSuccess, saved])
+    if (ready) void i18n.changeLanguage(value ?? browserLanguage())
+  }, [ready, value])
+  const target = scope === 'instance' ? instance.save : save
 
-  const save = useMutation({
-    mutationFn: (language: Language) => api.saveSettings({ language }),
-    // La langue change tout de suite ; un échec d'enregistrement la remet comme avant.
-    onMutate: (language) => {
+  return {
+    /** Valeur montrée par le sélecteur ; sans choix, la langue affichée. */
+    value: (scope === 'instance' ? instance.value : value) ?? i18n.language,
+    choose: (language: Language) => {
+      // Pour le compte, la langue change tout de suite ; un échec la remet comme avant.
       const previous = i18n.language
-      void i18n.changeLanguage(language)
-      return previous
+      if (scope === 'account') void i18n.changeLanguage(language)
+      target.mutate(language, {
+        onError: async (error) => {
+          if (scope === 'account') await i18n.changeLanguage(previous)
+          // `i18n.t` et non le `t` du rendu : celui-ci parle encore la langue qui vient d'échouer.
+          toast.error(i18n.t('layout.languageNotSaved'), { description: errorText(error, i18n.t) })
+        },
+      })
     },
-    onError: async (error, _language, previous) => {
-      await i18n.changeLanguage(previous)
-      // `i18n.t` et non le `t` du rendu : celui-ci parle encore la langue qui vient d'échouer.
-      toast.error(i18n.t('layout.languageNotSaved'), { description: errorText(error, i18n.t) })
-    },
-    onSuccess: (saved) => queryClient.setQueryData(['settings'], saved),
-  })
-  return { choose: (language: Language) => save.mutate(language) }
+  }
 }

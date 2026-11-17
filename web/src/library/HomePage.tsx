@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { useAllSeries, useContinue, useLibraries } from '@/api/queries'
 import type { Library, SeriesSummary } from '@/api/types'
+import { useIsAdmin } from '@/auth/session'
 import { QueryState } from '@/browse/parts'
 import { Button } from '@/components/ui/button'
 import { ContinueCard, CoverSkeletons, SeriesCard, Shelf } from './covers'
@@ -16,6 +17,7 @@ export function HomePage() {
   const libraries = useLibraries()
   const series = useAllSeries()
   const reading = useContinue()
+  const admin = useIsAdmin()
   return (
     <div className="space-y-8">
       <title>{`${t('home.title')} · Shiori`}</title>
@@ -45,10 +47,12 @@ export function HomePage() {
         loading={<CoverSkeletons />}
         empty={
           <div className="space-y-3">
-            <p>{t('libraries.empty')}</p>
-            <Button asChild>
-              <Link to="/admin">{t('admin.add')}</Link>
-            </Button>
+            <p>{t(admin ? 'libraries.empty' : 'libraries.emptyReader')}</p>
+            {admin && (
+              <Button asChild>
+                <Link to="/admin">{t('admin.add')}</Link>
+              </Button>
+            )}
           </div>
         }
       >

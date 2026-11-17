@@ -338,10 +338,10 @@ describe('identifiant invalide dans l’adresse', () => {
     const fetch = mockApi({})
     renderAt(path)
     expect(screen.getByRole('heading', { name: 'Page introuvable' })).toBeInTheDocument()
-    // Seuls les réglages (langue), les bibliothèques (sidebar) et le scan en cours (suivi) sont
-    // demandés, jamais la ressource.
+    // Seuls les réglages et les préférences (langue), les bibliothèques (sidebar) et le scan en
+    // cours (suivi) sont demandés, jamais la ressource.
     expect(new Set(fetch.mock.calls.map((c) => c[0]))).toEqual(
-      new Set(['/api/settings', '/api/libraries', '/api/admin/scans/current']),
+      new Set(['/api/settings', '/api/me', '/api/libraries', '/api/admin/scans/current']),
     )
   })
 })

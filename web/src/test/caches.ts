@@ -14,7 +14,7 @@ export function fakeCaches() {
       keys: async () => [...store.keys()].map((url) => new Request(url)),
     }
   }
-  vi.stubGlobal('caches', { open })
+  vi.stubGlobal('caches', { open, delete: async (name: string) => stores.delete(name) })
   /** Adresses gardées dans un cache, chemin et paramètres. */
   return (name: string) => [...(stores.get(name)?.keys() ?? [])].map((url) => url.replace('http://localhost', ''))
 }

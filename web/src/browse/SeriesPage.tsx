@@ -16,6 +16,7 @@ import { Cover, CoverCard, CoverGrid } from '@/library/covers'
 import { cancel, enqueue, remove, useOffline } from '@/offline/downloads'
 import { volumeLabel, volumeTitle } from './labels'
 import { BackLink, QueryState } from './parts'
+import { useIsAdmin } from '@/auth/session'
 import { IdentifyDialog } from './IdentifyDialog'
 import { LISTS } from './series'
 import { EditSeriesDialog, SeriesAbout } from './SeriesMetadata'
@@ -83,6 +84,8 @@ function SeriesHeader({ series }: { series: SeriesDetail }) {
   const authors = series.metadata.authors.map((a) => a.name).join(', ')
   const [editing, setEditing] = useState(false)
   const [identifying, setIdentifying] = useState(false)
+  // Fiche commune à tous les comptes : seul l'administrateur la modifie (Q50).
+  const admin = useIsAdmin()
   // « Identifier » n'a de sens que si le réseau est autorisé (Administration).
   const online = useQuery({ queryKey: ['settings'], queryFn: ({ signal }) => api.settings({ signal }) }).data?.metadata_online
   return (
@@ -119,12 +122,14 @@ function SeriesHeader({ series }: { series: SeriesDetail }) {
               </Link>
             </Button>
           )}
-          <Button size="lg" variant="secondary" onClick={() => setEditing(true)}>
-            <Pencil aria-hidden />
-            {t('series.edit')}
-          </Button>
+          {admin && (
+            <Button size="lg" variant="secondary" onClick={() => setEditing(true)}>
+              <Pencil aria-hidden />
+              {t('series.edit')}
+            </Button>
+          )}
           <DownloadSeries series={series} />
-          {online && (
+          {admin && online && (
             <Button size="lg" variant="secondary" onClick={() => setIdentifying(true)}>
               <ScanSearch aria-hidden />
               {t('series.identify')}

@@ -1,6 +1,5 @@
-import { useQuery } from '@tanstack/react-query'
 import { useEffect, useSyncExternalStore } from 'react'
-import { api } from '@/api/client'
+import { usePreference } from '@/account/preferences'
 import type { Theme } from '@/api/types'
 
 /** Thème réellement affiché : `system` devient sombre ou clair selon l'appareil. */
@@ -61,12 +60,11 @@ function subscribe(onChange: () => void) {
   return () => query.removeEventListener('change', onChange)
 }
 
-/** Applique le thème enregistré sur le serveur (suit l'appareil en direct pour `system`) ;
+/** Applique le thème du compte, sinon celui de l'instance (suit l'appareil en direct pour `system`) ;
  * `forced` l'impose, pour le lecteur qui reste toujours sombre. */
 export function useTheme(forced?: ShownTheme) {
-  const settings = useQuery({ queryKey: ['settings'], queryFn: ({ signal }) => api.settings({ signal }) })
+  const saved = usePreference('theme').value
   const prefersLight = useSyncExternalStore(subscribe, () => matchMedia(LIGHT).matches)
-  const saved = settings.data?.theme
   useEffect(() => {
     if (forced) applyTheme(forced)
     else if (saved) applyTheme(resolveTheme(saved, prefersLight))

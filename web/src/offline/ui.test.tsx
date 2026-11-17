@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SeriesDetail } from '@/api/types'
 import { fakeCaches } from '@/test/caches'
-import { NO_METADATA, json, renderAt } from '@/test/render'
+import { ADMIN, NO_METADATA, json, me, renderAt } from '@/test/render'
 import { resetForTests } from './downloads'
 import { queueProgress } from './progress'
 
@@ -40,9 +40,12 @@ function serve({ hold = false } = {}) {
         if (hold) await Promise.race([held, aborted])
         return new Response(new Uint8Array(2_000_000))
       }
+      // Page lue hors ligne : le serveur ne la reçoit pas encore, elle reste dans la file.
+      if (url.endsWith('/progress')) throw new TypeError('Failed to fetch')
       if (url === '/api/series/7') return json(detail)
       if (url.endsWith('/pages')) return json(pages)
       if (url === '/api/settings') return json({ language: 'fr', theme: 'dark' })
+      if (url === '/api/me') return json(me(ADMIN))
       if (['/api/libraries', '/api/series', '/api/continue'].includes(url)) return json([])
       if (url === '/api/admin/scans/current') return new Response(null, { status: 204 })
       return json({ id: url })
@@ -80,6 +83,7 @@ describe('tomes téléchargés, dans l’interface', () => {
     expect(main.queryByRole('button', { name: 'Télécharger la série' })).toBeNull()
 
     // La page des tomes téléchargés, reprise à la page lue hors ligne.
+    localStorage.setItem('shiori.user', String(ADMIN.id))
     queueProgress('b', 'p1')
     renderAt('/downloads')
     const page = within(screen.getAllByRole('main').at(-1)!)

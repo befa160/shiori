@@ -1,8 +1,7 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { api } from '@/api/client'
+import { type Scope, usePreference } from '@/account/preferences'
 import type { Theme } from '@/api/types'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { errorText } from '@/i18n/errors'
@@ -21,29 +20,25 @@ function Swatch({ theme }: { theme: Exclude<Theme, 'system'> }) {
   )
 }
 
-/** Thème de l'interface (global, comme la langue) ; le lecteur reste toujours sombre. */
-export function ThemeSetting() {
+/** Thème de l'interface (du compte, ou défaut de l'instance) ; le lecteur reste toujours sombre. */
+export function ThemeSetting({ scope = 'account' }: { scope?: Scope }) {
   const { t } = useTranslation()
   const id = useId()
-  const queryClient = useQueryClient()
-  const settings = useQuery({ queryKey: ['settings'], queryFn: ({ signal }) => api.settings({ signal }) })
-  const save = useMutation({
-    mutationFn: (theme: Theme) => api.saveSettings({ theme }),
-    onSuccess: (saved) => queryClient.setQueryData(['settings'], saved),
-    onError: (error) => toast.error(t('admin.themeNotSaved'), { description: errorText(error, t) }),
-  })
-  const value = save.isPending ? save.variables : settings.data?.theme
+  const { value: saved, save } = usePreference('theme', scope)
+  const choose = (theme: Theme) =>
+    save.mutate(theme, { onError: (error) => toast.error(t('admin.themeNotSaved'), { description: errorText(error, t) }) })
+  const value = save.isPending ? save.variables : saved
   if (value === undefined) return null
   return (
     <div className="space-y-3">
       <p id={`${id}-help`} className="text-sm text-muted-foreground">
-        {t('admin.themeHelp')}
+        {t(scope === 'instance' ? 'admin.themeHelp' : 'account.themeHelp')}
       </p>
       <ToggleGroup
         type="single"
         spacing={2}
         value={value}
-        onValueChange={(v) => v && save.mutate(v as Theme)}
+        onValueChange={(v) => v && choose(v as Theme)}
         aria-label={t('admin.theme')}
         aria-describedby={`${id}-help`}
         className="grid w-full grid-cols-3 sm:grid-cols-5"

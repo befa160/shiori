@@ -1,9 +1,10 @@
-import { BookCopy, HardDriveDownload, House, Loader2, RefreshCw, Search, Settings, WifiOff } from 'lucide-react'
+import { BookCopy, CircleUserRound, HardDriveDownload, House, Loader2, RefreshCw, Search, Settings, WifiOff } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link, NavLink, Outlet } from 'react-router'
 import { useLibraries } from '@/api/queries'
 import type { Library } from '@/api/types'
 import { useStartScan } from '@/admin/useStartScan'
+import { useIsAdmin, useUser } from '@/auth/session'
 import {
   Sidebar,
   SidebarContent,
@@ -27,14 +28,16 @@ import { useTheme } from '@/lib/theme'
 import { LanguageSelect } from './LanguageSelect'
 
 // Destinations principales : sidebar à partir de `lg`, barre d'onglets en dessous (4 au plus).
+// Le compte mène aussi à l'administration (administrateur) et aux tomes téléchargés.
 const NAV = [
   { to: '/', label: 'nav.home', icon: House },
   { to: '/series', label: 'nav.series', icon: BookCopy },
   { to: '/search', label: 'nav.search', icon: Search },
-  { to: '/admin', label: 'nav.admin', icon: Settings },
+  { to: '/account', label: 'nav.account', icon: CircleUserRound },
 ] as const
-// Pas dans la barre d'onglets (4 au plus) : lien dans l'administration et dans l'avis hors ligne.
+// Sidebar seulement (barre d'onglets : 4 au plus) ; aussi dans la page du compte.
 const DOWNLOADS = { to: '/downloads', label: 'nav.downloads', icon: HardDriveDownload } as const
+const ADMIN = { to: '/admin', label: 'nav.admin', icon: Settings } as const
 
 /** Cadre commun hors lecteur (DESIGN_SYSTEM.md, « Cadre et breakpoints »). */
 export function Layout() {
@@ -61,7 +64,7 @@ export function Layout() {
         </main>
       </SidebarInset>
       <TabBar />
-      <ScanWatcher />
+      {useIsAdmin() && <ScanWatcher />}
     </SidebarProvider>
   )
 }
@@ -70,6 +73,8 @@ function AppSidebar() {
   const { t } = useTranslation()
   const { state } = useSidebar()
   const libraries = useLibraries()
+  const admin = useIsAdmin()
+  const user = useUser()
   return (
     <Sidebar>
       <SidebarHeader className="flex-row items-center justify-between group-data-[collapsible=icon]:justify-center">
@@ -108,7 +113,7 @@ function AppSidebar() {
                         <span>{library.name}</span>
                       </NavLink>
                     </SidebarMenuSubButton>
-                    <ScanButton library={library} />
+                    {admin && <ScanButton library={library} />}
                   </li>
                 ))}
               </SidebarMenuSub>
@@ -117,7 +122,9 @@ function AppSidebar() {
           <SidebarGroup className="mt-auto">
             <SidebarMenu>
               <NavItem {...DOWNLOADS} />
-              <NavItem {...NAV[3]} />
+              {admin && <NavItem {...ADMIN} />}
+              {/* Le nom du compte plutôt que « Compte » : on voit qui est connecté. */}
+              <NavItem {...NAV[3]} name={user?.username} />
             </SidebarMenu>
           </SidebarGroup>
         </SidebarContent>
@@ -147,14 +154,14 @@ function ScanButton({ library }: { library: Library }) {
   )
 }
 
-function NavItem({ to, label, icon: Icon }: (typeof NAV)[number] | typeof DOWNLOADS) {
+function NavItem({ to, label, icon: Icon, name }: ((typeof NAV)[number] | typeof DOWNLOADS | typeof ADMIN) & { name?: string }) {
   const { t } = useTranslation()
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton tooltip={t(label)}>
-        <NavLink to={to} end={to === '/'}>
+      <SidebarMenuButton tooltip={name ?? t(label)}>
+        <NavLink to={to} end={to === '/'} aria-label={name ? `${t(label)} : ${name}` : undefined}>
           <Icon aria-hidden />
-          <span>{t(label)}</span>
+          <span>{name ?? t(label)}</span>
         </NavLink>
       </SidebarMenuButton>
     </SidebarMenuItem>

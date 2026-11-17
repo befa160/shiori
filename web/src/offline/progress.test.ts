@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/api/client'
 import { json } from '@/test/render'
-import { flushProgress, pendingPage, queueProgress, retryable } from './progress'
+import { flushProgress, pendingPage, queueProgress, retryable, setProgressUser } from './progress'
 
-beforeEach(() => localStorage.clear())
+beforeEach(() => {
+  localStorage.clear()
+  localStorage.setItem('shiori.user', '1')
+})
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
@@ -33,8 +36,41 @@ describe('progression lue hors ligne', () => {
     expect([pendingPage('a'), pendingPage('b')]).toEqual([undefined, undefined])
   })
 
-  it('un stockage illisible ou refusé ne casse rien', async () => {
+  it('une file par compte, envoyée seulement avec le compte qui l’a remplie', async () => {
+    const fetch = vi.fn(async () => json({}))
+    vi.stubGlobal('fetch', fetch)
+    queueProgress('a', 'p1')
+    setProgressUser(2)
+    expect(pendingPage('a')).toBeUndefined()
+    queueProgress('b', 'p2')
+    await flushProgress()
+    await vi.waitFor(() => expect(pendingPage('b')).toBeUndefined())
+    expect(fetch).toHaveBeenCalledTimes(1)
+    // Sans compte connu : gardée sans propriétaire, elle revient au prochain compte connecté.
+    setProgressUser(null)
+    queueProgress('c', 'p3')
+    expect(pendingPage('c')).toBe('p3')
+    // Le compte 1 revient : sa page et celle sans propriétaire partent.
+    setProgressUser(1)
+    await vi.waitFor(() => expect(pendingPage('a')).toBeUndefined())
+    expect(fetch).toHaveBeenCalledWith('/api/volumes/a/progress', expect.anything())
+    expect(fetch).toHaveBeenCalledWith('/api/volumes/c/progress', expect.anything())
+  })
+
+  it('la file d’avant les comptes revient au premier compte connecté', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new TypeError('Failed to fetch'))))
+    localStorage.setItem('shiori.pendingProgress', JSON.stringify({ a: 'p1' }))
+    setProgressUser(3)
+    expect(pendingPage('a')).toBe('p1')
+    expect(localStorage.getItem('shiori.pendingProgress')).toBeNull()
+    // Illisible : abandonnée sans rien casser.
     localStorage.setItem('shiori.pendingProgress', '{pas du json')
+    setProgressUser(3)
+    expect(localStorage.getItem('shiori.pendingProgress')).toBeNull()
+  })
+
+  it('un stockage illisible ou refusé ne casse rien', async () => {
+    localStorage.setItem('shiori.pendingProgress.1', '{pas du json')
     expect(pendingPage('a')).toBeUndefined()
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new Error('plein')
