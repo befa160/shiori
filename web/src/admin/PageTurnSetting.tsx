@@ -1,31 +1,30 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { api } from '@/api/client'
+import { type Scope, usePreference } from '@/account/preferences'
 import type { PageTurn } from '@/api/types'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { errorText } from '@/i18n/errors'
 
 const TURNS: PageTurn[] = ['reading', 'ltr', 'rtl']
 
-/** Sens par défaut pour tourner les pages (global, comme la langue) ; une série peut avoir le
- * sien, réglé dans le panneau « Affichage » du lecteur. */
-export function PageTurnSetting() {
+/** Sens par défaut pour tourner les pages (du compte, ou défaut de l'instance) ; une série peut
+ * avoir le sien, réglé dans le panneau « Affichage » du lecteur. */
+export function PageTurnSetting({ scope = 'account' }: { scope?: Scope }) {
   const { t } = useTranslation()
   const id = useId()
   const queryClient = useQueryClient()
-  const settings = useQuery({ queryKey: ['settings'], queryFn: ({ signal }) => api.settings({ signal }) })
-  const save = useMutation({
-    mutationFn: (page_turn: PageTurn) => api.saveSettings({ page_turn }),
-    onSuccess: (saved) => {
-      queryClient.setQueryData(['settings'], saved)
+  const { value: saved, save } = usePreference('page_turn', scope)
+  const choose = (turn: PageTurn) =>
+    save.mutate(turn, {
       // Les réglages effectifs des séries et des tomes en dépendent.
-      for (const queryKey of [['series'], ['volumes']]) void queryClient.invalidateQueries({ queryKey })
-    },
-    onError: (error) => toast.error(t('admin.pageTurnNotSaved'), { description: errorText(error, t) }),
-  })
-  const value = save.isPending ? save.variables : settings.data?.page_turn
+      onSuccess: () => {
+        for (const queryKey of [['series'], ['volumes']]) void queryClient.invalidateQueries({ queryKey })
+      },
+      onError: (error) => toast.error(t('admin.pageTurnNotSaved'), { description: errorText(error, t) }),
+    })
+  const value = save.isPending ? save.variables : saved
   if (value === undefined) return null
   return (
     <div className="space-y-1">
@@ -33,9 +32,9 @@ export function PageTurnSetting() {
         {t('admin.pageTurn')}
       </p>
       <p id={`${id}-help`} className="text-sm text-muted-foreground">
-        {t('admin.pageTurnHelp')}
+        {t(scope === 'instance' ? 'admin.pageTurnHelp' : 'account.pageTurnHelp')}
       </p>
-      <Select value={value} onValueChange={(v) => save.mutate(v as PageTurn)}>
+      <Select value={value} onValueChange={(v) => choose(v as PageTurn)}>
         <SelectTrigger aria-labelledby={`${id}-label`} aria-describedby={`${id}-help`} className="w-full max-w-sm">
           <SelectValue />
         </SelectTrigger>

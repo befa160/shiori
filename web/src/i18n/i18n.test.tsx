@@ -2,7 +2,7 @@ import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/api/client'
-import { json, mockApi, renderAt } from '@/test/render'
+import { ADMIN, json, me, mockApi, renderAt } from '@/test/render'
 import i18n, { browserLanguage } from '.'
 import { en } from './en'
 import { errorText } from './errors'
@@ -52,10 +52,20 @@ describe('langue de l’interface', () => {
     expect(await screen.findByRole('heading', { name: 'Home', level: 1 })).toBeInTheDocument()
   })
 
-  it('change tout de suite au choix dans le sélecteur et l’enregistre sur le serveur', async () => {
+  it('prend la langue du compte avant celle de l’instance', async () => {
+    mockApi({
+      '/api/settings': () => json({ language: 'fr' }),
+      '/api/me': () => json(me(ADMIN, { language: 'en' })),
+      '/api/libraries': () => json([]),
+    })
+    renderAt('/')
+    expect(await screen.findByRole('heading', { name: 'Home', level: 1 })).toBeInTheDocument()
+  })
+
+  it('change tout de suite au choix dans le sélecteur et l’enregistre pour le compte', async () => {
     const fetch = mockApi({
       '/api/libraries': () => json([]),
-      '/api/settings': () => json({ language: 'fr' }),
+      '/api/me': (init) => json(me(ADMIN, init?.method === 'PUT' ? JSON.parse(String(init.body)) : {})),
     })
     renderAt('/')
     await screen.findByRole('heading', { name: 'Accueil', level: 1 })
@@ -63,15 +73,31 @@ describe('langue de l’interface', () => {
     await userEvent.click(await screen.findByRole('option', { name: 'English' }))
     expect(await screen.findByRole('heading', { name: 'Home', level: 1 })).toBeInTheDocument()
     const put = fetch.mock.calls.find((c) => c[1]?.method === 'PUT')
-    expect(put?.[0]).toBe('/api/settings')
+    expect(put?.[0]).toBe('/api/me')
     expect(JSON.parse(String(put?.[1]?.body))).toEqual({ language: 'en' })
   })
 
+  it('l’administration règle la langue par défaut de l’instance, sans changer celle du compte', async () => {
+    const fetch = mockApi({
+      '/api/libraries': () => json([]),
+      '/api/admin/scans/current': () => new Response(null, { status: 204 }),
+      '/api/settings': (init) => json({ language: init?.method === 'PUT' ? 'en' : 'fr', page_turn: 'reading', theme: 'dark' }),
+    })
+    renderAt('/admin')
+    await userEvent.click(await screen.findByRole('combobox', { name: "Langue de l'interface" }))
+    await userEvent.click(await screen.findByRole('option', { name: 'English' }))
+    await waitFor(() => expect(fetch.mock.calls.some(([url, init]) => url === '/api/settings' && init?.method === 'PUT')).toBe(true))
+    const put = fetch.mock.calls.find(([url, init]) => url === '/api/settings' && init?.method === 'PUT')
+    expect(JSON.parse(String(put?.[1]?.body))).toEqual({ language: 'en' })
+    // Le compte n'a pas de choix : il suit le nouveau défaut.
+    expect(await screen.findByRole('heading', { name: 'Administration', level: 1 })).toBeInTheDocument()
+    await waitFor(() => expect(i18n.language).toBe('en'))
+  })
+
   it('revient à la langue d’avant si l’enregistrement échoue', async () => {
-    let saves = 0
     mockApi({
       '/api/libraries': () => json([]),
-      '/api/settings': () => (saves++ === 0 ? json({ language: 'fr' }) : json({ code: 'internal', message: 'erreur' }, 500)),
+      '/api/me': (init) => (init?.method === 'PUT' ? json({ code: 'internal', message: 'erreur' }, 500) : json(me(ADMIN))),
     })
     renderAt('/')
     await screen.findByRole('heading', { name: 'Accueil', level: 1 })

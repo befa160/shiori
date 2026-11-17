@@ -1,5 +1,13 @@
 import type {
+  Account,
+  AccountPatch,
+  AuthState,
   ContinueItem,
+  Device,
+  Me,
+  Preferences,
+  Role,
+  User,
   Health,
   Library,
   LibraryKind,
@@ -102,6 +110,26 @@ export const api = {
   metadataOverview: (init?: RequestInit) => must<MetadataOverview>('/admin/metadata', init),
   storage: (init?: RequestInit) => must<StoragePaths>('/admin/storage', init),
   identify: () => request<null>('/admin/metadata/identify', { method: 'POST' }),
+  authState: (init?: RequestInit) => must<AuthState>('/auth/state', init),
+  setup: (body: { token: string; username: string; password: string }) =>
+    must<{ user: User }>('/auth/setup', { method: 'POST', body: JSON.stringify(body) }),
+  login: (body: { username: string; password: string }) =>
+    must<{ user: User }>('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
+  logout: () => request<null>('/auth/logout', { method: 'POST' }),
+  me: (init?: RequestInit) => must<Me>('/me', init),
+  saveMe: (patch: Partial<Preferences>) => must<Me>('/me', { method: 'PUT', body: JSON.stringify(patch) }),
+  changePassword: (current: string, next: string) =>
+    request<null>('/me/password', { method: 'POST', body: JSON.stringify({ current, new: next }) }),
+  devices: (init?: RequestInit) => must<Device[]>('/me/sessions', init),
+  revokeDevice: (id: number) => request<null>(`/me/sessions/${id}`, { method: 'DELETE' }),
+  accounts: (init?: RequestInit) => must<Account[]>('/admin/users', init),
+  createAccount: (body: { username: string; role: Role; libraries?: number[] }) =>
+    must<{ user: Account; password: string }>('/admin/users', { method: 'POST', body: JSON.stringify(body) }),
+  updateAccount: (id: number, patch: AccountPatch) =>
+    must<Account>(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+  deleteAccount: (id: number) => request<null>(`/admin/users/${id}`, { method: 'DELETE' }),
+  resetPassword: (id: number) => must<{ password: string }>(`/admin/users/${id}/password`, { method: 'POST' }),
+  signOutAccount: (id: number) => request<null>(`/admin/users/${id}/sessions`, { method: 'DELETE' }),
   saveSeriesSettings: (seriesId: number, patch: SettingsPatch) =>
     must<ReadingSettings>(`/series/${seriesId}/settings`, { method: 'PATCH', body: JSON.stringify(patch) }),
 }

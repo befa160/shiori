@@ -56,8 +56,15 @@ test('un tome téléchargé se lit sans réseau, et la page lue part au retour d
       .toBe(true)
     await page.keyboard.press('PageDown')
   }
-  // La page lue attend le réseau sur l'appareil…
-  await expect.poll(() => page.evaluate(() => localStorage.getItem('shiori.pendingProgress'))).toContain(volume.volume_id)
+  // La page lue attend le réseau sur l'appareil, dans la file du compte…
+  const pending = () =>
+    page.evaluate(() =>
+      Object.keys(localStorage)
+        .filter((k) => k.startsWith('shiori.pendingProgress.'))
+        .map((k) => localStorage.getItem(k))
+        .join(),
+    )
+  await expect.poll(pending).toContain(volume.volume_id)
   // … et part au retour du réseau.
   await context.setOffline(false)
   await page.evaluate(() => dispatchEvent(new Event('online')))

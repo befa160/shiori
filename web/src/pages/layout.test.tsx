@@ -45,10 +45,14 @@ describe('cadre de navigation', () => {
     expect(webtoons).toHaveAttribute('aria-current', 'page')
     expect(within(sidebarNav()).getByRole('link', { name: 'Accueil' })).not.toHaveAttribute('aria-current')
 
-    await userEvent.click(within(tabBar()).getByRole('link', { name: 'Administration' }))
+    // Le 4e onglet est le compte (nom affiché dans la sidebar), qui mène à l'administration.
+    await userEvent.click(within(tabBar()).getByRole('link', { name: 'Compte' }))
+    expect(router.state.location.pathname).toBe('/account')
+    expect(within(sidebarNav()).getByRole('link', { name: 'Compte : admin' })).toHaveAttribute('aria-current', 'page')
+    await userEvent.click(within(screen.getByRole('main')).getByRole('link', { name: 'Administration' }))
     expect(router.state.location.pathname).toBe('/admin')
     expect(screen.getByRole('heading', { level: 1, name: 'Administration' })).toBeInTheDocument()
-    expect(within(screen.getByRole('main')).getByRole('combobox', { name: 'Langue' })).toBeInTheDocument()
+    expect(within(screen.getByRole('main')).getByRole('combobox', { name: "Langue de l'interface" })).toBeInTheDocument()
     expect(within(sidebarNav()).getByRole('link', { name: 'Administration' })).toHaveAttribute('aria-current', 'page')
   })
 

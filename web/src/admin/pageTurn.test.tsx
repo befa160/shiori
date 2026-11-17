@@ -21,7 +21,7 @@ describe('réglage « Tourner les pages » par défaut', () => {
     const section = within(await screen.findByRole('region', { name: 'Lecture' }))
     const select = await section.findByRole('combobox', { name: 'Tourner les pages, par défaut' })
     expect(select).toHaveTextContent('Comme le sens de lecture')
-    expect(select).toHaveAccessibleDescription(/Le sens de lecture garde l'ordre des doubles pages/)
+    expect(select).toHaveAccessibleDescription(/Par défaut pour les comptes qui n'en ont pas choisi/)
     await userEvent.click(select)
     await userEvent.click(await screen.findByRole('option', { name: 'Toucher à gauche avance' }))
     await waitFor(() => expect(select).toHaveTextContent('Toucher à gauche avance'))

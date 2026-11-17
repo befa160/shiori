@@ -326,3 +326,56 @@ export interface LogLine {
   series_id: number | null
   volume_id: string | null
 }
+
+export type Role = 'admin' | 'reader'
+
+/** Compte (`/api/auth/state`, `/api/me`). */
+export interface User {
+  id: number
+  username: string
+  role: Role
+  /** Mot de passe provisoire : à changer avant toute autre chose. */
+  must_change_password: boolean
+  disabled: boolean
+  created_at: string
+}
+
+export interface AuthState {
+  /** Aucun compte : page d'installation. */
+  setup_required: boolean
+  /** `null` : pas de session valide. */
+  user: User | null
+}
+
+/** Préférences du compte ; `null` = défaut de l'instance (Administration). */
+export interface Preferences {
+  language: 'fr' | 'en' | null
+  theme: Theme | null
+  page_turn: PageTurn | null
+}
+
+export interface Me {
+  user: User
+  preferences: Preferences
+}
+
+/** Appareil connecté (une session). */
+export interface Device {
+  id: number
+  label: string
+  created_at: string
+  last_seen_at: string
+  /** L'appareil d'où vient la requête. */
+  current: boolean
+}
+
+/** Compte vu par l'administrateur ; `libraries` : bibliothèques ouvertes (vide pour un administrateur, qui les voit toutes). */
+export interface Account extends User {
+  libraries: number[]
+}
+
+export interface AccountPatch {
+  role?: Role
+  disabled?: boolean
+  libraries?: number[]
+}
