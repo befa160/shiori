@@ -1168,7 +1168,7 @@ Ouvrir Shiori hors de chez soi et le partager en famille : comptes locaux (admin
 
 **Crates** (dernières versions au moment du lot) : `argon2` 0.6 (Argon2id, pur Rust) ; `rand` 0.10 (jetons de session, 32 octets) ; `blake3` (déjà là : seul le hash du jeton est stocké) ; `axum-extra` 0.12 (cookies) ; `totp-rs` 6 (features `otpauth`, `gen_secret`) et `qrcode` 0.14 (QR en SVG, sans dépendance d'image) pour la double authentification ; rien pour la limite de débit (compteur en mémoire, quelques lignes).
 
-**Schéma SQLite** (migration 0014, une seule) :
+**Schéma SQLite** (une migration par lot qui en a besoin : 0014 comptes et sessions au lot 7.2, progression et réglages par compte au lot 7.4, puis TOTP et jetons d'API dans leurs lots) :
 
 - `users` : `id`, `username` (unique, sans tenir compte de la casse), `password_hash` (PHC Argon2id), `role` (`admin` | `reader`), `disabled_at`, `created_at`, `password_changed_at`.
 - `sessions` : `token_hash` (BLAKE3 du jeton, clé), `user_id` (cascade), `created_at`, `last_seen_at`, `expires_at`, `label` (navigateur et système, pour la liste des appareils).
@@ -1206,9 +1206,9 @@ Ouvrir Shiori hors de chez soi et le partager en famille : comptes locaux (admin
 ### Lots
 
 - ✅ **7.1 `refactor/images`** : sortir le service des images de `server.rs` (point 10 de l'audit), sans changement de comportement.
-- **7.2 `feat/accounts-db`** : migration 0014, `shiori-db` (comptes, sessions, accès, préférences, réglages de série et progression par compte, `legacy_progress`, `legacy_series_settings`), CLI `shiori user`.
+- ✅ **7.2 `feat/accounts-db`** : migration 0014 (`users`, `user_libraries`, `sessions`), module `accounts` de `shiori-db` (Argon2id, hash factice pour un nom inconnu, nom unique sans tenir compte de la casse Unicode, jeton de session `shiori_s_` de 256 bits dont seul le hash BLAKE3 est gardé, prolongé au plus une fois par heure pour ne pas écrire en base à chaque image), CLI `shiori user add <nom> [--admin]` et `shiori user password <nom>`, qui génèrent un mot de passe provisoire (16 caractères, 80 bits) au lieu d'en demander un. Rien d'autre ne lit encore les comptes. Écart au plan : la progression et les réglages par compte passent au lot 7.4, sinon `main` aurait eu une progression rattachée à un compte que le serveur ne connaît pas encore.
 - **7.3 `feat/auth`** : installation, connexion, déconnexion, cookie, session par `Authorization: Bearer` (`"client": "app"`), middleware de session, limite de débit, délais du serveur.
-- **7.4 `feat/roles`** : routes réservées, accès par bibliothèque sur toutes les lectures, `/api/me`, réglages de série par compte, `/api/admin/users`.
+- **7.4 `feat/roles`** : migration de la progression, des préférences et des réglages de série vers des clés par compte (`legacy_progress`, `legacy_series_settings`), routes réservées, accès par bibliothèque sur toutes les lectures, `/api/me`, réglages de série par compte, `/api/admin/users`. À trancher au lot : le titre et le résumé fusionnés dépendent aujourd'hui de la langue de l'instance (Q34) ; avec une langue par compte, garder la langue de l'instance pour la fusion ou fusionner à la lecture.
 - **7.5 `feat/totp`** : enrôlement, second facteur à la connexion, codes de secours, désactivation (compte, administrateur, CLI).
 - **7.6 `feat/api-tokens`** : jetons d'API (création, liste, révocation), authentification `Bearer` limitée à la lecture et à la progression.
 - **7.7 `feat/web-auth`** : connexion (avec le second facteur), installation, menu du compte, double authentification, jetons, Comptes, préférences et réglages de série par compte, déconnexion et hors-ligne.

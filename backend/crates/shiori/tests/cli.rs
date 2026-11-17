@@ -379,3 +379,48 @@ fn open_launches_the_browser_even_when_already_running() {
         "{text}"
     );
 }
+
+/// Mot de passe provisoire affiché par `shiori user`.
+fn temporary(o: &Output) -> String {
+    let out = stdout(o);
+    out.lines()
+        .find_map(|l| l.strip_prefix("Mot de passe provisoire : "))
+        .unwrap_or_else(|| panic!("pas de mot de passe dans :\n{out}"))
+        .to_owned()
+}
+
+#[tokio::test]
+async fn user_add_and_password_work_on_the_local_database() {
+    let data = tempfile::tempdir().unwrap();
+    let add = shiori(&["user", "add", "Alice", "--admin"], data.path());
+    assert_eq!(add.status.code(), Some(0), "{}", stderr(&add));
+    assert!(stdout(&add).contains("Compte « Alice » créé (administrateur)."));
+    let first = temporary(&add);
+
+    let taken = shiori(&["user", "add", "alice"], data.path());
+    assert_eq!(taken.status.code(), Some(2));
+    assert!(
+        stderr(&taken).contains("un compte s'appelle déjà"),
+        "{}",
+        stderr(&taken)
+    );
+    let unknown = shiori(&["user", "password", "bob"], data.path());
+    assert_eq!(unknown.status.code(), Some(2));
+    assert!(stderr(&unknown).contains("aucun compte « bob »"));
+
+    let reset = shiori(&["user", "password", "alice"], data.path());
+    assert_eq!(reset.status.code(), Some(0), "{}", stderr(&reset));
+    let second = temporary(&reset);
+    assert_ne!(first, second);
+
+    let reader = shiori(&["user", "add", "bob"], data.path());
+    assert!(stdout(&reader).contains("(lecteur)"), "{}", stdout(&reader));
+
+    let db = shiori_db::Db::open(&data.path().join("shiori.db"))
+        .await
+        .unwrap();
+    assert_eq!(db.check_password("alice", &first).await.unwrap(), None);
+    let alice = db.check_password("alice", &second).await.unwrap().unwrap();
+    assert_eq!(alice.role, shiori_db::Role::Admin);
+    assert!(alice.must_change_password);
+}

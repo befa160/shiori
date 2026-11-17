@@ -3,7 +3,7 @@
 use std::process::ExitCode;
 
 use clap::{ArgAction, Parser, Subcommand};
-use shiori::{scan, server};
+use shiori::{scan, server, user};
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
@@ -29,6 +29,8 @@ enum Command {
     Scan(scan::ScanArgs),
     /// Serveur HTTP : API JSON des bibliothèques, séries, tomes et pages.
     Serve(server::ServeArgs),
+    /// Comptes : création, mot de passe oublié (base locale, sans passer par le serveur).
+    User(user::UserArgs),
 }
 
 fn main() -> ExitCode {
@@ -57,6 +59,10 @@ fn main() -> ExitCode {
                     Command::Scan(args) => scan::run(args, cli.quiet).await,
                     Command::Serve(args) => {
                         server::run(args, cli.quiet, stop_signal()).await?;
+                        Ok(ExitCode::SUCCESS)
+                    }
+                    Command::User(args) => {
+                        user::run(args).await?;
                         Ok(ExitCode::SUCCESS)
                     }
                 }
