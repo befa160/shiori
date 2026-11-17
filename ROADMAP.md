@@ -1264,7 +1264,7 @@ Idées retenues le 2026-11-16 (audit fonctionnel externe, comparé à l'existant
 - **8.1 Surveillance des dossiers** (décidée le 2026-11-16) : crate `notify` (8.2, dernière stable ; inotify, ReadDirectoryChangesW, FSEvents). Chaque bibliothèque est surveillée ; les événements sont regroupés et, après un temps calme (fichier encore en copie), un scan ciblé part sur le dossier de série touché (file d'attente : un scan à la fois). Limite connue : sur un montage réseau (SMB, NFS), les changements faits depuis une autre machine ne sont pas signalés ; un **scan complet périodique** sert de filet. À trancher au plan : surveillance activable par bibliothèque, temps calme, intervalle du scan périodique, comportement quand la racine disparaît (le garde-fou de l'audit s'applique).
 - **8.2 Santé des bibliothèques** : tableau de bord (Administration → Santé) : tomes sains, en avertissement, en erreur, par bibliothèque ; date de la dernière vérification complète (`--deep`) ; liste des tomes à réparer, filtrable par code de diagnostic, avec le lien vers les problèmes du tome ; bouton « Vérifier en profondeur ». Les données existent déjà (dernier rapport de chaque tome, journaux des passes).
 
-Plus tard, sans ordre : collections et listes de lecture, relations entre séries (suites, éditions), OPDS (avec les jetons d'API), statistiques de lecture, Comic Vine et MangaUpdates. EPUB et PDF : non.
+Plus tard, sans ordre : collections et listes de lecture, relations entre séries (suites, éditions), OPDS (avec les jetons d'API), statistiques de lecture, Comic Vine et MangaUpdates. EPUB : non. PDF : voir « Lecture des PDF » ci-dessous (demandée le 2026-11-17, à planifier).
 
 ## Fonctionnalités ajoutées en cours de route
 
@@ -1319,6 +1319,19 @@ Besoin : en ouvrant le binaire (Windows, macOS, Linux ; pas Docker), arriver dir
 - ✅ Au démarrage, la console montre l'adresse, la base et le cache ; **Administration → Données** (`GET /api/admin/storage`) les montre en lecture seule, sélectionnables.
 - Écart assumé au principe 9 : sous Linux, `webbrowser` lance `$BROWSER` ou `xdg-open` (aucune API système pour ça), seulement avec `--open` ; un échec affiche l'adresse à ouvrir à la main.
 - Plus tard, si besoin : icône dans la zone de notification (rouvrir, quitter) et fenêtre console masquée sous Windows.
+
+### Lecture des PDF (demandée le 2026-11-17, à planifier)
+
+Besoin : lire les BD et mangas en PDF **sans les grandes marges** qui rendent la page minuscule sur tablette. Plutôt que d'afficher la page PDF entière comme les autres lecteurs, Shiori extrait les images incluses dans le PDF et en fait un tome, servi comme un CBZ.
+
+- **Ce que fait transmute** (MIT, lu le 2026-11-17) : il ne rogne rien. `cbz_convert.py` appelle `ComicInfo.from_pdf` de la bibliothèque Python `cbz` (MIT), qui prend page par page les images incluses (`pypdf`, `page.images`). Les marges disparaissent parce qu'elles font partie de la mise en page du PDF, pas de l'image scannée. Rien à copier : l'idée tient en quelques lignes, refaite en Rust.
+- **Proposition technique** : le scan ouvre le PDF en Rust pur (`lopdf` 0.47 ou `hayro-syntax` 0.9, MIT ou Apache-2.0), et chaque page du PDF donne une page du tome : son image (XObject) la plus grande. ID de page = hash(hash du fichier, identifiant de l'entrée), comme pour un CBZ (principe 1). L'image est lue à la demande par sa référence dans le PDF. Un JPEG (`DCTDecode`, cas courant des scans) est servi tel quel ; une image `FlateDecode` (pixels bruts) est réencodée ; JPEG 2000, JBIG2 et CCITT (scans noir et blanc) passent par `hayro-jpeg2000`, `hayro-jbig2` et `hayro-ccitt`, purs Rust. Rotation de la page (`/Rotate`) et retournement par la matrice de dessin appliqués. Le fichier source n'est jamais modifié (principe 5).
+- **Cas à couvrir dans le scan** (codes de diagnostic) : page sans image (texte, dessin vectoriel), page faite de plusieurs images (bandes, tuiles, masque de transparence `SMask`), couche de texte OCR invisible (ignorée), petite image décorative à ignorer, PDF chiffré ou abîmé : erreur explicite, jamais une page sautée en silence (principe 4).
+- **Q-PDF1 Convertir le PDF en CBZ ?** Proposition : **non**. Remplacer le fichier irait contre le principe 5 ; en écrire une copie double la place prise et crée un second fichier à scanner, à ranger et à garder à jour. Lire le PDF directement, comme un CBR, suffit, avec le cache d'extraction des RAR solid si la lecture d'une page est trop lente. Plus tard, éventuellement : un bouton « Télécharger en CBZ ».
+- **Q-PDF2 Page sans image** (PDF né numérique, texte vectoriel) : erreur explicite, ou rendu de la page (`hayro`, pur Rust) avec rognage automatique des marges unies ? Le second couvre aussi les PDF qui ne sont pas des scans.
+- **Q-PDF3 Page faite de plusieurs images** : les recomposer en une image, ou ne garder que la plus grande ?
+- **Q-PDF4 Place dans la roadmap** : après la phase 7, avant ou après la phase 8 ?
+- À essayer d'abord sur de vrais PDF (scans du commerce, PDF faits à partir d'images, PDF nés numériques) pour mesurer la part de chaque cas avant de trancher.
 
 ### Invariant de lecture à vérifier en phase 2
 
