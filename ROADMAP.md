@@ -1257,14 +1257,42 @@ Audit complet après la phase 6 (couverture backend 96,85 % lignes / 91,64 % bra
 - Aucun délai de connexion ni limite de débit dans `serve` : vérifier les défauts d'axum avant une exposition sans reverse proxy ; limiter les essais de connexion.
 - Non vérifié pendant l'audit : `cargo audit`, clippy, `cargo fmt`, tests Playwright ; `sw.js` n'est couvert que par eux.
 
-## Phase 8 : maintenance de la bibliothèque (à planifier après la phase 7)
+## Phase 8 : lecture des PDF sans marges (demandée le 2026-11-17, à planifier après la phase 7)
+
+### Objectif
+
+Lire les BD et mangas en PDF **sans les marges** qui rendent la page minuscule sur tablette : c'est **la** condition. Plutôt que d'afficher la page PDF entière comme les autres lecteurs, Shiori sert les images incluses dans le PDF, comme les pages d'un CBZ.
+
+### Constats (2026-11-17)
+
+- **transmute** (MIT) ne rogne rien : `cbz_convert.py` appelle `ComicInfo.from_pdf` de la bibliothèque Python `cbz` (MIT), qui prend page par page les images incluses (`pypdf`, `page.images`). Rien à copier : l'idée tient en quelques lignes, refaite en Rust.
+- **Exemple réel** (`Hell's Paradise T04.pdf`, 104 Mo, fait par Calibre 3.48) : 211 pages au format Letter (612 × 792 pt), **une image JPEG par page** (1 040 à 1 200 px de large, 105 pages en 1 200 × 1 884), non chiffré. L'image extraite est la planche nette, sans marge : les marges venaient seulement de la page PDF, plus large que l'image (rapport 0,77 contre 0,64).
+
+### Décisions (2026-11-17)
+
+- **Placement** : phase 8, entre les comptes (phase 7) et la maintenance (devenue phase 9).
+- **Pas de conversion en CBZ** : le PDF est lu directement, comme un CBR ; le fichier source n'est jamais modifié (principe 5), pas de copie qui doublerait la place prise.
+- **Page sans image** (texte, dessin vectoriel) : ignorée, absente du tome, mais signalée par un **avertissement** du scan (« page N sans image, ignorée ») : rien ne disparaît sans trace (principe 4). Un PDF sans aucune image : tome en erreur.
+- **Page faite de plusieurs images** (bandes, tuiles, masque de transparence `SMask`) : **recomposée** en une image, d'après la position de chaque morceau sur la page.
+- **Bordures blanches à l'intérieur d'une image scannée** : pas de rognage pour l'instant (risque de couper une case au fond blanc) ; à revoir si un vrai PDF le demande.
+- **Métadonnées du PDF** (titre, auteur, sujet, mots-clés, date) : lues au scan comme source locale, au même rang que `ComicInfo.xml` ; sources web et édition manuelle gardent les règles de fusion actuelles.
+
+### Plan technique (à détailler avant de coder)
+
+- **Lecture** en Rust pur : `lopdf` 0.47 ou `hayro-syntax` 0.9 (MIT ou Apache-2.0), à comparer sur l'exemple (vitesse d'ouverture d'un PDF de 100 Mo, robustesse aux PDF abîmés). Chaque page du PDF qui a au moins une image donne une page du tome. ID de page = hash(hash du fichier, identifiant de l'entrée), comme pour un CBZ (principe 1) ; ordre = ordre des pages du PDF.
+- **Images** : un JPEG (`DCTDecode`, cas de l'exemple) est servi tel quel, sans réencodage ; une image `FlateDecode` (pixels bruts) est réencodée ; JPEG 2000, JBIG2 et CCITT (scans noir et blanc) passent par `hayro-jpeg2000`, `hayro-jbig2` et `hayro-ccitt`, purs Rust. Rotation de la page (`/Rotate`) et retournement par la matrice de dessin appliqués. Couche de texte OCR invisible ignorée.
+- **Service** : lecture d'une image à la demande par sa référence dans le PDF (table des objets, accès direct) ; une page recomposée, ou trop lente à décoder, passe par le cache d'extraction déjà utilisé pour les RAR solid. Redimensionnement, AVIF, cache et URLs immuables inchangés (principes 2 et 7).
+- **Scan** : nouveaux codes de diagnostic (page sans image, image illisible, PDF chiffré ou abîmé), traduits dans l'interface ; `--deep` décode chaque image.
+- **Tests** : fixtures PDF générées dans `shiori-testkit` (une image par page, page sans image, page en bandes, page tournée, JPEG et Flate), et vérification sur l'exemple réel.
+
+## Phase 9 : maintenance de la bibliothèque (à planifier après la phase 8)
 
 Idées retenues le 2026-11-16 (audit fonctionnel externe, comparé à l'existant) : Shiori « prend soin de la bibliothèque autant que de la lecture ».
 
-- **8.1 Surveillance des dossiers** (décidée le 2026-11-16) : crate `notify` (8.2, dernière stable ; inotify, ReadDirectoryChangesW, FSEvents). Chaque bibliothèque est surveillée ; les événements sont regroupés et, après un temps calme (fichier encore en copie), un scan ciblé part sur le dossier de série touché (file d'attente : un scan à la fois). Limite connue : sur un montage réseau (SMB, NFS), les changements faits depuis une autre machine ne sont pas signalés ; un **scan complet périodique** sert de filet. À trancher au plan : surveillance activable par bibliothèque, temps calme, intervalle du scan périodique, comportement quand la racine disparaît (le garde-fou de l'audit s'applique).
-- **8.2 Santé des bibliothèques** : tableau de bord (Administration → Santé) : tomes sains, en avertissement, en erreur, par bibliothèque ; date de la dernière vérification complète (`--deep`) ; liste des tomes à réparer, filtrable par code de diagnostic, avec le lien vers les problèmes du tome ; bouton « Vérifier en profondeur ». Les données existent déjà (dernier rapport de chaque tome, journaux des passes).
+- **9.1 Surveillance des dossiers** (décidée le 2026-11-16) : crate `notify` (8.2, dernière stable ; inotify, ReadDirectoryChangesW, FSEvents). Chaque bibliothèque est surveillée ; les événements sont regroupés et, après un temps calme (fichier encore en copie), un scan ciblé part sur le dossier de série touché (file d'attente : un scan à la fois). Limite connue : sur un montage réseau (SMB, NFS), les changements faits depuis une autre machine ne sont pas signalés ; un **scan complet périodique** sert de filet. À trancher au plan : surveillance activable par bibliothèque, temps calme, intervalle du scan périodique, comportement quand la racine disparaît (le garde-fou de l'audit s'applique).
+- **9.2 Santé des bibliothèques** : tableau de bord (Administration → Santé) : tomes sains, en avertissement, en erreur, par bibliothèque ; date de la dernière vérification complète (`--deep`) ; liste des tomes à réparer, filtrable par code de diagnostic, avec le lien vers les problèmes du tome ; bouton « Vérifier en profondeur ». Les données existent déjà (dernier rapport de chaque tome, journaux des passes).
 
-Plus tard, sans ordre : collections et listes de lecture, relations entre séries (suites, éditions), OPDS (avec les jetons d'API), statistiques de lecture, Comic Vine et MangaUpdates. EPUB et PDF : non.
+Plus tard, sans ordre : collections et listes de lecture, relations entre séries (suites, éditions), OPDS (avec les jetons d'API), statistiques de lecture, Comic Vine et MangaUpdates. EPUB : non. PDF : phase 8.
 
 ## Fonctionnalités ajoutées en cours de route
 
@@ -1356,3 +1384,4 @@ L'ordre de lecture ne dépend jamais de l'ordre dans l'archive : le lecteur reç
 - 2026-11-16 : phase 6 terminée (distribution, thèmes, PWA et hors-ligne, documentation) ; version `v0.1.0`.
 - 2026-11-16 : version `v0.1.1` : correctifs de l'audit (dont le scan d'une racine illisible qui vidait la bibliothèque), recherche et filtre par tag, double-clic qui ouvre l'interface, Administration → Données ; plan de la phase 7 proposé.
 - 2026-11-17 : plan de la phase 7 validé : comptes créés par l'administrateur (liens d'inscription notés pour plus tard), page d'installation avec jeton, sessions de 90 jours glissants, réglages de lecture des séries par compte, nouvelles bibliothèques fermées aux lecteurs existants ; double authentification (TOTP) et jetons d'API ajoutés à la phase (lots 7.5 et 7.6), `Remote-User` plus tard. Une future application mobile passera par la connexion (session en `Bearer`, tous les droits du compte), pas par un jeton d'API, qui reste limité à la lecture et à la progression.
+- 2026-11-17 : lecture des PDF sans marges ajoutée en phase 8 (images incluses servies comme des pages, pas de conversion en CBZ, page sans image ignorée avec un avertissement, pages en plusieurs morceaux recomposées, métadonnées du PDF lues) ; la maintenance devient la phase 9.
