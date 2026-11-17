@@ -41,10 +41,11 @@ use crate::cache::Images;
 use crate::job::{ScanRequest, Scanner, StartError};
 use crate::meta::{IdentifyStatus, MetaError, Metadata, web_sources};
 
+mod accounts;
 mod auth;
 mod images;
 
-use auth::Me;
+use auth::{Admin, Me};
 pub(crate) use images::{IMMUTABLE, etag_matches};
 use images::{cover, page_image, thumbnail};
 
@@ -279,6 +280,26 @@ pub fn router(app: Arc<App>, hosts: Option<Vec<String>>) -> Router {
         .route("/api/auth/setup", post(auth::setup))
         .route("/api/auth/login", post(auth::login))
         .route("/api/auth/logout", post(auth::logout))
+        .route("/api/me", get(accounts::me).put(accounts::save_me))
+        .route("/api/me/password", post(auth::change_password))
+        .route("/api/me/sessions", get(accounts::devices))
+        .route("/api/me/sessions/{id}", delete(accounts::revoke_device))
+        .route(
+            "/api/admin/users",
+            get(accounts::users).post(accounts::create_user),
+        )
+        .route(
+            "/api/admin/users/{id}",
+            patch(accounts::update_user).delete(accounts::delete_user),
+        )
+        .route(
+            "/api/admin/users/{id}/password",
+            post(accounts::reset_password),
+        )
+        .route(
+            "/api/admin/users/{id}/sessions",
+            delete(accounts::revoke_sessions),
+        )
         .route("/api/settings", get(settings).put(save_settings))
         .route("/api/libraries", get(libraries).post(create_library))
         .route("/api/libraries/{id}", delete(delete_library))
@@ -392,6 +413,8 @@ pub struct ApiError {
     status: StatusCode,
     code: &'static str,
     message: String,
+    /// `Retry-After`, en secondes (429).
+    retry_after: Option<u64>,
 }
 
 impl ApiError {
@@ -400,6 +423,14 @@ impl ApiError {
             status,
             code,
             message: message.into(),
+            retry_after: None,
+        }
+    }
+
+    fn retry_after(self, seconds: u64) -> Self {
+        Self {
+            retry_after: Some(seconds),
+            ..self
         }
     }
 
@@ -417,7 +448,13 @@ impl IntoResponse for ApiError {
         let body = Json(json!({ "code": self.code, "message": self.message }));
         // Une erreur n'est jamais mise en cache : la même URL peut redevenir lisible après un rescan.
         let no_store = [(header::CACHE_CONTROL, "no-store")];
-        (self.status, no_store, body).into_response()
+        let mut response = (self.status, no_store, body).into_response();
+        if let Some(seconds) = self.retry_after {
+            response
+                .headers_mut()
+                .insert(header::RETRY_AFTER, seconds.into());
+        }
+        response
     }
 }
 
@@ -471,7 +508,7 @@ async fn health() -> Json<serde_json::Value> {
 }
 
 /// Où sont la base et le cache (administration), pour les sauvegarder ou les retrouver.
-async fn storage(State(app): State<Arc<App>>) -> Json<serde_json::Value> {
+async fn storage(_: Admin, State(app): State<Arc<App>>) -> Json<serde_json::Value> {
     Json(json!({
         "database": absolute(app.db.pool().connect_options().get_filename()),
         "cache": absolute(app.images.dir()),
@@ -506,6 +543,7 @@ struct NewSettings {
 }
 
 async fn save_settings(
+    _: Admin,
     State(app): State<Arc<App>>,
     body: Result<Json<NewSettings>, JsonRejection>,
 ) -> ApiResult<shiori_db::Settings> {
@@ -564,8 +602,11 @@ async fn save_settings(
     Ok(Json(app.db.settings().await?))
 }
 
-async fn libraries(State(app): State<Arc<App>>) -> ApiResult<Vec<shiori_db::LibrarySummary>> {
-    Ok(Json(app.db.library_summaries().await?))
+async fn libraries(
+    State(app): State<Arc<App>>,
+    Me(me): Me,
+) -> ApiResult<Vec<shiori_db::LibrarySummary>> {
+    Ok(Json(app.db.library_summaries(&me).await?))
 }
 
 #[derive(Deserialize)]
@@ -575,6 +616,9 @@ struct NewLibrary {
     /// Donne le sens de lecture par défaut des séries (Q12) ; `manga` si absent.
     #[serde(default)]
     kind: LibraryKind,
+    /// Ouverte aux lecteurs existants ; sinon visible de l'administrateur seul (Q49).
+    #[serde(default)]
+    share: bool,
 }
 
 #[derive(Serialize)]
@@ -586,6 +630,7 @@ struct CreatedLibrary {
 }
 
 async fn create_library(
+    _: Admin,
     State(app): State<Arc<App>>,
     body: Result<Json<NewLibrary>, JsonRejection>,
 ) -> Result<(StatusCode, Json<CreatedLibrary>), ApiError> {
@@ -594,6 +639,9 @@ async fn create_library(
         .db
         .create_library(&new.name, &new.root, new.kind)
         .await?;
+    if new.share {
+        app.db.share_library(library.id).await?;
+    }
     Ok((
         StatusCode::CREATED,
         Json(CreatedLibrary {
@@ -606,6 +654,7 @@ async fn create_library(
 }
 
 async fn delete_library(
+    _: Admin,
     State(app): State<Arc<App>>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, ApiError> {
@@ -684,6 +733,7 @@ impl From<EditError> for ApiError {
 /// Modifie les métadonnées d'une série et renvoie son détail. Chaque champ donné est édité
 /// (verrouillé, `null` compris) ; `unlock: [...]` rend des champs aux sources.
 async fn patch_series(
+    _: Admin,
     State(app): State<Arc<App>>,
     Me(me): Me,
     Path(id): Path<String>,
@@ -776,6 +826,7 @@ struct MetadataSearch {
 
 /// Fiches d'une source pour identifier une série à la main (fenêtre « Identifier »).
 async fn search_metadata(
+    _: Admin,
     State(app): State<Arc<App>>,
     Me(me): Me,
     Path(id): Path<String>,
@@ -803,6 +854,7 @@ struct NewLink {
 
 /// Lie une série à la fiche choisie et renvoie son détail.
 async fn link_source(
+    _: Admin,
     State(app): State<Arc<App>>,
     Me(me): Me,
     Path((id, source)): Path<(String, String)>,
@@ -817,6 +869,7 @@ async fn link_source(
 
 /// Délie une source (ses données ne comptent plus) et renvoie le détail de la série.
 async fn unlink_source(
+    _: Admin,
     State(app): State<Arc<App>>,
     Me(me): Me,
     Path((id, source)): Path<(String, String)>,
@@ -829,6 +882,7 @@ async fn unlink_source(
 
 /// Relit les fiches liées d'une série et renvoie son détail.
 async fn refresh_metadata(
+    _: Admin,
     State(app): State<Arc<App>>,
     Me(me): Me,
     Path(id): Path<String>,
@@ -847,6 +901,7 @@ struct UseCover {
 
 /// Prend la couverture de la fiche liée chez une source et renvoie le détail de la série.
 async fn use_cover(
+    _: Admin,
     State(app): State<Arc<App>>,
     Me(me): Me,
     Path(id): Path<String>,
@@ -869,7 +924,7 @@ struct MetadataOverview {
     issues: Vec<shiori_db::SourceIssue>,
 }
 
-async fn metadata_status(State(app): State<Arc<App>>) -> ApiResult<MetadataOverview> {
+async fn metadata_status(_: Admin, State(app): State<Arc<App>>) -> ApiResult<MetadataOverview> {
     let settings = app.db.settings().await?;
     Ok(Json(MetadataOverview {
         online: settings.metadata_online,
@@ -881,7 +936,7 @@ async fn metadata_status(State(app): State<Arc<App>>) -> ApiResult<MetadataOverv
 
 /// Lance l'identification des séries pas encore liées (202) ; 409 si le réseau est désactivé
 /// ou si une identification tourne déjà.
-async fn identify(State(app): State<Arc<App>>) -> Result<StatusCode, ApiError> {
+async fn identify(_: Admin, State(app): State<Arc<App>>) -> Result<StatusCode, ApiError> {
     if !app.db.settings().await?.metadata_online {
         return Err(MetaError::Disabled.into());
     }
@@ -890,6 +945,7 @@ async fn identify(State(app): State<Arc<App>>) -> Result<StatusCode, ApiError> {
 }
 
 async fn patch_volume(
+    _: Admin,
     State(app): State<Arc<App>>,
     Me(me): Me,
     Path(id): Path<String>,
@@ -917,7 +973,7 @@ async fn progress(
     if let Some(progress) = app.db.progress(&me, &volume).await? {
         return Ok(Json(progress).into_response());
     }
-    match app.db.volume_exists(&volume).await? {
+    match app.db.volume_visible(&me, &volume).await? {
         true => Ok(StatusCode::NO_CONTENT.into_response()),
         false => Err(ApiError::not_found("tome")),
     }
@@ -1006,10 +1062,11 @@ async fn series_settings(
 
 async fn pages(
     State(app): State<Arc<App>>,
+    Me(me): Me,
     Path(id): Path<String>,
 ) -> ApiResult<Vec<shiori_db::PageInfo>> {
     app.db
-        .pages_of(&volume_id(&id)?)
+        .pages_of(&me, &volume_id(&id)?)
         .await?
         .map(Json)
         .ok_or_else(|| ApiError::not_found("tome"))
@@ -1053,6 +1110,7 @@ struct NewScan {
 }
 
 async fn start_scan(
+    _: Admin,
     State(app): State<Arc<App>>,
     body: Result<Json<NewScan>, JsonRejection>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), ApiError> {
@@ -1068,7 +1126,7 @@ async fn start_scan(
 }
 
 /// Progression de la passe en cours, ou 204 si rien ne tourne.
-async fn current_scan(State(app): State<Arc<App>>) -> Response {
+async fn current_scan(_: Admin, State(app): State<Arc<App>>) -> Response {
     match app.scanner.progress().await {
         Some(progress) => Json(progress).into_response(),
         None => StatusCode::NO_CONTENT.into_response(),
@@ -1076,6 +1134,7 @@ async fn current_scan(State(app): State<Arc<App>>) -> Response {
 }
 
 async fn cancel_scan(
+    _: Admin,
     State(app): State<Arc<App>>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), ApiError> {
     match app.scanner.cancel().await {
@@ -1097,6 +1156,7 @@ struct ScansQuery {
 }
 
 async fn scans(
+    _: Admin,
     State(app): State<Arc<App>>,
     query: Result<Query<ScansQuery>, QueryRejection>,
 ) -> ApiResult<Vec<shiori_db::RunSummary>> {
@@ -1111,6 +1171,7 @@ async fn scans(
 }
 
 async fn scan(
+    _: Admin,
     State(app): State<Arc<App>>,
     Path(id): Path<String>,
 ) -> ApiResult<shiori_db::RunSummary> {
@@ -1130,6 +1191,7 @@ struct LogsQuery {
 }
 
 async fn scan_logs(
+    _: Admin,
     State(app): State<Arc<App>>,
     Path(id): Path<String>,
     query: Result<Query<LogsQuery>, QueryRejection>,

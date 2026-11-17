@@ -453,3 +453,30 @@ async fn each_language_has_its_own_merged_view() {
     assert_eq!(listed(db.all_series(&fr).await.unwrap()), "One Piece (VF)");
     assert_eq!(listed(db.all_series(&en).await.unwrap()), "One Piece");
 }
+
+/// Une couverture gardée n'est servie à un lecteur que si elle est choisie pour une série d'une
+/// bibliothèque qui lui est ouverte.
+#[tokio::test]
+async fn a_cover_is_visible_through_its_series_library() {
+    let (_dir, db, one, _) = setup().await;
+    sqlx::query("UPDATE series_metadata SET edited = json_object('cover_image_id', 'c1') WHERE series_id = ?")
+        .bind(one)
+        .execute(db.pool())
+        .await
+        .unwrap();
+    let admin = crate::tests::viewer(&db).await;
+    let bob = db
+        .create_user("bob", "mot de passe", crate::Role::Reader)
+        .await
+        .unwrap();
+    let reader = db.viewer(bob.id).await.unwrap();
+    assert!(db.cover_visible(&admin, "inconnue").await.unwrap());
+    assert!(db.cover_visible(&reader, "c1").await.unwrap());
+    assert!(!db.cover_visible(&reader, "c2").await.unwrap());
+    let closed = crate::UserChange {
+        libraries: Some(Vec::new()),
+        ..Default::default()
+    };
+    db.update_user(bob.id, closed).await.unwrap();
+    assert!(!db.cover_visible(&reader, "c1").await.unwrap());
+}

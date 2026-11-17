@@ -74,6 +74,8 @@ async function signIn(password: string) {
   const value = /shiori_session=([^;]+)/.exec(response.headers.get('set-cookie') ?? '')?.[1]
   if (!value) throw new Error('cookie de session absent')
   session = `shiori_session=${value}`
+  // Mot de passe provisoire : à changer avant toute autre requête (la session reste ouverte).
+  await api('/me/password', { method: 'POST', body: JSON.stringify({ current: password, new: 'e2e mot de passe' }) })
   const cookie = { name: 'shiori_session', value, domain: '127.0.0.1', path: '/', expires: -1, httpOnly: true, secure: false, sameSite: 'Lax' }
   writeFileSync(AUTH, JSON.stringify({ cookies: [cookie], origins: [] }))
 }

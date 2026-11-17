@@ -17,7 +17,27 @@ use crate::{Db, Error, Language, from_db, to_db};
 pub struct Viewer {
     pub user: i64,
     pub language: Language,
+    /// Un administrateur voit toutes les bibliothèques ; un lecteur, celles qui lui sont
+    /// ouvertes (`user_libraries`).
+    pub admin: bool,
 }
+
+/// Condition SQL : la bibliothèque `$col` est visible du compte (`$admin` : est-il
+/// administrateur, `$user` : son id ; des paramètres numérotés, comme `"?3"`).
+macro_rules! visible {
+    ($col:literal, $admin:literal, $user:literal) => {
+        concat!(
+            "(",
+            $admin,
+            " OR ",
+            $col,
+            " IN (SELECT library_id FROM user_libraries WHERE user_id = ",
+            $user,
+            "))"
+        )
+    };
+}
+pub(crate) use visible;
 
 /// Type de bibliothèque : donne le sens de lecture par défaut de ses séries (Q12).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -192,8 +212,9 @@ impl Db {
     /// Lecteur `user` : sa langue, sinon celle de l'instance, sinon le français.
     pub async fn viewer(&self, user: i64) -> Result<Viewer, Error> {
         let row = sqlx::query(
-            "SELECT COALESCE(us.language, a.language, 'fr') AS language
-             FROM app_settings a LEFT JOIN user_settings us ON us.user_id = ? WHERE a.id = 1",
+            "SELECT COALESCE(us.language, a.language, 'fr') AS language, u.role
+             FROM users u JOIN app_settings a ON a.id = 1
+             LEFT JOIN user_settings us ON us.user_id = u.id WHERE u.id = ?",
         )
         .bind(user)
         .fetch_one(&self.pool)
@@ -201,13 +222,47 @@ impl Db {
         Ok(Viewer {
             user,
             language: from_db(row.get("language"))?,
+            admin: row.get::<&str, _>("role") == "admin",
         })
     }
 
-    /// Le tome est connu de la base.
-    pub async fn volume_exists(&self, volume: &VolumeId) -> Result<bool, Error> {
-        Ok(sqlx::query("SELECT 1 FROM volumes WHERE id = ?")
-            .bind(volume.to_string())
+    /// Le tome existe et le compte peut le lire : un administrateur, tout tome connu ; un
+    /// lecteur, un tome rangé dans une bibliothèque qui lui est ouverte. Sinon, pour lui, le
+    /// tome n'existe pas (404, jamais « existe mais interdit »).
+    pub async fn volume_visible(&self, viewer: &Viewer, volume: &VolumeId) -> Result<bool, Error> {
+        self.volume_visible_str(viewer, &volume.to_string()).await
+    }
+
+    pub(crate) async fn volume_visible_str(
+        &self,
+        viewer: &Viewer,
+        volume: &str,
+    ) -> Result<bool, Error> {
+        let sql = concat!(
+            "SELECT 1 FROM volumes v WHERE v.id = ?1 AND (?2 OR EXISTS (
+               SELECT 1 FROM file_locations l WHERE l.volume_id = v.id AND ",
+            visible!("l.library_id", "0", "?3"),
+            "))"
+        );
+        Ok(sqlx::query(sql)
+            .bind(volume)
+            .bind(viewer.admin)
+            .bind(viewer.user)
+            .fetch_optional(&self.pool)
+            .await?
+            .is_some())
+    }
+
+    /// La série existe et sa bibliothèque est visible du compte.
+    pub async fn series_visible(&self, viewer: &Viewer, series: i64) -> Result<bool, Error> {
+        let sql = concat!(
+            "SELECT 1 FROM series s WHERE s.id = ?1 AND ",
+            visible!("s.library_id", "?2", "?3")
+        );
+        Ok(sqlx::query(sql)
+            .bind(series)
+            .bind(viewer.admin)
+            .bind(viewer.user)
             .fetch_optional(&self.pool)
             .await?
             .is_some())
@@ -274,6 +329,9 @@ impl Db {
         volume: &VolumeId,
         page: &PageId,
     ) -> Result<SaveProgress, Error> {
+        if !self.volume_visible(viewer, volume).await? {
+            return Ok(SaveProgress::UnknownVolume);
+        }
         let volume = volume.to_string();
         let Some(v) = sqlx::query("SELECT page_count FROM volumes WHERE id = ?")
             .bind(&volume)
@@ -327,7 +385,7 @@ impl Db {
             .bind(volume.to_string())
             .execute(&self.pool)
             .await?;
-        self.volume_exists(volume).await
+        self.volume_visible(viewer, volume).await
     }
 
     /// Réglages appliqués à une série pour ce compte ; `None` si elle n'existe pas.
@@ -336,6 +394,9 @@ impl Db {
         viewer: &Viewer,
         series: i64,
     ) -> Result<Option<ReadingSettings>, Error> {
+        if !self.series_visible(viewer, series).await? {
+            return Ok(None);
+        }
         let row = sqlx::query(settings_of!("?2"))
             .bind(viewer.user)
             .bind(series)

@@ -425,6 +425,9 @@ async fn progress_and_settings_belong_to_the_account() {
         f.db.create_user("bob", "mot de passe", shiori_db::Role::Reader)
             .await
             .unwrap();
+    f.db.set_password("bob", "mot de passe", false, None)
+        .await
+        .unwrap();
     let session = f.db.create_session(bob.id, "tests").await.unwrap();
     let as_bob = |method: &str, uri: &str| {
         Request::builder()

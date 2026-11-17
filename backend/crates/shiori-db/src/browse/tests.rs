@@ -317,3 +317,77 @@ async fn publication_status_is_set_and_cleared() {
             .unwrap()
     );
 }
+
+/// Un lecteur ne voit que les bibliothèques qui lui sont ouvertes : le reste n'existe pas pour
+/// lui (listes vides, détails, pages et progression introuvables).
+#[tokio::test]
+async fn a_reader_sees_only_the_libraries_opened_to_him() {
+    let f = fixture().await;
+    let admin = crate::tests::viewer(&f.db).await;
+    let bob =
+        f.db.create_user("bob", "mot de passe", crate::Role::Reader)
+            .await
+            .unwrap();
+    // Le lecteur reçoit toutes les bibliothèques à sa création : on lui retire « Lib ».
+    let only_other = crate::UserChange {
+        libraries: Some(vec![f.other.id]),
+        ..Default::default()
+    };
+    f.db.update_user(bob.id, only_other).await.unwrap();
+    let bob = f.db.viewer(bob.id).await.unwrap();
+    assert!(!bob.admin);
+
+    let names = |libs: Vec<LibrarySummary>| libs.into_iter().map(|l| l.name).collect::<Vec<_>>();
+    assert_eq!(
+        names(f.db.library_summaries(&bob).await.unwrap()),
+        ["Autre"]
+    );
+    assert_eq!(
+        names(f.db.library_summaries(&admin).await.unwrap()),
+        ["Autre", "Lib"]
+    );
+    let series: Vec<String> =
+        f.db.all_series(&bob)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|s| s.name)
+            .collect();
+    assert_eq!(series, ["Autre"]);
+    assert!(f.db.series_of(&bob, f.library.id).await.unwrap().is_none());
+    assert!(f.db.series_of(&bob, f.other.id).await.unwrap().is_some());
+
+    let hidden = f.series("Série").await.id;
+    let tome: VolumeId = f.volumes[&1].parse().unwrap();
+    let page = f.pages[&1][0];
+    assert!(f.db.series_detail(&bob, hidden).await.unwrap().is_none());
+    assert!(f.db.series_settings(&bob, hidden).await.unwrap().is_none());
+    assert!(f.db.volume_detail(&bob, &tome).await.unwrap().is_none());
+    assert!(f.db.pages_of(&bob, &tome).await.unwrap().is_none());
+    assert!(f.db.page_source(&bob, &page).await.unwrap().is_none());
+    assert_eq!(
+        f.db.save_progress(&bob, &tome, &page).await.unwrap(),
+        crate::SaveProgress::UnknownVolume
+    );
+    assert!(!f.db.clear_progress(&bob, &tome).await.unwrap());
+
+    // Lu par l'administrateur : n'apparaît pas dans « Continuer la lecture » du lecteur.
+    f.db.save_progress(&admin, &tome, &page).await.unwrap();
+    let visible: VolumeId = f.volumes[&9].parse().unwrap();
+    f.db.save_progress(&bob, &visible, &f.pages[&9][0])
+        .await
+        .unwrap();
+    let next: Vec<String> =
+        f.db.continue_reading(&bob, 10)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|c| c.series_name)
+            .collect();
+    assert_eq!(next, ["Autre"]);
+
+    // Ouverte de nouveau : tout réapparaît.
+    f.db.share_library(f.library.id).await.unwrap();
+    assert!(f.db.series_detail(&bob, hidden).await.unwrap().is_some());
+    assert!(f.db.page_source(&bob, &page).await.unwrap().is_some());
+}
