@@ -1149,7 +1149,7 @@ Aucune nouvelle prévue (service worker fait main, `tokio::signal::unix` déjà 
 
 Édition d'un tome dans l'interface, MangaUpdates et Comic Vine, actualisation périodique des fiches, autres `shortcut:` notés au bilan de la phase 5, `:root:has()` sur un vrai Safari iOS, essai sur la tablette réelle, registre shadcn et le paquet `cn`.
 
-## Phase 7 : comptes, authentification et sauvegarde (plan proposé le 2026-11-16, à valider)
+## Phase 7 : comptes, authentification et sauvegarde (plan proposé le 2026-11-16, validé le 2026-11-17)
 
 ### Objectif
 
@@ -1166,7 +1166,7 @@ Ouvrir Shiori hors de chez soi et le partager en famille : comptes locaux (admin
 
 ### Plan technique
 
-**Crates** (dernières versions au moment du lot) : `argon2` 0.6 (Argon2id, pur Rust) ; `rand` 0.10 (jetons de session, 32 octets) ; `blake3` (déjà là : seul le hash du jeton est stocké) ; `axum-extra` 0.12 (cookies) ; rien pour la limite de débit (compteur en mémoire, quelques lignes).
+**Crates** (dernières versions au moment du lot) : `argon2` 0.6 (Argon2id, pur Rust) ; `rand` 0.10 (jetons de session, 32 octets) ; `blake3` (déjà là : seul le hash du jeton est stocké) ; `axum-extra` 0.12 (cookies) ; `totp-rs` 6 (features `otpauth`, `gen_secret`) et `qrcode` 0.14 (QR en SVG, sans dépendance d'image) pour la double authentification ; rien pour la limite de débit (compteur en mémoire, quelques lignes).
 
 **Schéma SQLite** (migration 0014, une seule) :
 
@@ -1174,13 +1174,17 @@ Ouvrir Shiori hors de chez soi et le partager en famille : comptes locaux (admin
 - `sessions` : `token_hash` (BLAKE3 du jeton, clé), `user_id` (cascade), `created_at`, `last_seen_at`, `expires_at`, `label` (navigateur et système, pour la liste des appareils).
 - `user_libraries` : (`user_id`, `library_id`) ; un administrateur voit tout.
 - `user_settings` : `user_id` (clé), `language`, `theme`, `page_turn` ; `NULL` = défaut de l'instance (`app_settings`, réglé par l'administrateur).
-- `reading_progress` : clé (`user_id`, `volume_id`). La progression existante va dans `legacy_progress`, rattachée au premier administrateur à sa création (Q46).
+- `user_series_settings` : (`user_id`, `series_id`) en clé, cascade des deux côtés, `reading_mode`, `page_layout`, `page_turn` (Q48 : par compte) ; `NULL` = défaut du type de bibliothèque, comme aujourd'hui. Les colonnes de `series` sortent de la table.
+- `reading_progress` : clé (`user_id`, `volume_id`). La progression existante va dans `legacy_progress`, et les réglages actuels des séries dans `legacy_series_settings`, rattachés au premier administrateur à sa création (Q46).
+- `user_totp` : `user_id` (clé), `secret` (base32), `enabled_at` (`NULL` tant que l'enrôlement n'est pas confirmé par un premier code), `last_step` (dernier pas de 30 s accepté : un code ne sert qu'une fois) ; `user_recovery_codes` : `user_id`, `code_hash` (Argon2id), `used_at` (10 codes à usage unique).
+- `api_tokens` : `id`, `user_id` (cascade), `name`, `token_hash` (BLAKE3, unique), `prefix` (8 premiers caractères, pour reconnaître un jeton dans la liste), `created_at`, `last_used_at`, `expires_at` (`NULL` = sans expiration).
 
 **Routes** :
 
-- Publiques : `GET /api/health` ; `GET /api/auth/state` (`setup_required`, et le compte si une session est valide) ; `POST /api/auth/setup` (premier administrateur, avec le jeton d'installation) ; `POST /api/auth/login` ; l'interface (le front affiche la page de connexion).
-- Avec une session : tout le reste ; `POST /api/auth/logout` ; `GET`/`PUT /api/me` (préférences, mot de passe) ; `GET`/`DELETE /api/me/sessions/{id}` (appareils connectés).
-- Administrateur seulement (403 `forbidden` sinon) : `/api/admin/*`, `POST`/`DELETE /api/libraries`, édition des séries et des tomes, sources et couvertures, `GET`/`POST`/`PATCH`/`DELETE /api/admin/users` (création, rôle, bibliothèques, désactivation, nouveau mot de passe, révocation des sessions), `POST /api/admin/backup`.
+- Publiques : `GET /api/health` ; `GET /api/auth/state` (`setup_required`, et le compte si une session est valide) ; `POST /api/auth/setup` (premier administrateur, avec le jeton d'installation) ; `POST /api/auth/login` (répond `totp_required` avec un défi de courte durée si le compte a la double authentification) ; `POST /api/auth/totp` (défi + code à 6 chiffres ou code de secours) ; l'interface (le front affiche la page de connexion).
+- Avec une session : tout le reste ; `POST /api/auth/logout` ; `GET`/`PUT /api/me` (préférences, mot de passe) ; `GET`/`DELETE /api/me/sessions/{id}` (appareils connectés) ; `POST /api/me/totp` (enrôlement : secret et QR en SVG), `POST /api/me/totp/confirm` (premier code, renvoie les codes de secours), `DELETE /api/me/totp` (mot de passe + code exigés) ; `GET`/`POST`/`DELETE /api/me/tokens` (jetons d'API, le jeton en clair n'est montré qu'une fois) ; `GET`/`PUT /api/series/{id}/settings` (réglages de lecture du compte pour la série).
+- Avec un jeton d'API (`Authorization: Bearer shiori_…`) : seulement la lecture (routes `GET`) et l'envoi de la progression ; jamais `/api/admin/*`, `/api/me/*` ni la gestion des comptes, même pour un jeton d'administrateur (un jeton volé ne prend pas l'instance).
+- Administrateur seulement (403 `forbidden` sinon) : `/api/admin/*`, `POST`/`DELETE /api/libraries`, édition des séries et des tomes, sources et couvertures, `GET`/`POST`/`PATCH`/`DELETE /api/admin/users` (création, rôle, bibliothèques, désactivation, nouveau mot de passe, révocation des sessions, désactivation de la double authentification d'un compte qui a perdu son téléphone), `POST /api/admin/backup`.
 - Accès par bibliothèque : les listes, le détail, les pages, les images et les couvertures d'une bibliothèque non accessible répondent 404 (jamais « existe mais interdit »).
 
 **Sécurité** :
@@ -1190,33 +1194,43 @@ Ouvrir Shiori hors de chez soi et le partager en famille : comptes locaux (admin
 - Écritures : la garde `Sec-Fetch-Site` reste, plus `SameSite=Lax` ; JSON exigé sur les routes à corps.
 - Connexion : temps constant (hash factice pour un nom inconnu), message unique « identifiants incorrects », limite par adresse et par nom (pause croissante, 429 `rate_limited` avec `Retry-After`).
 - Serveur : délai de lecture des en-têtes et délai par requête (hors images en cours de rendu) avant toute exposition directe.
-- Récupération sans interface : `shiori user add <nom> --admin` et `shiori user password <nom>` (CLI, base locale).
+- Double authentification (Q44) : facultative par compte, TOTP RFC 6238 (SHA-1, 6 chiffres, 30 s, tolérance d'un pas), secret jamais renvoyé après l'enrôlement, code rejoué refusé (`last_step`), essais du second facteur sous la même limite de débit que le mot de passe, défi de connexion valable 5 minutes.
+- Jetons d'API (Q43) : 256 bits aléatoires, préfixe `shiori_`, seul le hash en base ; révoqués avec le compte désactivé ; pas soumis à la garde `Sec-Fetch-Site` (aucun cookie, donc pas de CSRF).
+- Récupération sans interface : `shiori user add <nom> --admin`, `shiori user password <nom>` et `shiori user totp-reset <nom>` (CLI, base locale).
 
-**Front** : page de connexion et page d'installation ; 401 → page de connexion, puis retour à la page demandée ; menu du compte (préférences, mot de passe, appareils, déconnexion) ; **Administration → Comptes** ; administration masquée aux lecteurs. Déconnexion : vide les caches du service worker et propose d'effacer les tomes téléchargés ; la file de progression hors ligne garde le compte qui l'a remplie et n'est envoyée que pour lui.
+**Front** : page de connexion et page d'installation ; 401 → page de connexion, puis retour à la page demandée ; menu du compte (préférences, mot de passe, double authentification avec QR et codes de secours, jetons d'API, appareils, déconnexion) ; réglages de lecture d'une série enregistrés pour le compte ; **Administration → Comptes** ; administration masquée aux lecteurs. Déconnexion : vide les caches du service worker et propose d'effacer les tomes téléchargés ; la file de progression hors ligne garde le compte qui l'a remplie et n'est envoyée que pour lui.
 
 **Sauvegarde** : `VACUUM INTO` (copie cohérente, Shiori allumé) : `shiori backup <fichier>` et un bouton « Télécharger une sauvegarde » dans **Administration → Données** ; restauration documentée (arrêter Shiori, remplacer `shiori.db`) ; une sauvegarde automatique avant chaque migration de schéma (`shiori.db.avant-<version>`).
 
 ### Lots
 
 - **7.1 `refactor/images`** : sortir le service des images de `server.rs` (point 10 de l'audit), sans changement de comportement.
-- **7.2 `feat/accounts-db`** : migration 0014, `shiori-db` (comptes, sessions, accès, préférences, progression par compte, `legacy_progress`), CLI `shiori user`.
+- **7.2 `feat/accounts-db`** : migration 0014, `shiori-db` (comptes, sessions, accès, préférences, réglages de série et progression par compte, `legacy_progress`, `legacy_series_settings`), CLI `shiori user`.
 - **7.3 `feat/auth`** : installation, connexion, déconnexion, cookie, middleware de session, limite de débit, délais du serveur.
-- **7.4 `feat/roles`** : routes réservées, accès par bibliothèque sur toutes les lectures, `/api/me`, `/api/admin/users`.
-- **7.5 `feat/web-auth`** : connexion, installation, menu du compte, Comptes, préférences par compte, déconnexion et hors-ligne.
-- **7.6 `feat/backup`** : `shiori backup`, bouton de l'administration, sauvegarde avant migration.
-- **7.7 `docs/phase7`** : installation (premier compte, jeton d'installation, comptes, sauvegarde et restauration), technique, fonctionnelle, bilan.
+- **7.4 `feat/roles`** : routes réservées, accès par bibliothèque sur toutes les lectures, `/api/me`, réglages de série par compte, `/api/admin/users`.
+- **7.5 `feat/totp`** : enrôlement, second facteur à la connexion, codes de secours, désactivation (compte, administrateur, CLI).
+- **7.6 `feat/api-tokens`** : jetons d'API (création, liste, révocation), authentification `Bearer` limitée à la lecture et à la progression.
+- **7.7 `feat/web-auth`** : connexion (avec le second facteur), installation, menu du compte, double authentification, jetons, Comptes, préférences et réglages de série par compte, déconnexion et hors-ligne.
+- **7.8 `feat/backup`** : `shiori backup`, bouton de l'administration, sauvegarde avant migration.
+- **7.9 `docs/phase7`** : installation (premier compte, jeton d'installation, comptes, double authentification, jetons, sauvegarde et restauration), technique, fonctionnelle, bilan.
 
-### Questions à trancher (Q42 à Q50)
+Accès d'une nouvelle bibliothèque (Q49) : `user_libraries` est une liste explicite ; « toutes » à la création d'un lecteur coche les bibliothèques existantes, une bibliothèque créée ensuite n'est visible que de l'administrateur jusqu'à ce qu'il l'ouvre aux comptes voulus (case « Donner accès à tous les lecteurs » à la création).
 
-- **Q42 En-tête `Remote-User` d'un proxy d'authentification** (Authelia, Authentik) : proposition : **plus tard**. Les comptes locaux d'abord ; le proxy avec mot de passe reste possible devant, en couche de plus.
-- **Q43 Jetons d'API (lecteurs tiers, OPDS)** : proposition : **plus tard**, avec OPDS.
-- **Q44 Double authentification (TOTP)** : proposition : **plus tard** (crate `totp-rs` le moment venu).
-- **Q45 Création des comptes** : proposition : **par l'administrateur seulement** (nom et mot de passe provisoire, changé à la première connexion) ; liens d'invitation plus tard.
-- **Q46 Premier administrateur** : proposition : page d'installation tant qu'aucun compte n'existe, protégée par un **jeton d'installation** affiché dans la console et le journal Docker (sinon le premier venu du réseau prend l'instance) ; il reprend la progression existante.
-- **Q47 Durée des sessions** : proposition : **90 jours glissants** (prolongés à chaque usage), révocables appareil par appareil.
-- **Q48 Réglages de lecture d'une série** (sens, mise en page, tourner les pages) : proposition : **communs**, réglés par l'administrateur (c'est une propriété de l'œuvre) ; le sens des pages *par défaut*, la langue et le thème deviennent **par compte**.
-- **Q49 Accès d'un nouveau lecteur** : proposition : **toutes les bibliothèques par défaut**, à restreindre à la création.
-- **Q50 Métadonnées** : proposition : édition, sources et couvertures réservées à l'administrateur (communes à tous).
+### Décisions (Q42 à Q50, tranchées le 2026-11-17)
+
+- **Q42 En-tête `Remote-User` d'un proxy d'authentification** (Authelia, Authentik) : **plus tard**. Les comptes locaux d'abord ; le proxy avec mot de passe reste possible devant, en couche de plus.
+- **Q43 Jetons d'API** : **dès la phase 7** (lot 7.6), limités à la lecture et à la progression ; OPDS s'appuiera dessus plus tard.
+- **Q44 Double authentification (TOTP)** : **dès la phase 7** (lot 7.5), facultative par compte, avec codes de secours.
+- **Q45 Création des comptes** : **par l'administrateur seulement** (nom et mot de passe provisoire, changé à la première connexion). Liens d'inscription plus tard, voir ci-dessous.
+- **Q46 Premier administrateur** : page d'installation tant qu'aucun compte n'existe, protégée par un **jeton d'installation** affiché dans la console et le journal Docker (sinon le premier venu du réseau prend l'instance) ; il reprend la progression et les réglages de série existants.
+- **Q47 Durée des sessions** : **90 jours glissants** (prolongés à chaque usage), révocables appareil par appareil.
+- **Q48 Réglages de lecture d'une série** (sens, mise en page, tourner les pages) : **par compte** (`user_series_settings`) ; sans réglage, le défaut du type de bibliothèque. Sens des pages par défaut, langue et thème aussi par compte.
+- **Q49 Accès d'un nouveau lecteur** : **toutes les bibliothèques existantes par défaut**, à restreindre à la création ; une bibliothèque créée ensuite **n'est pas** ouverte d'office aux lecteurs existants.
+- **Q50 Métadonnées** : édition, sources et couvertures réservées à l'administrateur (communes à tous).
+
+### Plus tard : liens d'inscription (demandés le 2026-11-17)
+
+L'administrateur génère un lien d'invitation (`/invite/<jeton>`, 256 bits, seul le hash en base, usage unique, expiration réglable, 7 jours par défaut), avec le rôle et les bibliothèques du futur compte choisis d'avance ; la personne choisit son nom et son mot de passe sur la page du lien. Table `invites` (`token_hash`, `role`, bibliothèques, `created_by`, `expires_at`, `used_at`, `used_by`), liste et révocation dans **Administration → Comptes**. Aucune inscription libre.
 
 ### Notes de l'audit du 2026-11-16 (avant la phase 7)
 
@@ -1340,3 +1354,4 @@ L'ordre de lecture ne dépend jamais de l'ordre dans l'archive : le lecteur reç
 - 2026-11-16 : signature des binaires (Windows, macOS) et attestations des artefacts (Linux, image Docker) ajoutées à la roadmap, à planifier.
 - 2026-11-16 : phase 6 terminée (distribution, thèmes, PWA et hors-ligne, documentation) ; version `v0.1.0`.
 - 2026-11-16 : version `v0.1.1` : correctifs de l'audit (dont le scan d'une racine illisible qui vidait la bibliothèque), recherche et filtre par tag, double-clic qui ouvre l'interface, Administration → Données ; plan de la phase 7 proposé.
+- 2026-11-17 : plan de la phase 7 validé : comptes créés par l'administrateur (liens d'inscription notés pour plus tard), page d'installation avec jeton, sessions de 90 jours glissants, réglages de lecture des séries par compte, nouvelles bibliothèques fermées aux lecteurs existants ; double authentification (TOTP) et jetons d'API ajoutés à la phase (lots 7.5 et 7.6), `Remote-User` plus tard.
