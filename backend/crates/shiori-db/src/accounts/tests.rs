@@ -186,7 +186,11 @@ async fn a_session_is_found_by_its_token_only_while_valid() {
     assert_eq!(session.token.len(), "shiori_s_".len() + 64);
     assert_eq!(
         db.session_user(&session.token).await.unwrap(),
-        Some((session.id, bob.clone()))
+        Some(Session {
+            id: session.id,
+            user: bob.clone(),
+            renewed: false,
+        })
     );
     // Le jeton en clair n'est jamais en base.
     let stored: i64 = sqlx::query("SELECT COUNT(*) AS n FROM sessions WHERE token_hash = ?")
@@ -242,7 +246,13 @@ async fn a_session_slides_at_most_once_an_hour() {
     )
     .await;
     let before = times().await;
-    db.session_user(&session.token).await.unwrap().unwrap();
+    assert!(
+        !db.session_user(&session.token)
+            .await
+            .unwrap()
+            .unwrap()
+            .renewed
+    );
     assert_eq!(times().await, before);
     // Vue il y a deux heures : repart pour 90 jours.
     exec(
@@ -250,7 +260,13 @@ async fn a_session_slides_at_most_once_an_hour() {
         "UPDATE sessions SET last_seen_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-2 hours')",
     )
     .await;
-    db.session_user(&session.token).await.unwrap().unwrap();
+    assert!(
+        db.session_user(&session.token)
+            .await
+            .unwrap()
+            .unwrap()
+            .renewed
+    );
     let (seen, expires) = times().await;
     assert!(seen > before.0, "{seen} {}", before.0);
     let in_89_days: String =
@@ -293,4 +309,30 @@ fn temporary_passwords_are_long_unambiguous_and_different() {
         "{a}"
     );
     assert_ne!(a, temporary_password());
+}
+
+#[tokio::test]
+async fn the_first_admin_is_created_only_while_no_account_exists() {
+    let (_dir, db) = db().await;
+    let alice = db
+        .create_first_admin("alice", "mot de passe")
+        .await
+        .unwrap()
+        .unwrap();
+    // Mot de passe choisi par la personne : rien à changer.
+    assert_eq!(
+        (alice.role, alice.must_change_password),
+        (Role::Admin, false)
+    );
+    assert_eq!(
+        db.create_first_admin("mallory", "mot de passe")
+            .await
+            .unwrap(),
+        None
+    );
+    assert_eq!(db.users().await.unwrap(), vec![alice]);
+    assert!(matches!(
+        db.create_first_admin("a b", "mot de passe").await,
+        Err(AccountError::InvalidName)
+    ));
 }

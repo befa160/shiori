@@ -1,17 +1,20 @@
 // Prépare une instance de Shiori pour les tests : bibliothèques générées (couleur unique par
 // page, voir `backend/crates/shiori-testkit/examples/e2e_library.rs`), base neuve, scan fini.
 import { type ChildProcess, execFileSync, spawn } from 'node:child_process'
-import { mkdirSync, rmSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 const backend = fileURLToPath(new URL('../../backend', import.meta.url))
 export const DATA = fileURLToPath(new URL('./.data', import.meta.url))
 const BASE = 'http://127.0.0.1:7879'
+/** Session de l'administrateur des tests, réutilisée par chaque page (`storageState`). */
+const AUTH = `${DATA}/auth.json`
+let session = ''
 
 async function api(path: string, init?: RequestInit) {
   const response = await fetch(`${BASE}/api${path}`, {
     ...init,
-    headers: init?.body ? { 'content-type': 'application/json' } : undefined,
+    headers: { cookie: session, ...(init?.body ? { 'content-type': 'application/json' } : {}) },
   })
   if (!response.ok) throw new Error(`${init?.method ?? 'GET'} ${path} : HTTP ${response.status}`)
   return response.status === 204 ? null : response.json()
@@ -32,6 +35,10 @@ export default async function setup() {
   cargo('run', '-q', '-p', 'shiori-testkit', '--example', 'e2e_library', '--', `${DATA}/library`)
   cargo('build', '-q', '-p', 'shiori')
   const exe = `${backend}/target/debug/shiori${process.platform === 'win32' ? '.exe' : ''}`
+  // Compte créé par la CLI avant le démarrage : son mot de passe provisoire est affiché.
+  const added = execFileSync(exe, ['user', 'add', 'e2e', '--admin', '--db', `${DATA}/shiori.db`], { encoding: 'utf8' })
+  const password = /Mot de passe provisoire : (\S+)/.exec(added)?.[1]
+  if (!password) throw new Error(`mot de passe absent de : ${added}`)
   const server: ChildProcess = spawn(
     exe,
     ['serve', '--listen', '127.0.0.1:7879', '--db', `${DATA}/shiori.db`, '--cache-dir', `${DATA}/cache`],
@@ -45,6 +52,7 @@ export default async function setup() {
   died.catch(() => {}) // l'arrêt voulu, à la fin des tests, n'est pas une erreur
   try {
     await Promise.race([until(async () => (await fetch(`${BASE}/api/health`)).ok, 'démarrage du serveur'), died])
+    await Promise.race([signIn(password), died])
     await Promise.race([createLibraries(), died])
   } catch (error) {
     // Jamais de serveur orphelin sur le port après un échec.
@@ -54,6 +62,20 @@ export default async function setup() {
   return () => {
     server.kill()
   }
+}
+
+async function signIn(password: string) {
+  const response = await fetch(`${BASE}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ username: 'e2e', password }),
+  })
+  if (!response.ok) throw new Error(`connexion : HTTP ${response.status}`)
+  const value = /shiori_session=([^;]+)/.exec(response.headers.get('set-cookie') ?? '')?.[1]
+  if (!value) throw new Error('cookie de session absent')
+  session = `shiori_session=${value}`
+  const cookie = { name: 'shiori_session', value, domain: '127.0.0.1', path: '/', expires: -1, httpOnly: true, secure: false, sameSite: 'Lax' }
+  writeFileSync(AUTH, JSON.stringify({ cookies: [cookie], origins: [] }))
 }
 
 async function createLibraries() {

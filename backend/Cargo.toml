@@ -51,6 +51,9 @@ tempfile = "3.27"
 tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.7", features = ["compression-br", "compression-gzip", "trace"] }
 http-body-util = "0.1"
+# Boucle de service avec délai de lecture des en-têtes (axum::serve n'en pose aucun).
+hyper = { version = "1.12", features = ["server", "http1"] }
+hyper-util = { version = "0.1.21", features = ["tokio", "service", "server-graceful", "http1"] }
 shiori-testkit = { path = "crates/shiori-testkit" }
 
 # Les fixtures encodent des centaines d'images : on optimise les dépendances même en

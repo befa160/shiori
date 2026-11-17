@@ -1,5 +1,7 @@
 //! Métadonnées web par l'API (lot 5.5b) : fausses sources, aucun appel réseau.
 
+mod common;
+
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -11,7 +13,7 @@ use http_body_util::BodyExt;
 use serde_json::{Value, json};
 use shiori::cache::Images;
 use shiori::job::ScanRequest;
-use shiori::server::{self, App};
+use shiori::server::App;
 use shiori_db::{Db, LibraryKind};
 use shiori_meta::{FetchError, Source, SourceId, Text, WebMetadata};
 use shiori_testkit::{STORED, page_color, png, write_zip};
@@ -158,7 +160,7 @@ async fn fixture(delay: Duration) -> Fixture {
     let sources: Vec<Arc<dyn Source>> = vec![anilist.clone()];
     // Un fichier à la fois : les séries reçoivent leurs ids dans l'ordre des dossiers.
     let state = Arc::new(App::build(db, images, 1, 30, sources));
-    let app = server::router(state.clone(), None);
+    let app = common::router(state.clone()).await;
     Fixture {
         _dir: dir,
         state,

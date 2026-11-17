@@ -91,7 +91,7 @@ cargo run --release -p shiori -- scan /chemin/vers/ma/bibliotheque
 
 Options utiles : `--deep` (décode chaque image), `--json rapport.json` (rapport complet), `--no-db` (sans base), `--fail-on warning`.
 
-Lancer Shiori (interface web et API sous `/api`, sans authentification, écoute sur `127.0.0.1:7878` par défaut). Le front est intégré au binaire de release : le construire d'abord.
+Lancer Shiori (interface web et API sous `/api`, connexion exigée, écoute sur `127.0.0.1:7878` par défaut ; sans compte, la console affiche le jeton d'installation du premier administrateur). Le front est intégré au binaire de release : le construire d'abord.
 
 ```bash
 cd web && npm ci && npm run build
