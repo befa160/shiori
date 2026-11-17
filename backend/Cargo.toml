@@ -17,10 +17,14 @@ all = { level = "warn", priority = -1 }
 [workspace.dependencies]
 alphanumeric-sort = "1.5"
 anyhow = "1.0"
+# Mots de passe (Argon2id, pur Rust) ; le sel vient de getrandom.
+argon2 = "0.6"
 axum = { version = "0.8", default-features = false, features = ["http1", "json", "query", "tokio", "tracing"] }
 clap = { version = "4.6", features = ["derive", "env"] }
 comfy-table = "8.0"
 directories = "6.0"
+# Hasard du système pour les jetons de session et les mots de passe provisoires.
+getrandom = "0.4"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
 imagesize = "0.15"
 ravif = { version = "0.13", default-features = false, features = ["threading"] }

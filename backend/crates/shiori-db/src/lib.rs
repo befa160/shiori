@@ -31,6 +31,7 @@ macro_rules! now {
     };
 }
 
+mod accounts;
 mod browse;
 mod library;
 mod metadata;
@@ -39,6 +40,7 @@ mod runs;
 mod settings;
 mod web;
 
+pub use accounts::{AccountError, NewSession, Role, User, temporary_password};
 pub use browse::{
     ContinueItem, LibrarySummary, PageFile, PageInfo, PageSource, PublicationStatus, ReadingStatus,
     SeriesDetail, SeriesSummary, SeriesVolume, VolumeDetail, VolumeLocation,
