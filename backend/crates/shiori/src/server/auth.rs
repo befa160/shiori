@@ -15,12 +15,13 @@ use std::time::{Duration, Instant};
 
 use axum::Json;
 use axum::extract::rejection::JsonRejection;
-use axum::extract::{ConnectInfo, Request, State};
+use axum::extract::{ConnectInfo, FromRequestParts, Request, State};
+use axum::http::request::Parts;
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use serde::{Deserialize, Serialize};
-use shiori_db::{AccountError, SESSION_SECONDS, User};
+use shiori_db::{AccountError, SESSION_SECONDS, Session, User, Viewer};
 use tokio::sync::Semaphore;
 
 use super::{ApiError, App, invalid_body};
@@ -168,12 +169,7 @@ pub(crate) async fn require_session(
         None => None,
     };
     let Some((session, token, from_cookie)) = session else {
-        return ApiError::new(
-            StatusCode::UNAUTHORIZED,
-            "unauthenticated",
-            "connexion requise",
-        )
-        .into_response();
+        return unauthenticated().into_response();
     };
     let renew = (session.renewed && from_cookie)
         .then(|| cookie(request.headers(), &token, SESSION_SECONDS));
@@ -183,6 +179,30 @@ pub(crate) async fn require_session(
         response.headers_mut().append(header::SET_COOKIE, cookie);
     }
     response
+}
+
+fn unauthenticated() -> ApiError {
+    ApiError::new(
+        StatusCode::UNAUTHORIZED,
+        "unauthenticated",
+        "connexion requise",
+    )
+}
+
+/// Lecteur de la requête (compte de la session et sa langue), pour les routes dont la réponse
+/// dépend du compte : progression, réglages, titres.
+pub(crate) struct Me(pub(crate) Viewer);
+
+impl FromRequestParts<Arc<App>> for Me {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(parts: &mut Parts, app: &Arc<App>) -> Result<Self, ApiError> {
+        let session = parts
+            .extensions
+            .get::<Session>()
+            .ok_or_else(unauthenticated)?;
+        Ok(Me(app.db.viewer(session.user.id).await?))
+    }
 }
 
 impl From<AccountError> for ApiError {

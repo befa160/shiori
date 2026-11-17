@@ -225,6 +225,27 @@ impl Db {
             }
             Err(e) => return Err(e.into()),
         };
+        if role == Role::Admin {
+            // L'existant d'avant les comptes revient au premier administrateur (Q46) ; les
+            // suivants trouvent les tables vides.
+            for sql in [
+                "INSERT INTO reading_progress
+                   (user_id, volume_id, page_id, ordinal, finished_at, updated_at)
+                 SELECT ?, volume_id, page_id, ordinal, finished_at, updated_at FROM legacy_progress",
+                "INSERT INTO user_series_settings
+                   (user_id, series_id, reading_mode, page_layout, page_turn)
+                 SELECT ?, series_id, reading_mode, page_layout, page_turn
+                 FROM legacy_series_settings",
+            ] {
+                sqlx::query(sql).bind(id).execute(&mut *tx).await?;
+            }
+            sqlx::query("DELETE FROM legacy_progress")
+                .execute(&mut *tx)
+                .await?;
+            sqlx::query("DELETE FROM legacy_series_settings")
+                .execute(&mut *tx)
+                .await?;
+        }
         if role == Role::Reader {
             sqlx::query(
                 "INSERT INTO user_libraries (user_id, library_id) SELECT ?, id FROM libraries",

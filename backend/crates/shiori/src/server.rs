@@ -28,7 +28,7 @@ use serde_json::json;
 use shiori_core::{PageId, Severity, VolumeId};
 use shiori_db::{
     Db, EditError, Edited, Language, LibraryError, LibraryKind, PageLayout, PageTurn, ReadingMode,
-    RunFilter, RunStatus, SaveProgress, SettingsChange, Theme,
+    RunFilter, RunStatus, SaveProgress, SettingsChange, Theme, Viewer,
 };
 use shiori_meta::{FetchError, Source, SourceId, WebMetadata};
 use tokio::net::TcpListener;
@@ -44,6 +44,7 @@ use crate::meta::{IdentifyStatus, MetaError, Metadata, web_sources};
 mod auth;
 mod images;
 
+use auth::Me;
 pub(crate) use images::{IMMUTABLE, etag_matches};
 use images::{cover, page_image, thumbnail};
 
@@ -616,10 +617,11 @@ async fn delete_library(
 
 async fn library_series(
     State(app): State<Arc<App>>,
+    Me(me): Me,
     Path(id): Path<String>,
 ) -> ApiResult<Vec<shiori_db::SeriesSummary>> {
     app.db
-        .series_of(int_id(&id)?)
+        .series_of(&me, int_id(&id)?)
         .await?
         .map(Json)
         .ok_or_else(|| ApiError::not_found("bibliothèque"))
@@ -634,14 +636,15 @@ struct SeriesQuery {
 /// Toutes les séries, ou celles d'une bibliothèque (`?library_id=`).
 async fn all_series(
     State(app): State<Arc<App>>,
+    Me(me): Me,
     query: Result<Query<SeriesQuery>, QueryRejection>,
 ) -> ApiResult<Vec<shiori_db::SeriesSummary>> {
     let Query(q) = query.map_err(invalid_query)?;
     match q.library_id {
-        None => Ok(Json(app.db.all_series().await?)),
+        None => Ok(Json(app.db.all_series(&me).await?)),
         Some(id) => app
             .db
-            .series_of(id)
+            .series_of(&me, id)
             .await?
             .map(Json)
             .ok_or_else(|| ApiError::not_found("bibliothèque")),
@@ -657,11 +660,12 @@ struct ContinueQuery {
 /// « Continuer la lecture » : 20 entrées par défaut, 100 au plus.
 async fn continue_reading(
     State(app): State<Arc<App>>,
+    Me(me): Me,
     query: Result<Query<ContinueQuery>, QueryRejection>,
 ) -> ApiResult<Vec<shiori_db::ContinueItem>> {
     let Query(q) = query.map_err(invalid_query)?;
     let limit = q.limit.unwrap_or(20).clamp(1, 100) as usize;
-    Ok(Json(app.db.continue_reading(limit).await?))
+    Ok(Json(app.db.continue_reading(&me, limit).await?))
 }
 
 fn invalid_body(e: JsonRejection) -> ApiError {
@@ -681,6 +685,7 @@ impl From<EditError> for ApiError {
 /// (verrouillé, `null` compris) ; `unlock: [...]` rend des champs aux sources.
 async fn patch_series(
     State(app): State<Arc<App>>,
+    Me(me): Me,
     Path(id): Path<String>,
     body: Result<Json<Edited>, JsonRejection>,
 ) -> ApiResult<shiori_db::SeriesDetail> {
@@ -690,7 +695,7 @@ async fn patch_series(
         return Err(ApiError::not_found("série"));
     }
     app.db
-        .series_detail(id)
+        .series_detail(&me, id)
         .await?
         .map(Json)
         .ok_or_else(|| ApiError::not_found("série"))
@@ -698,10 +703,11 @@ async fn patch_series(
 
 async fn series(
     State(app): State<Arc<App>>,
+    Me(me): Me,
     Path(id): Path<String>,
 ) -> ApiResult<shiori_db::SeriesDetail> {
     app.db
-        .series_detail(int_id(&id)?)
+        .series_detail(&me, int_id(&id)?)
         .await?
         .map(Json)
         .ok_or_else(|| ApiError::not_found("série"))
@@ -709,10 +715,11 @@ async fn series(
 
 async fn volume(
     State(app): State<Arc<App>>,
+    Me(me): Me,
     Path(id): Path<String>,
 ) -> ApiResult<shiori_db::VolumeDetail> {
     app.db
-        .volume_detail(&volume_id(&id)?)
+        .volume_detail(&me, &volume_id(&id)?)
         .await?
         .map(Json)
         .ok_or_else(|| ApiError::not_found("tome"))
@@ -749,9 +756,13 @@ fn source_id(name: &str) -> Result<SourceId, ApiError> {
 }
 
 /// Détail d'une série, ou 404.
-async fn series_or_404(app: &App, id: i64) -> Result<shiori_db::SeriesDetail, ApiError> {
+async fn series_or_404(
+    app: &App,
+    me: &Viewer,
+    id: i64,
+) -> Result<shiori_db::SeriesDetail, ApiError> {
     app.db
-        .series_detail(id)
+        .series_detail(me, id)
         .await?
         .ok_or_else(|| ApiError::not_found("série"))
 }
@@ -766,6 +777,7 @@ struct MetadataSearch {
 /// Fiches d'une source pour identifier une série à la main (fenêtre « Identifier »).
 async fn search_metadata(
     State(app): State<Arc<App>>,
+    Me(me): Me,
     Path(id): Path<String>,
     query: Result<Query<MetadataSearch>, QueryRejection>,
 ) -> ApiResult<Vec<WebMetadata>> {
@@ -779,7 +791,7 @@ async fn search_metadata(
             "q : un titre à chercher",
         ));
     }
-    series_or_404(&app, id).await?;
+    series_or_404(&app, &me, id).await?;
     Ok(Json(app.metadata.search(q.source, text).await?))
 }
 
@@ -792,36 +804,39 @@ struct NewLink {
 /// Lie une série à la fiche choisie et renvoie son détail.
 async fn link_source(
     State(app): State<Arc<App>>,
+    Me(me): Me,
     Path((id, source)): Path<(String, String)>,
     body: Result<Json<NewLink>, JsonRejection>,
 ) -> ApiResult<shiori_db::SeriesDetail> {
     let (id, source) = (int_id(&id)?, source_id(&source)?);
     let Json(link) = body.map_err(invalid_body)?;
-    series_or_404(&app, id).await?;
+    series_or_404(&app, &me, id).await?;
     app.metadata.link(id, source, link.external_id).await?;
-    Ok(Json(series_or_404(&app, id).await?))
+    Ok(Json(series_or_404(&app, &me, id).await?))
 }
 
 /// Délie une source (ses données ne comptent plus) et renvoie le détail de la série.
 async fn unlink_source(
     State(app): State<Arc<App>>,
+    Me(me): Me,
     Path((id, source)): Path<(String, String)>,
 ) -> ApiResult<shiori_db::SeriesDetail> {
     let (id, source) = (int_id(&id)?, source_id(&source)?);
-    series_or_404(&app, id).await?;
+    series_or_404(&app, &me, id).await?;
     app.db.unlink_source(id, source).await?;
-    Ok(Json(series_or_404(&app, id).await?))
+    Ok(Json(series_or_404(&app, &me, id).await?))
 }
 
 /// Relit les fiches liées d'une série et renvoie son détail.
 async fn refresh_metadata(
     State(app): State<Arc<App>>,
+    Me(me): Me,
     Path(id): Path<String>,
 ) -> ApiResult<shiori_db::SeriesDetail> {
     let id = int_id(&id)?;
-    series_or_404(&app, id).await?;
+    series_or_404(&app, &me, id).await?;
     app.metadata.refresh(id).await?;
-    Ok(Json(series_or_404(&app, id).await?))
+    Ok(Json(series_or_404(&app, &me, id).await?))
 }
 
 #[derive(Deserialize)]
@@ -833,14 +848,15 @@ struct UseCover {
 /// Prend la couverture de la fiche liée chez une source et renvoie le détail de la série.
 async fn use_cover(
     State(app): State<Arc<App>>,
+    Me(me): Me,
     Path(id): Path<String>,
     body: Result<Json<UseCover>, JsonRejection>,
 ) -> ApiResult<shiori_db::SeriesDetail> {
     let id = int_id(&id)?;
     let Json(body) = body.map_err(invalid_body)?;
-    series_or_404(&app, id).await?;
+    series_or_404(&app, &me, id).await?;
     app.metadata.use_cover(id, body.source).await?;
-    Ok(Json(series_or_404(&app, id).await?))
+    Ok(Json(series_or_404(&app, &me, id).await?))
 }
 
 #[derive(Serialize)]
@@ -875,6 +891,7 @@ async fn identify(State(app): State<Arc<App>>) -> Result<StatusCode, ApiError> {
 
 async fn patch_volume(
     State(app): State<Arc<App>>,
+    Me(me): Me,
     Path(id): Path<String>,
     body: Result<Json<Edited>, JsonRejection>,
 ) -> ApiResult<shiori_db::VolumeDetail> {
@@ -884,7 +901,7 @@ async fn patch_volume(
         return Err(ApiError::not_found("tome"));
     }
     app.db
-        .volume_detail(&id)
+        .volume_detail(&me, &id)
         .await?
         .map(Json)
         .ok_or_else(|| ApiError::not_found("tome"))
@@ -893,10 +910,11 @@ async fn patch_volume(
 /// Progression d'un tome, ou 204 s'il n'a jamais été ouvert.
 async fn progress(
     State(app): State<Arc<App>>,
+    Me(me): Me,
     Path(id): Path<String>,
 ) -> Result<Response, ApiError> {
     let volume = volume_id(&id)?;
-    if let Some(progress) = app.db.progress(&volume).await? {
+    if let Some(progress) = app.db.progress(&me, &volume).await? {
         return Ok(Json(progress).into_response());
     }
     match app.db.volume_exists(&volume).await? {
@@ -912,6 +930,7 @@ struct NewProgress {
 
 async fn save_progress(
     State(app): State<Arc<App>>,
+    Me(me): Me,
     Path(id): Path<String>,
     body: Result<Json<NewProgress>, JsonRejection>,
 ) -> ApiResult<shiori_db::Progress> {
@@ -921,7 +940,7 @@ async fn save_progress(
         .page_id
         .parse()
         .map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, "invalid_body", format!("{e}")))?;
-    match app.db.save_progress(&volume, &page).await? {
+    match app.db.save_progress(&me, &volume, &page).await? {
         SaveProgress::Saved(progress) => Ok(Json(progress)),
         SaveProgress::UnknownVolume => Err(ApiError::not_found("tome")),
         SaveProgress::PageNotInVolume => Err(ApiError::new(
@@ -935,9 +954,10 @@ async fn save_progress(
 /// « Marquer comme non lu ».
 async fn clear_progress(
     State(app): State<Arc<App>>,
+    Me(me): Me,
     Path(id): Path<String>,
 ) -> Result<StatusCode, ApiError> {
-    match app.db.clear_progress(&volume_id(&id)?).await? {
+    match app.db.clear_progress(&me, &volume_id(&id)?).await? {
         true => Ok(StatusCode::NO_CONTENT),
         false => Err(ApiError::not_found("tome")),
     }
@@ -966,6 +986,7 @@ where
 
 async fn series_settings(
     State(app): State<Arc<App>>,
+    Me(me): Me,
     Path(id): Path<String>,
     body: Result<Json<SettingsPatch>, JsonRejection>,
 ) -> ApiResult<shiori_db::ReadingSettings> {
@@ -977,7 +998,7 @@ async fn series_settings(
         page_turn: patch.page_turn,
     };
     app.db
-        .change_series_settings(id, change)
+        .change_series_settings(&me, id, change)
         .await?
         .map(Json)
         .ok_or_else(|| ApiError::not_found("série"))

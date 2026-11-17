@@ -48,20 +48,24 @@ impl Settings {
     /// Ordre des sources appliqué (Q28) : celui choisi, sinon AniList d'abord en anglais et
     /// MangaDex d'abord en français (ses résumés existent souvent en français).
     pub fn source_order(&self) -> Vec<SourceId> {
+        self.order_for(self.language.unwrap_or(Language::Fr))
+    }
+
+    /// Ordre des sources pour la vue fusionnée d'une langue : celui choisi, sinon d'après elle.
+    pub fn order_for(&self, language: Language) -> Vec<SourceId> {
         self.metadata_sources
             .clone()
-            .unwrap_or_else(|| match self.language {
-                Some(Language::En) => vec![SourceId::Anilist, SourceId::Mangadex],
-                _ => vec![SourceId::Mangadex, SourceId::Anilist],
+            .unwrap_or_else(|| match language {
+                Language::En => vec![SourceId::Anilist, SourceId::Mangadex],
+                Language::Fr => vec![SourceId::Mangadex, SourceId::Anilist],
             })
     }
 
-    /// Code de la langue de l'interface pour choisir un titre ou un résumé (`fr` par défaut,
-    /// la langue source de l'interface).
-    pub fn lang(&self) -> &'static str {
-        match self.language {
-            Some(Language::En) => "en",
-            _ => "fr",
+    /// Code d'une langue pour choisir un titre ou un résumé.
+    pub fn code(language: Language) -> &'static str {
+        match language {
+            Language::En => "en",
+            Language::Fr => "fr",
         }
     }
 }

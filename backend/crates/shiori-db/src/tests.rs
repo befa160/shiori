@@ -89,3 +89,15 @@ fn location_keys_are_absolute_with_forward_slashes() {
     assert!(key.ends_with("relatif/tome.cbz"), "{key}");
     assert!(Path::new(&key.replace('/', std::path::MAIN_SEPARATOR_STR)).is_absolute());
 }
+
+/// Lecteur des tests : un administrateur, créé au premier appel.
+pub(crate) async fn viewer(db: &Db) -> Viewer {
+    let user = match db.user_by_name("lecteur").await.unwrap() {
+        Some(user) => user,
+        None => db
+            .create_user("lecteur", "mot de passe", Role::Admin)
+            .await
+            .unwrap(),
+    };
+    db.viewer(user.id).await.unwrap()
+}

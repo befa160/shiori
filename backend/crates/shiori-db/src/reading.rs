@@ -1,7 +1,6 @@
-//! Lecture : progression par tome et réglages de lecture par série (phase 3, lot 3.3).
-//!
-//! Un seul utilisateur implicite tant qu'il n'y a pas de comptes (Q11). La progression est
-//! rangée sous l'identité du tome et désigne la page par son ID : jamais un index brut.
+//! Lecture : progression par tome et réglages de lecture par série (phase 3, lot 3.3), propres
+//! à chaque compte depuis la phase 7 (Q48). La progression est rangée sous l'identité du tome
+//! et désigne la page par son ID : jamais un index brut.
 
 use std::collections::HashMap;
 
@@ -10,7 +9,15 @@ use shiori_core::{PageId, VolumeId};
 use sqlx::Row;
 use sqlx::sqlite::SqliteRow;
 
-use crate::{Db, Error, from_db, to_db};
+use crate::{Db, Error, Language, from_db, to_db};
+
+/// Qui lit : la progression et les réglages sont ceux de ce compte, les titres et résumés
+/// venus du web dans sa langue (Q34).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Viewer {
+    pub user: i64,
+    pub language: Language,
+}
 
 /// Type de bibliothèque : donne le sens de lecture par défaut de ses séries (Q12).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -67,8 +74,8 @@ pub enum PageTurn {
     Rtl,
 }
 
-/// Réglages d'une série : les valeurs appliquées, et ce que la série impose elle-même
-/// (`None` = défaut de la bibliothèque, ou défaut global pour `page_turn`).
+/// Réglages d'une série pour un compte : les valeurs appliquées, et ce que le compte a choisi
+/// pour elle (`None` = défaut de la bibliothèque, ou défaut du compte pour `page_turn`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct ReadingSettings {
     pub reading_mode: ReadingMode,
@@ -80,8 +87,7 @@ pub struct ReadingSettings {
 }
 
 impl ReadingSettings {
-    /// D'après une ligne qui a `kind`, `reading_mode`, `page_layout`, `page_turn` (de la série)
-    /// et `default_page_turn` (réglage global).
+    /// D'après une ligne de [`settings_of!`].
     pub(crate) fn of(row: &SqliteRow) -> Result<Self, Error> {
         let optional = |column| row.get::<Option<&str>, _>(column);
         let kind: LibraryKind = from_db(row.get("kind"))?;
@@ -114,15 +120,22 @@ impl Default for ReadingSettings {
     }
 }
 
-/// Colonnes de [`ReadingSettings::of`], pour une requête où `s` est la série et `b` sa
-/// bibliothèque.
-macro_rules! settings_columns {
-    () => {
-        "b.kind, s.reading_mode, s.page_layout, s.page_turn,
-         (SELECT page_turn FROM app_settings WHERE id = 1) AS default_page_turn"
+/// Réglages de la série `s` pour le compte `?1` ; `$series` choisit la série d'après `?2`.
+/// Le sens pour tourner les pages par défaut est celui du compte, sinon celui de l'instance.
+macro_rules! settings_of {
+    ($series:literal) => {
+        concat!(
+            "SELECT b.kind, us.reading_mode, us.page_layout, us.page_turn,
+                    COALESCE(ust.page_turn, a.page_turn) AS default_page_turn
+             FROM series s JOIN libraries b ON b.id = s.library_id
+             JOIN app_settings a ON a.id = 1
+             LEFT JOIN user_settings ust ON ust.user_id = ?1
+             LEFT JOIN user_series_settings us ON us.user_id = ?1 AND us.series_id = s.id
+             WHERE s.id = ",
+            $series
+        )
     };
 }
-pub(crate) use settings_columns;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Progress {
@@ -163,17 +176,34 @@ pub struct SettingsChange {
     pub page_turn: Option<Option<PageTurn>>,
 }
 
+/// Progression du compte `?1` ; `$filter` peut utiliser `?2`.
 macro_rules! progress_of {
     ($filter:literal) => {
         concat!(
             "SELECT r.volume_id, r.page_id, r.ordinal, r.finished_at, r.updated_at, v.page_count
-             FROM reading_progress r JOIN volumes v ON v.id = r.volume_id WHERE ",
+             FROM reading_progress r JOIN volumes v ON v.id = r.volume_id
+             WHERE r.user_id = ?1 AND ",
             $filter
         )
     };
 }
 
 impl Db {
+    /// Lecteur `user` : sa langue, sinon celle de l'instance, sinon le français.
+    pub async fn viewer(&self, user: i64) -> Result<Viewer, Error> {
+        let row = sqlx::query(
+            "SELECT COALESCE(us.language, a.language, 'fr') AS language
+             FROM app_settings a LEFT JOIN user_settings us ON us.user_id = ? WHERE a.id = 1",
+        )
+        .bind(user)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(Viewer {
+            user,
+            language: from_db(row.get("language"))?,
+        })
+    }
+
     /// Le tome est connu de la base.
     pub async fn volume_exists(&self, volume: &VolumeId) -> Result<bool, Error> {
         Ok(sqlx::query("SELECT 1 FROM volumes WHERE id = ?")
@@ -184,8 +214,13 @@ impl Db {
     }
 
     /// Progression d'un tome ; `None` s'il n'a jamais été ouvert (ou n'existe pas).
-    pub async fn progress(&self, volume: &VolumeId) -> Result<Option<Progress>, Error> {
-        let row = sqlx::query(progress_of!("r.volume_id = ?"))
+    pub async fn progress(
+        &self,
+        viewer: &Viewer,
+        volume: &VolumeId,
+    ) -> Result<Option<Progress>, Error> {
+        let row = sqlx::query(progress_of!("r.volume_id = ?2"))
+            .bind(viewer.user)
             .bind(volume.to_string())
             .fetch_optional(&self.pool)
             .await?;
@@ -195,11 +230,13 @@ impl Db {
     /// Progression des tomes d'une série, par ID de tome.
     pub(crate) async fn progress_in_series(
         &self,
+        viewer: &Viewer,
         series: i64,
     ) -> Result<HashMap<String, Progress>, Error> {
         let rows = sqlx::query(progress_of!(
-            "r.volume_id IN (SELECT volume_id FROM file_locations WHERE series_id = ?)"
+            "r.volume_id IN (SELECT volume_id FROM file_locations WHERE series_id = ?2)"
         ))
+        .bind(viewer.user)
         .bind(series)
         .fetch_all(&self.pool)
         .await?;
@@ -212,12 +249,14 @@ impl Db {
     /// Progression des tomes rattachés à une série, dans une bibliothèque ou dans toutes.
     pub(crate) async fn progress_in_libraries(
         &self,
+        viewer: &Viewer,
         library: Option<i64>,
     ) -> Result<HashMap<String, Progress>, Error> {
         let rows = sqlx::query(progress_of!(
             "r.volume_id IN (SELECT volume_id FROM file_locations
-             WHERE series_id IS NOT NULL AND (?1 IS NULL OR library_id = ?1))"
+             WHERE series_id IS NOT NULL AND (?2 IS NULL OR library_id = ?2))"
         ))
+        .bind(viewer.user)
         .bind(library)
         .fetch_all(&self.pool)
         .await?;
@@ -231,6 +270,7 @@ impl Db {
     /// et il le reste même si on revient en arrière (seul [`Db::clear_progress`] l'efface).
     pub async fn save_progress(
         &self,
+        viewer: &Viewer,
         volume: &VolumeId,
         page: &PageId,
     ) -> Result<SaveProgress, Error> {
@@ -253,24 +293,27 @@ impl Db {
         let ordinal: i64 = p.get("ordinal");
         let last = ordinal + 1 >= v.get::<i64, _>("page_count");
         let sql = concat!(
-            "INSERT INTO reading_progress (volume_id, page_id, ordinal, finished_at, updated_at)
-             VALUES (?, ?, ?, CASE WHEN ? THEN ",
+            "INSERT INTO reading_progress
+               (user_id, volume_id, page_id, ordinal, finished_at, updated_at)
+             VALUES (?, ?, ?, ?, CASE WHEN ? THEN ",
             now!(),
             " END, ",
             now!(),
             ")
-             ON CONFLICT (volume_id) DO UPDATE SET page_id = excluded.page_id,
+             ON CONFLICT (user_id, volume_id) DO UPDATE SET page_id = excluded.page_id,
                ordinal = excluded.ordinal, updated_at = excluded.updated_at,
                finished_at = COALESCE(reading_progress.finished_at, excluded.finished_at)"
         );
         sqlx::query(sql)
+            .bind(viewer.user)
             .bind(&volume)
             .bind(page.to_string())
             .bind(ordinal)
             .bind(last)
             .execute(&self.pool)
             .await?;
-        let row = sqlx::query(progress_of!("r.volume_id = ?"))
+        let row = sqlx::query(progress_of!("r.volume_id = ?2"))
+            .bind(viewer.user)
             .bind(&volume)
             .fetch_one(&self.pool)
             .await?;
@@ -278,61 +321,71 @@ impl Db {
     }
 
     /// « Marquer comme non lu ». `false` si le tome n'existe pas.
-    pub async fn clear_progress(&self, volume: &VolumeId) -> Result<bool, Error> {
-        sqlx::query("DELETE FROM reading_progress WHERE volume_id = ?")
+    pub async fn clear_progress(&self, viewer: &Viewer, volume: &VolumeId) -> Result<bool, Error> {
+        sqlx::query("DELETE FROM reading_progress WHERE user_id = ? AND volume_id = ?")
+            .bind(viewer.user)
             .bind(volume.to_string())
             .execute(&self.pool)
             .await?;
         self.volume_exists(volume).await
     }
 
-    /// Réglages appliqués à une série ; `None` si elle n'existe pas.
-    pub async fn series_settings(&self, series: i64) -> Result<Option<ReadingSettings>, Error> {
-        let row = sqlx::query(concat!(
-            "SELECT ",
-            settings_columns!(),
-            " FROM series s JOIN libraries b ON b.id = s.library_id WHERE s.id = ?"
-        ))
-        .bind(series)
-        .fetch_optional(&self.pool)
-        .await?;
+    /// Réglages appliqués à une série pour ce compte ; `None` si elle n'existe pas.
+    pub async fn series_settings(
+        &self,
+        viewer: &Viewer,
+        series: i64,
+    ) -> Result<Option<ReadingSettings>, Error> {
+        let row = sqlx::query(settings_of!("?2"))
+            .bind(viewer.user)
+            .bind(series)
+            .fetch_optional(&self.pool)
+            .await?;
         row.as_ref().map(ReadingSettings::of).transpose()
     }
 
-    /// Modifie les réglages d'une série ; `None` si elle n'existe pas.
+    /// Modifie les réglages d'une série pour ce compte ; `None` si elle n'existe pas.
     pub async fn change_series_settings(
         &self,
+        viewer: &Viewer,
         series: i64,
         change: SettingsChange,
     ) -> Result<Option<ReadingSettings>, Error> {
-        let Some(current) = self.series_settings(series).await? else {
+        let Some(current) = self.series_settings(viewer, series).await? else {
             return Ok(None);
         };
         let mode = change.reading_mode.unwrap_or(current.reading_mode_override);
         let layout = change.page_layout.unwrap_or(current.page_layout_override);
         let turn = change.page_turn.unwrap_or(current.page_turn_override);
         sqlx::query(
-            "UPDATE series SET reading_mode = ?, page_layout = ?, page_turn = ? WHERE id = ?",
+            "INSERT INTO user_series_settings
+               (user_id, series_id, reading_mode, page_layout, page_turn)
+             VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT (user_id, series_id) DO UPDATE SET reading_mode = excluded.reading_mode,
+               page_layout = excluded.page_layout, page_turn = excluded.page_turn",
         )
+        .bind(viewer.user)
+        .bind(series)
         .bind(mode.as_ref().map(to_db))
         .bind(layout.as_ref().map(to_db))
         .bind(turn.as_ref().map(to_db))
-        .bind(series)
         .execute(&self.pool)
         .await?;
-        self.series_settings(series).await
+        self.series_settings(viewer, series).await
     }
 
     /// Réglages qui s'appliquent à un tome : ceux de sa première série (par chemin), sinon
     /// le défaut d'une bibliothèque de manga.
-    pub(crate) async fn volume_settings(&self, volume: &str) -> Result<ReadingSettings, Error> {
-        let row = sqlx::query(concat!(
-            "SELECT ",
-            settings_columns!(),
-            " FROM file_locations l JOIN series s ON s.id = l.series_id
-             JOIN libraries b ON b.id = s.library_id
-             WHERE l.volume_id = ? ORDER BY l.path LIMIT 1"
+    pub(crate) async fn volume_settings(
+        &self,
+        viewer: &Viewer,
+        volume: &str,
+    ) -> Result<ReadingSettings, Error> {
+        let row = sqlx::query(settings_of!(
+            "(SELECT series_id FROM file_locations
+              WHERE volume_id = ?2 AND series_id IS NOT NULL ORDER BY path LIMIT 1)"
         ))
+        .bind(viewer.user)
         .bind(volume)
         .fetch_optional(&self.pool)
         .await?;

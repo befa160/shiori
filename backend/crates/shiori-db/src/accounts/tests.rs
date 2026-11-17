@@ -361,3 +361,94 @@ async fn a_recent_session_is_read_even_while_another_write_holds_the_lock() {
     assert_eq!(found.unwrap().unwrap().user, bob);
     lock.rollback().await.unwrap();
 }
+
+/// Base d'avant les comptes : progression et réglages de série (migration 14) à remplir.
+async fn before_accounts(path: &std::path::Path, admin_already: bool) {
+    let options = sqlx::sqlite::SqliteConnectOptions::new()
+        .filename(path)
+        .create_if_missing(true);
+    let pool = sqlx::SqlitePool::connect_with(options).await.unwrap();
+    sqlx::migrate!().run_to(14, &pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO volumes VALUES ('v', 1, 'cbz', 'ok', 3, 1, '2026-11-11T00:00:00.000Z');
+         INSERT INTO libraries (id, name, root, created_at) VALUES (1, 'L', '/l', '');
+         INSERT INTO series (id, library_id, folder, name, created_at, reading_mode, page_turn)
+           VALUES (1, 1, 'A', 'A', '', 'ltr', 'rtl');
+         INSERT INTO series (id, library_id, folder, name, created_at) VALUES (2, 1, 'B', 'B', '');
+         INSERT INTO reading_progress VALUES ('v', 'p', 2, 'x', '2026-11-12T00:00:00.000Z');",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    if admin_already {
+        sqlx::query(
+            "INSERT INTO users (username, username_key, password_hash, role, created_at,
+                                password_changed_at)
+             VALUES ('cli', 'cli', 'x', 'admin', '', '')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    pool.close().await;
+}
+
+async fn counts(db: &Db) -> (i64, i64, i64, i64) {
+    let row = sqlx::query(
+        "SELECT (SELECT COUNT(*) FROM legacy_progress) AS lp,
+                (SELECT COUNT(*) FROM legacy_series_settings) AS ls,
+                (SELECT COUNT(*) FROM reading_progress) AS rp,
+                (SELECT COUNT(*) FROM user_series_settings) AS us",
+    )
+    .fetch_one(db.pool())
+    .await
+    .unwrap();
+    (row.get("lp"), row.get("ls"), row.get("rp"), row.get("us"))
+}
+
+#[tokio::test]
+async fn the_first_admin_takes_back_what_was_read_before_accounts() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("t.db");
+    before_accounts(&path, false).await;
+    let db = Db::open(&path).await.unwrap();
+    assert_eq!(
+        counts(&db).await,
+        (1, 1, 0, 0),
+        "gardé en attendant un administrateur"
+    );
+
+    // Un lecteur ne reprend rien ; le premier administrateur reprend tout.
+    db.create_user("bob", "mot de passe", Role::Reader)
+        .await
+        .unwrap();
+    assert_eq!(counts(&db).await, (1, 1, 0, 0));
+    let alice = db
+        .create_user("alice", "mot de passe", Role::Admin)
+        .await
+        .unwrap();
+    assert_eq!(counts(&db).await, (0, 0, 1, 1));
+    let viewer = db.viewer(alice.id).await.unwrap();
+    let settings = db.series_settings(&viewer, 1).await.unwrap().unwrap();
+    assert_eq!(
+        (settings.reading_mode, settings.page_turn),
+        (crate::ReadingMode::Ltr, crate::PageTurn::Rtl)
+    );
+    db.create_user("carol", "mot de passe", Role::Admin)
+        .await
+        .unwrap();
+    assert_eq!(
+        counts(&db).await,
+        (0, 0, 1, 1),
+        "le second administrateur ne reprend rien"
+    );
+}
+
+#[tokio::test]
+async fn an_admin_created_from_the_cli_takes_it_back_at_migration() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("t.db");
+    before_accounts(&path, true).await;
+    let db = Db::open(&path).await.unwrap();
+    assert_eq!(counts(&db).await, (0, 0, 1, 1));
+}

@@ -59,10 +59,23 @@ impl Fixture {
             .unwrap()
     }
 
+    /// Un lecteur quelconque : les noms des séries ne dépendent pas du compte.
+    async fn viewer(&self) -> shiori_db::Viewer {
+        let user = match self.db.user_by_name("lecteur").await.unwrap() {
+            Some(user) => user,
+            None => self
+                .db
+                .create_user("lecteur", "mot de passe", shiori_db::Role::Reader)
+                .await
+                .unwrap(),
+        };
+        self.db.viewer(user.id).await.unwrap()
+    }
+
     async fn series(&self) -> Vec<String> {
         let mut names: Vec<String> = self
             .db
-            .series_of(self.library.id)
+            .series_of(&self.viewer().await, self.library.id)
             .await
             .unwrap()
             .unwrap()

@@ -18,6 +18,7 @@ use tower::ServiceExt;
 
 struct Fixture {
     _dir: tempfile::TempDir,
+    db: Arc<Db>,
     app: Router,
     series: i64,
     volume: String,
@@ -66,9 +67,13 @@ async fn fixture(kind: Option<&str>) -> Fixture {
         .unwrap();
     db.attach(&library, &manga).await.unwrap();
     db.refresh_series(&library).await.unwrap();
-    let series = db.series_of(library.id).await.unwrap().unwrap()[0].id;
+    // Le compte de la session des tests (créé par `common::router`).
+    let admin = db.user_by_name("admin").await.unwrap().unwrap();
+    let viewer = db.viewer(admin.id).await.unwrap();
+    let series = db.series_of(&viewer, library.id).await.unwrap().unwrap()[0].id;
     Fixture {
         _dir: dir,
+        db,
         app,
         series,
         volume: scanned.report.volume_id.unwrap().to_string(),
@@ -398,4 +403,50 @@ async fn language_setting_round_trip() {
             "{body}"
         );
     }
+}
+
+/// Chaque compte a sa progression et ses réglages (Q48) : un autre lecteur ne voit rien de ce
+/// que l'administrateur a lu ou réglé.
+#[tokio::test]
+async fn progress_and_settings_belong_to_the_account() {
+    let f = fixture(None).await;
+    let uri = format!("/api/volumes/{}/progress", f.volume);
+    call(&f.app, "PUT", &uri, Some(json!({ "page_id": f.pages[4] }))).await;
+    let settings = format!("/api/series/{}/settings", f.series);
+    call(
+        &f.app,
+        "PATCH",
+        &settings,
+        Some(json!({ "reading_mode": "ltr" })),
+    )
+    .await;
+
+    let bob =
+        f.db.create_user("bob", "mot de passe", shiori_db::Role::Reader)
+            .await
+            .unwrap();
+    let session = f.db.create_session(bob.id, "tests").await.unwrap();
+    let as_bob = |method: &str, uri: &str| {
+        Request::builder()
+            .method(method)
+            .uri(uri)
+            .header("cookie", format!("shiori_session={}", session.token))
+            .body(Body::empty())
+            .unwrap()
+    };
+    let response = f.app.clone().oneshot(as_bob("GET", &uri)).await.unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    let response = f
+        .app
+        .clone()
+        .oneshot(as_bob("GET", &format!("/api/series/{}", f.series)))
+        .await
+        .unwrap();
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let series: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(series["settings"]["reading_mode"], "rtl");
+    assert!(series["volumes"][0].get("progress").is_none());
+
+    let (_, mine) = call(&f.app, "GET", &uri, None).await;
+    assert_eq!(mine["ordinal"], 4);
 }

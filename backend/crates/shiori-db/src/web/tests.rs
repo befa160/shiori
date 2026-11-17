@@ -26,7 +26,7 @@ async fn setup() -> (tempfile::TempDir, Db, i64, i64) {
     }
     db.refresh_metadata(None).await.unwrap();
     let ids: Vec<i64> = db
-        .all_series()
+        .all_series(&crate::tests::viewer(&db).await)
         .await
         .unwrap()
         .iter()
@@ -53,7 +53,10 @@ fn fiche(id: &str, title: &str, lang: &str) -> WebMetadata {
 }
 
 async fn series(db: &Db, id: i64) -> crate::SeriesDetail {
-    db.series_detail(id).await.unwrap().unwrap()
+    db.series_detail(&crate::tests::viewer(db).await, id)
+        .await
+        .unwrap()
+        .unwrap()
 }
 
 async fn left(db: &Db, source: SourceId) -> Vec<i64> {
@@ -283,7 +286,10 @@ async fn an_edited_field_beats_the_web_and_settings_round_trip() {
         settings.source_order(),
         [SourceId::Mangadex, SourceId::Anilist]
     );
-    assert_eq!(settings.lang(), "fr");
+    assert_eq!(
+        settings.order_for(Language::En),
+        [SourceId::Anilist, SourceId::Mangadex]
+    );
     assert!(db.set_metadata_online(true).await.unwrap().metadata_online);
     assert!(
         !settings.metadata_adult,
@@ -402,4 +408,48 @@ async fn unused_covers_are_purged_after_an_hour() {
     assert_eq!(db.purge_covers().await.unwrap(), 1);
     assert!(db.cover(&chosen).await.unwrap().is_some());
     assert_eq!(db.cover(&replaced).await.unwrap(), None);
+}
+
+/// Une vue par langue (Q34) : deux comptes lisent la même série en même temps, chacun avec le
+/// titre et le résumé de sa langue.
+#[tokio::test]
+async fn each_language_has_its_own_merged_view() {
+    let (_dir, db, one, _) = setup().await;
+    db.record_source(one, SourceId::Anilist, linked("30013", "One Piece", "en"))
+        .await
+        .unwrap();
+    db.record_source(
+        one,
+        SourceId::Mangadex,
+        linked("a1c7", "One Piece (VF)", "fr"),
+    )
+    .await
+    .unwrap();
+    let fr = crate::tests::viewer(&db).await;
+    let bob = db
+        .create_user("bob", "mot de passe", crate::Role::Reader)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO user_settings (user_id, language) VALUES (?, 'en')")
+        .bind(bob.id)
+        .execute(db.pool())
+        .await
+        .unwrap();
+    let en = db.viewer(bob.id).await.unwrap();
+    let name = |d: crate::SeriesDetail| (d.name, d.metadata.summary);
+    assert_eq!(
+        name(db.series_detail(&fr, one).await.unwrap().unwrap()),
+        (
+            "One Piece (VF)".into(),
+            Some("Résumé de One Piece (VF)".into())
+        )
+    );
+    assert_eq!(
+        name(db.series_detail(&en, one).await.unwrap().unwrap()),
+        ("One Piece".into(), Some("Résumé de One Piece".into()))
+    );
+    let listed =
+        |all: Vec<crate::SeriesSummary>| all.into_iter().find(|s| s.id == one).unwrap().name;
+    assert_eq!(listed(db.all_series(&fr).await.unwrap()), "One Piece (VF)");
+    assert_eq!(listed(db.all_series(&en).await.unwrap()), "One Piece");
 }

@@ -13,10 +13,9 @@ use shiori_core::{
 use sqlx::Row;
 use sqlx::sqlite::SqliteRow;
 
-use crate::reading::settings_columns;
 use crate::{
-    Db, Error, LibraryKind, Progress, ReadingSettings, SeriesMetadata, VolumeMetadata, from_db,
-    stamp,
+    Db, Error, LibraryKind, Progress, ReadingSettings, SeriesMetadata, Viewer, VolumeMetadata,
+    from_db, stamp, to_db,
 };
 
 #[derive(Debug, Serialize)]
@@ -352,7 +351,11 @@ impl Db {
     }
 
     /// Séries d'une bibliothèque, triées par nom (tri naturel) ; `None` si elle n'existe pas.
-    pub async fn series_of(&self, library_id: i64) -> Result<Option<Vec<SeriesSummary>>, Error> {
+    pub async fn series_of(
+        &self,
+        viewer: &Viewer,
+        library_id: i64,
+    ) -> Result<Option<Vec<SeriesSummary>>, Error> {
         if sqlx::query("SELECT 1 FROM libraries WHERE id = ?")
             .bind(library_id)
             .fetch_optional(&self.pool)
@@ -361,22 +364,28 @@ impl Db {
         {
             return Ok(None);
         }
-        self.summaries(Some(library_id)).await.map(Some)
+        self.summaries(viewer, Some(library_id)).await.map(Some)
     }
 
     /// Séries de toutes les bibliothèques, triées par nom (tri naturel).
-    pub async fn all_series(&self) -> Result<Vec<SeriesSummary>, Error> {
-        self.summaries(None).await
+    pub async fn all_series(&self, viewer: &Viewer) -> Result<Vec<SeriesSummary>, Error> {
+        self.summaries(viewer, None).await
     }
 
     // shortcut: liste complète sans pagination (recherche et filtres côté client), suffisant pour quelques milliers de séries ; paginer et filtrer côté serveur au-delà.
-    async fn summaries(&self, library: Option<i64>) -> Result<Vec<SeriesSummary>, Error> {
+    async fn summaries(
+        &self,
+        viewer: &Viewer,
+        library: Option<i64>,
+    ) -> Result<Vec<SeriesSummary>, Error> {
         let series = sqlx::query(
-            "SELECT s.id, s.library_id, s.name, s.publication_status, s.created_at, m.merged
+            "SELECT s.id, s.library_id, s.name, s.publication_status, s.created_at,
+                    CASE WHEN ?2 = 'en' THEN m.merged_en ELSE m.merged END AS merged
              FROM series s LEFT JOIN series_metadata m ON m.series_id = s.id
              WHERE ?1 IS NULL OR s.library_id = ?1",
         )
         .bind(library)
+        .bind(to_db(&viewer.language))
         .fetch_all(&self.pool)
         .await?;
         let rows = sqlx::query(located_volumes!(
@@ -390,7 +399,7 @@ impl Db {
         .collect::<Result<Vec<_>, _>>()?;
         let rows = in_series_order(rows);
         let volumes = by_series(&rows);
-        let progress = self.progress_in_libraries(library).await?;
+        let progress = self.progress_in_libraries(viewer, library).await?;
         let mut out = series
             .iter()
             .map(|s| {
@@ -451,22 +460,31 @@ impl Db {
 
     /// « Continuer la lecture » : la suite de chaque série commencée ([`up_next`]), de la
     /// lecture la plus récente à la plus ancienne.
-    pub async fn continue_reading(&self, limit: usize) -> Result<Vec<ContinueItem>, Error> {
-        // Séries dont au moins un tome a été ouvert.
+    pub async fn continue_reading(
+        &self,
+        viewer: &Viewer,
+        limit: usize,
+    ) -> Result<Vec<ContinueItem>, Error> {
+        // Séries dont le compte `?1` a ouvert au moins un tome.
         macro_rules! started {
             () => {
                 "(SELECT l2.series_id FROM file_locations l2
-                  JOIN reading_progress r ON r.volume_id = l2.volume_id)"
+                  JOIN reading_progress r ON r.volume_id = l2.volume_id AND r.user_id = ?1)"
             };
         }
         let series = sqlx::query(concat!(
-            "SELECT s.id, COALESCE(json_extract(m.merged, '$.title'), s.name) AS name, s.library_id
+            "SELECT s.id, s.library_id, COALESCE(json_extract(
+                      CASE WHEN ?2 = 'en' THEN m.merged_en ELSE m.merged END, '$.title'),
+                    s.name) AS name
              FROM series s LEFT JOIN series_metadata m ON m.series_id = s.id WHERE s.id IN ",
             started!()
         ))
+        .bind(viewer.user)
+        .bind(to_db(&viewer.language))
         .fetch_all(&self.pool)
         .await?;
         let rows = sqlx::query(concat!(located_volumes!("l.series_id IN "), started!()))
+            .bind(viewer.user)
             .fetch_all(&self.pool)
             .await?
             .iter()
@@ -474,7 +492,7 @@ impl Db {
             .collect::<Result<Vec<_>, _>>()?;
         let rows = in_series_order(rows);
         let volumes = by_series(&rows);
-        let progress = self.progress_in_libraries(None).await?;
+        let progress = self.progress_in_libraries(viewer, None).await?;
         let mut out: Vec<ContinueItem> = series
             .iter()
             .filter_map(|s| {
@@ -501,19 +519,21 @@ impl Db {
         Ok(out)
     }
 
-    pub async fn series_detail(&self, id: i64) -> Result<Option<SeriesDetail>, Error> {
-        let Some(series) = sqlx::query(concat!(
-            "SELECT s.library_id, s.name, s.folder, s.publication_status, ",
-            settings_columns!(),
-            " FROM series s JOIN libraries b ON b.id = s.library_id WHERE s.id = ?"
-        ))
+    pub async fn series_detail(
+        &self,
+        viewer: &Viewer,
+        id: i64,
+    ) -> Result<Option<SeriesDetail>, Error> {
+        let Some(series) = sqlx::query(
+            "SELECT library_id, name, folder, publication_status FROM series WHERE id = ?",
+        )
         .bind(id)
         .fetch_optional(&self.pool)
         .await?
         else {
             return Ok(None);
         };
-        let mut progress = self.progress_in_series(id).await?;
+        let mut progress = self.progress_in_series(viewer, id).await?;
         let rows = sqlx::query(located_volumes!("l.series_id = ?"))
             .bind(id)
             .fetch_all(&self.pool)
@@ -525,7 +545,8 @@ impl Db {
         let all: Vec<&Located> = rows.iter().collect();
         let resume_volume_id = resume(&all, &progress);
         let (pages_read, page_count) = pages(&all, &progress);
-        let (metadata, locked) = self.series_metadata(id).await?;
+        let (metadata, locked) = self.series_metadata(id, viewer.language).await?;
+        let settings = self.series_settings(viewer, id).await?.unwrap_or_default();
         let mut titles = self.volume_titles(id).await?;
         Ok(Some(SeriesDetail {
             id,
@@ -539,7 +560,7 @@ impl Db {
                 .get::<Option<&str>, _>("publication_status")
                 .map(from_db)
                 .transpose()?,
-            settings: ReadingSettings::of(&series)?,
+            settings,
             resume_volume_id,
             page_count,
             pages_read,
@@ -554,7 +575,11 @@ impl Db {
         }))
     }
 
-    pub async fn volume_detail(&self, volume: &VolumeId) -> Result<Option<VolumeDetail>, Error> {
+    pub async fn volume_detail(
+        &self,
+        viewer: &Viewer,
+        volume: &VolumeId,
+    ) -> Result<Option<VolumeDetail>, Error> {
         let id = volume.to_string();
         let Some(v) = sqlx::query(
             "SELECT size, format, status, page_count, scanned_at FROM volumes WHERE id = ?",
@@ -596,8 +621,8 @@ impl Db {
             })
         })
         .collect::<Result<_, Error>>()?;
-        let settings = self.volume_settings(&id).await?;
-        let progress = self.progress(volume).await?;
+        let settings = self.volume_settings(viewer, &id).await?;
+        let progress = self.progress(viewer, volume).await?;
         let (metadata, locked) = self.volume_metadata(&id).await?;
         Ok(Some(VolumeDetail {
             id,

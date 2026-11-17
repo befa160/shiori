@@ -35,14 +35,18 @@ impl Fixture {
         tokio::time::sleep(std::time::Duration::from_millis(3)).await;
         let volume = self.volumes[&tome].parse().unwrap();
         self.db
-            .save_progress(&volume, &self.pages[&tome][page])
+            .save_progress(
+                &crate::tests::viewer(&self.db).await,
+                &volume,
+                &self.pages[&tome][page],
+            )
             .await
             .unwrap();
     }
 
     async fn series(&self, name: &str) -> SeriesSummary {
         self.db
-            .all_series()
+            .all_series(&crate::tests::viewer(&self.db).await)
             .await
             .unwrap()
             .into_iter()
@@ -115,13 +119,29 @@ async fn fixture() -> Fixture {
 #[tokio::test]
 async fn summaries_follow_the_reading() {
     let f = fixture().await;
-    let all = f.db.all_series().await.unwrap();
+    let all =
+        f.db.all_series(&crate::tests::viewer(&f.db).await)
+            .await
+            .unwrap();
     assert_eq!(
         all.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(),
         ["Autre", "Série"]
     );
-    assert_eq!(f.db.series_of(f.other.id).await.unwrap().unwrap().len(), 1);
-    assert_eq!(f.db.series_of(999).await.unwrap().map(|s| s.len()), None);
+    assert_eq!(
+        f.db.series_of(&crate::tests::viewer(&f.db).await, f.other.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        f.db.series_of(&crate::tests::viewer(&f.db).await, 999)
+            .await
+            .unwrap()
+            .map(|s| s.len()),
+        None
+    );
 
     // Jamais ouverte : premier tome, date de création écrite par le scan.
     let s = f.series("Série").await;
@@ -154,7 +174,11 @@ async fn summaries_follow_the_reading() {
     );
     assert_eq!(s.resume_volume_id.as_ref(), Some(&f.volumes[&4]));
     // Le détail de la série suit la même règle.
-    let detail = f.db.series_detail(s.id).await.unwrap().unwrap();
+    let detail =
+        f.db.series_detail(&crate::tests::viewer(&f.db).await, s.id)
+            .await
+            .unwrap()
+            .unwrap();
     assert_eq!(detail.resume_volume_id, s.resume_volume_id);
     assert_eq!(
         (detail.pages_read, detail.page_count),
@@ -183,17 +207,30 @@ async fn resume_falls_back_to_the_first_unread_volume() {
     f.read(4, 2).await;
     let s = f.series("Série").await;
     assert_eq!(s.resume_volume_id.as_ref(), Some(&f.volumes[&1]));
-    assert!(f.db.continue_reading(20).await.unwrap().is_empty());
+    assert!(
+        f.db.continue_reading(&crate::tests::viewer(&f.db).await, 20)
+            .await
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[tokio::test]
 async fn continue_reading_lists_the_next_volume_of_each_series() {
     let f = fixture().await;
-    assert!(f.db.continue_reading(20).await.unwrap().is_empty());
+    assert!(
+        f.db.continue_reading(&crate::tests::viewer(&f.db).await, 20)
+            .await
+            .unwrap()
+            .is_empty()
+    );
 
     f.read(9, 1).await; // « Autre » : en cours
     f.read(1, 2).await; // « Série » : tome 1 fini, puis tome 2 à lire
-    let items = f.db.continue_reading(20).await.unwrap();
+    let items =
+        f.db.continue_reading(&crate::tests::viewer(&f.db).await, 20)
+            .await
+            .unwrap();
     let got: Vec<_> = items
         .iter()
         .map(|i| (i.series_name.as_str(), i.volume.volume_id.as_str()))
@@ -209,16 +246,28 @@ async fn continue_reading_lists_the_next_volume_of_each_series() {
     assert_eq!(items[0].volume.progress, None);
     assert_eq!(items[1].volume.progress.as_ref().unwrap().ordinal, 1);
     assert_eq!(items[0].library_id, f.library.id);
-    assert_eq!(f.db.continue_reading(1).await.unwrap().len(), 1);
+    assert_eq!(
+        f.db.continue_reading(&crate::tests::viewer(&f.db).await, 1)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
 
     // Tome 2 fini : le tome 3, en erreur, est sauté.
     f.read(2, 2).await;
-    let items = f.db.continue_reading(20).await.unwrap();
+    let items =
+        f.db.continue_reading(&crate::tests::viewer(&f.db).await, 20)
+            .await
+            .unwrap();
     assert_eq!(items[0].volume.volume_id, f.volumes[&4]);
 
     // Relire le tome 1, déjà fini : c'est lui qu'on reprend, pas la suite.
     f.read(1, 1).await;
-    let items = f.db.continue_reading(20).await.unwrap();
+    let items =
+        f.db.continue_reading(&crate::tests::viewer(&f.db).await, 20)
+            .await
+            .unwrap();
     assert_eq!(items[0].volume.volume_id, f.volumes[&1]);
     let s = f.series("Série").await;
     assert_eq!(s.resume_volume_id.as_ref(), Some(&f.volumes[&1]));
@@ -226,7 +275,10 @@ async fn continue_reading_lists_the_next_volume_of_each_series() {
 
     // « Autre » fini, sans suite : elle disparaît.
     f.read(9, 2).await;
-    let items = f.db.continue_reading(20).await.unwrap();
+    let items =
+        f.db.continue_reading(&crate::tests::viewer(&f.db).await, 20)
+            .await
+            .unwrap();
     assert_eq!(items.len(), 1);
 }
 
@@ -245,7 +297,11 @@ async fn publication_status_is_set_and_cleared() {
         f.series("Série").await.publication_status,
         Some(PublicationStatus::Hiatus)
     );
-    let detail = f.db.series_detail(id).await.unwrap().unwrap();
+    let detail =
+        f.db.series_detail(&crate::tests::viewer(&f.db).await, id)
+            .await
+            .unwrap()
+            .unwrap();
     assert_eq!(detail.publication_status, Some(PublicationStatus::Hiatus));
     assert_eq!(detail.locked, ["publication_status"]);
     assert!(
