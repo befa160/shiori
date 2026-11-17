@@ -1,6 +1,8 @@
 //! Pages servies par HTTP : la bonne image à chaque ordinal, en-têtes immuables, et une
 //! erreur explicite pour chaque incohérence (principes 1, 2 et 4).
 
+mod common;
+
 use std::fs::{File, FileTimes};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -12,7 +14,7 @@ use axum::response::Response;
 use http_body_util::BodyExt;
 use serde_json::Value;
 use shiori::cache::Images;
-use shiori::server::{self, App};
+use shiori::server::App;
 use shiori_core::ScanOptions;
 use shiori_db::Db;
 use shiori_testkit::{RAR4, RAR5, STORED, fixtures, page_color, png, replace_all, write_zip};
@@ -28,7 +30,7 @@ async fn fixture() -> Fixture {
     let dir = tempfile::tempdir().unwrap();
     let db = Arc::new(Db::open(&dir.path().join("t.db")).await.unwrap());
     let images = Images::open(dir.path().join("cache"), u64::MAX).unwrap();
-    let app = server::router(Arc::new(App::new(db.clone(), images)), None);
+    let app = common::router(Arc::new(App::new(db.clone(), images))).await;
     Fixture { dir, db, app }
 }
 

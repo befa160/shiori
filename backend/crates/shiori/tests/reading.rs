@@ -1,5 +1,7 @@
 //! Lecture par HTTP : progression d'un tome, réglages d'une série, type de bibliothèque.
 
+mod common;
+
 use std::sync::Arc;
 
 use axum::Router;
@@ -8,7 +10,7 @@ use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
 use serde_json::{Value, json};
 use shiori::cache::Images;
-use shiori::server::{self, App};
+use shiori::server::App;
 use shiori_core::ScanOptions;
 use shiori_db::Db;
 use shiori_testkit::fixtures;
@@ -48,7 +50,7 @@ async fn fixture(kind: Option<&str>) -> Fixture {
     let manga = fixtures::manga(&folder);
     let db = Arc::new(Db::open(&dir.path().join("t.db")).await.unwrap());
     let images = Images::open(dir.path().join("cache"), u64::MAX).unwrap();
-    let app = server::router(Arc::new(App::new(db.clone(), images)), None);
+    let app = common::router(Arc::new(App::new(db.clone(), images))).await;
     let mut body = json!({ "name": "Lib", "root": root });
     if let Some(kind) = kind {
         body["kind"] = json!(kind);

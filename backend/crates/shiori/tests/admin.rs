@@ -1,5 +1,7 @@
 //! API d'administration des scans : lancer, suivre, annuler, historique et journaux.
 
+mod common;
+
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -9,7 +11,7 @@ use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
 use serde_json::{Value, json};
 use shiori::cache::Images;
-use shiori::server::{self, App};
+use shiori::server::App;
 use shiori_db::Db;
 use shiori_testkit::{STORED, fixtures, page_color, png, write_zip};
 use tower::ServiceExt;
@@ -31,8 +33,9 @@ impl Fixture {
         fixtures::bad_crc(&root);
         let db = Arc::new(Db::open(&dir.path().join("t.db")).await.unwrap());
         let images = Images::open(dir.path().join("cache"), u64::MAX).unwrap();
-        let state = Arc::new(App::new(db, images));
-        let app = server::router(state.clone(), None);
+        // Un fichier à la fois : un scan dure assez pour être suivi puis annulé.
+        let state = Arc::new(App::build(db, images, 1, 30, Vec::new()));
+        let app = common::router(state.clone()).await;
         let mut f = Self {
             _dir: dir,
             root,
@@ -199,6 +202,13 @@ async fn follow_and_cancel_a_running_scan() {
         .await;
     assert_eq!(status, StatusCode::ACCEPTED);
     let run = started["run"].as_i64().unwrap();
+    // Verrou d'écriture tenu par le test : la passe attend pour enregistrer son premier fichier
+    // et ne peut pas finir avant l'annulation (suivre et annuler ne font que lire).
+    let mut lock = f.state.db.pool().begin().await.unwrap();
+    sqlx::query("UPDATE app_settings SET id = id")
+        .execute(&mut *lock)
+        .await
+        .unwrap();
 
     let (status, progress) = f.call("GET", "/api/admin/scans/current", None).await;
     assert_eq!(status, StatusCode::OK);
@@ -217,6 +227,7 @@ async fn follow_and_cancel_a_running_scan() {
         (status, body),
         (StatusCode::ACCEPTED, json!({ "cancelling": true }))
     );
+    lock.rollback().await.unwrap();
     f.state.scanner.wait().await;
     let (_, detail) = f
         .call("GET", &format!("/api/admin/scans/{run}"), None)

@@ -2454,6 +2454,8 @@ dependencies = [
  "comfy-table",
  "directories",
  "http-body-util",
+ "hyper",
+ "hyper-util",
  "image",
  "imagesize",
  "ravif",

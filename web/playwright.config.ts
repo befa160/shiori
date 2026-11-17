@@ -19,5 +19,7 @@ export default defineConfig({
     baseURL: 'http://127.0.0.1:7879',
     locale: 'fr-FR',
     trace: 'retain-on-failure',
+    // Session de l'administrateur créée par `e2e/setup.ts`.
+    storageState: 'e2e/.data/auth.json',
   },
 })

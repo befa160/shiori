@@ -11,13 +11,18 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use axum::extract::rejection::{JsonRejection, QueryRejection};
-use axum::extract::{Path, Query, Request, State};
+use axum::extract::{ConnectInfo, Path, Query, Request, State};
 use axum::http::{Method, StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, patch, post, put};
 use axum::{Json, Router};
 use clap::Args;
+use hyper::body::Incoming;
+use hyper::server::conn::http1;
+use hyper_util::rt::{TokioIo, TokioTimer};
+use hyper_util::server::graceful::GracefulShutdown;
+use hyper_util::service::TowerToHyperService;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use shiori_core::{PageId, Severity, VolumeId};
@@ -28,6 +33,7 @@ use shiori_db::{
 use shiori_meta::{FetchError, Source, SourceId, WebMetadata};
 use tokio::net::TcpListener;
 use tokio::sync::Semaphore;
+use tower::ServiceExt;
 use tower_http::compression::CompressionLayer;
 use tower_http::trace::TraceLayer;
 
@@ -35,14 +41,18 @@ use crate::cache::Images;
 use crate::job::{ScanRequest, Scanner, StartError};
 use crate::meta::{IdentifyStatus, MetaError, Metadata, web_sources};
 
+mod auth;
 mod images;
 
 pub(crate) use images::{IMMUTABLE, etag_matches};
 use images::{cover, page_image, thumbnail};
 
+/// Délai pour recevoir les en-têtes d'une requête.
+const HEADER_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
 #[derive(Args)]
 pub struct ServeArgs {
-    /// Adresse d'écoute. Sans authentification : 0.0.0.0 ouvre l'API à tout le réseau local.
+    /// Adresse d'écoute ; 0.0.0.0 ouvre l'interface à tout le réseau (connexion exigée).
     #[arg(long, default_value = "127.0.0.1:7878")]
     pub listen: SocketAddr,
     /// Base SQLite (défaut : <dossier de données>/shiori.db, ou $SHIORI_DATA_DIR/shiori.db).
@@ -84,6 +94,7 @@ pub struct App {
     pub metadata: Arc<Metadata>,
     /// Décoder et encoder coûte du CPU et de la mémoire : nombre de rendus simultanés borné.
     renders: Semaphore,
+    auth: auth::Guard,
 }
 
 impl App {
@@ -110,7 +121,13 @@ impl App {
             scanner: Scanner::new(jobs, log_days).with_metadata(metadata.clone()),
             metadata,
             renders: Semaphore::new(cores.min(4)),
+            auth: auth::Guard::new(),
         }
+    }
+
+    /// Jeton exigé pour créer le premier compte, tiré au hasard à chaque démarrage.
+    pub fn setup_token(&self) -> &str {
+        self.auth.setup_token()
     }
 }
 
@@ -165,6 +182,13 @@ pub async fn run(
         args.scan_log_days,
         web_sources(),
     );
+    // Toujours affiché, même avec `--quiet` : sans lui, personne ne peut créer le premier compte.
+    if app.db.users().await?.is_empty() {
+        eprintln!(
+            "Aucun compte : ouvrez l'interface et saisissez le jeton d'installation {}",
+            app.setup_token()
+        );
+    }
     if args.open {
         open_browser(listener.local_addr()?.port());
     }
@@ -204,9 +228,41 @@ pub async fn serve(
     // Écoute locale : toujours protégée ; écoute réseau : seulement si des noms sont donnés.
     let local = listener.local_addr()?.ip().is_loopback();
     let hosts = (local || !allowed_hosts.is_empty()).then_some(allowed_hosts);
-    axum::serve(listener, router(app.clone(), hosts))
-        .with_graceful_shutdown(shutdown)
-        .await?;
+    let router = router(app.clone(), hosts);
+    // Boucle d'hyper plutôt qu'`axum::serve`, qui ne pose aucun délai : un client qui envoie ses
+    // en-têtes octet par octet garderait sa connexion ouverte indéfiniment.
+    let graceful = GracefulShutdown::new();
+    let mut shutdown = std::pin::pin!(shutdown);
+    loop {
+        let (stream, peer) = tokio::select! {
+            accepted = listener.accept() => match accepted {
+                Ok(accepted) => accepted,
+                // Trop de fichiers ouverts, connexion avortée : on continue d'écouter.
+                Err(e) => {
+                    tracing::warn!("connexion refusée : {e}");
+                    continue;
+                }
+            },
+            () = &mut shutdown => break,
+        };
+        let service = TowerToHyperService::new(router.clone().map_request(
+            move |mut request: axum::http::Request<Incoming>| {
+                request.extensions_mut().insert(ConnectInfo(peer));
+                request
+            },
+        ));
+        let connection = http1::Builder::new()
+            .timer(TokioTimer::new())
+            .header_read_timeout(HEADER_TIMEOUT)
+            .serve_connection(TokioIo::new(stream), service);
+        let connection = graceful.watch(connection);
+        tokio::spawn(async move {
+            if let Err(e) = connection.await {
+                tracing::debug!("connexion de {peer} : {e}");
+            }
+        });
+    }
+    graceful.shutdown().await;
     // Le scan en cours est annulé et sa passe close `cancelled`, jamais laissée `running`.
     app.scanner.shutdown().await;
     // shortcut: une identification en cours finit sa requête (jusqu'à 10 s d'attente du débit + 15 s de délai réseau, fils bloquants non interruptibles) avant que le processus s'arrête ; ajouter un drapeau d'arrêt lu avant chaque appel si cette attente gêne.
@@ -218,6 +274,10 @@ pub async fn serve(
 pub fn router(app: Arc<App>, hosts: Option<Vec<String>>) -> Router {
     let router = Router::new()
         .route("/api/health", get(health))
+        .route("/api/auth/state", get(auth::state))
+        .route("/api/auth/setup", post(auth::setup))
+        .route("/api/auth/login", post(auth::login))
+        .route("/api/auth/logout", post(auth::logout))
         .route("/api/settings", get(settings).put(save_settings))
         .route("/api/libraries", get(libraries).post(create_library))
         .route("/api/libraries/{id}", delete(delete_library))
@@ -258,6 +318,10 @@ pub fn router(app: Arc<App>, hosts: Option<Vec<String>>) -> Router {
                 "méthode non autorisée sur cette route",
             )
         })
+        .layer(middleware::from_fn_with_state(
+            app.clone(),
+            auth::require_session,
+        ))
         // Front (JS, CSS) et JSON compressés (brotli ou gzip, selon le navigateur) : environ trois
         // fois moins à transférer. Les images, déjà compressées, sont exclues par défaut.
         .layer(CompressionLayer::new())

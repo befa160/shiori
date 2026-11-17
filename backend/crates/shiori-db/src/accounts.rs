@@ -54,6 +54,18 @@ pub struct NewSession {
     pub token: String,
 }
 
+/// Session valide, retrouvée par son jeton.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Session {
+    pub id: i64,
+    pub user: User,
+    /// Prolongée de 90 jours par cette requête : le cookie doit l'être aussi.
+    pub renewed: bool,
+}
+
+/// Durée d'une session sans usage, en secondes (Q47), pour le cookie.
+pub const SESSION_SECONDS: u64 = 90 * 24 * 3600;
+
 const MIN_PASSWORD: usize = 8;
 /// Un mot de passe de plusieurs Mo ferait travailler Argon2 pour rien.
 const MAX_PASSWORD: usize = 1024;
@@ -156,27 +168,55 @@ impl Db {
         password: &str,
         role: Role,
     ) -> Result<User, AccountError> {
+        let created = self.insert_user(username, password, role, false).await?;
+        Ok(created.expect("insertion sans condition"))
+    }
+
+    /// Premier administrateur (page d'installation, Q46), avec le mot de passe qu'il a choisi ;
+    /// `None` si un compte existe déjà. La vérification et l'insertion ne font qu'une requête :
+    /// deux installations simultanées ne créent pas deux administrateurs.
+    pub async fn create_first_admin(
+        &self,
+        username: &str,
+        password: &str,
+    ) -> Result<Option<User>, AccountError> {
+        self.insert_user(username, password, Role::Admin, true)
+            .await
+    }
+
+    /// `first` : seulement si aucun compte n'existe, et mot de passe définitif (choisi par la
+    /// personne) ; sinon mot de passe provisoire.
+    async fn insert_user(
+        &self,
+        username: &str,
+        password: &str,
+        role: Role,
+        first: bool,
+    ) -> Result<Option<User>, AccountError> {
         let key = name_key(username)?;
         let hash = hash_password(password).await?;
         let mut tx = self.pool.begin().await?;
         let sql = concat!(
-            "INSERT INTO users (username, username_key, password_hash, role, created_at,
-                                password_changed_at)
-             VALUES (?, ?, ?, ?, ",
+            "INSERT INTO users (username, username_key, password_hash, role,
+                                must_change_password, created_at, password_changed_at)
+             SELECT ?, ?, ?, ?, ?, ",
             now!(),
             ", ",
             now!(),
-            ") RETURNING id"
+            " WHERE ? OR NOT EXISTS (SELECT 1 FROM users) RETURNING id"
         );
         let id: i64 = match sqlx::query(sql)
             .bind(username)
             .bind(&key)
             .bind(&hash)
             .bind(to_db(&role))
-            .fetch_one(&mut *tx)
+            .bind(!first)
+            .bind(!first)
+            .fetch_optional(&mut *tx)
             .await
         {
-            Ok(row) => row.get("id"),
+            Ok(None) => return Ok(None),
+            Ok(Some(row)) => row.get("id"),
             Err(e)
                 if e.as_database_error()
                     .is_some_and(|d| d.is_unique_violation()) =>
@@ -194,10 +234,7 @@ impl Db {
             .await?;
         }
         tx.commit().await?;
-        Ok(self
-            .user_by_name(username)
-            .await?
-            .expect("compte tout juste créé"))
+        Ok(self.user_by_name(username).await?)
     }
 
     pub async fn user_by_name(&self, username: &str) -> Result<Option<User>, Error> {
@@ -296,13 +333,15 @@ impl Db {
 
     /// Compte et identifiant de la session si le jeton est valide (non expiré, compte actif) ;
     /// prolonge la session de 90 jours si elle n'a pas servi depuis une heure.
-    pub async fn session_user(&self, token: &str) -> Result<Option<(i64, User)>, Error> {
+    pub async fn session_user(&self, token: &str) -> Result<Option<Session>, Error> {
         if !token.starts_with(SESSION_PREFIX) {
             return Ok(None);
         }
         let hash = token_hash(token);
         let sql = concat!(
-            "SELECT s.id AS session_id, u.* FROM sessions s JOIN users u ON u.id = s.user_id
+            "SELECT s.id AS session_id, u.*,
+                    s.last_seen_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour') AS stale
+             FROM sessions s JOIN users u ON u.id = s.user_id
              WHERE s.token_hash = ? AND u.disabled_at IS NULL AND s.expires_at > ",
             now!()
         );
@@ -313,15 +352,23 @@ impl Db {
         else {
             return Ok(None);
         };
-        let sql = concat!(
-            "UPDATE sessions SET last_seen_at = ",
-            now!(),
-            ", expires_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+90 days')
-             WHERE token_hash = ?
-               AND last_seen_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour')"
-        );
-        sqlx::query(sql).bind(&hash).execute(&self.pool).await?;
-        Ok(Some((row.get("session_id"), user(&row)?)))
+        // Écrire seulement quand il le faut : même sans ligne touchée, un UPDATE prend le verrou
+        // d'écriture, et chaque image attendrait la fin d'une écriture de scan.
+        let renewed: bool = row.get("stale");
+        if renewed {
+            let sql = concat!(
+                "UPDATE sessions SET last_seen_at = ",
+                now!(),
+                ", expires_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+90 days')
+                 WHERE token_hash = ?"
+            );
+            sqlx::query(sql).bind(&hash).execute(&self.pool).await?;
+        }
+        Ok(Some(Session {
+            id: row.get("session_id"),
+            user: user(&row)?,
+            renewed,
+        }))
     }
 
     /// Ferme la session de ce jeton (déconnexion) ; sans effet si elle n'existe plus.

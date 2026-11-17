@@ -1,5 +1,7 @@
 //! API HTTP de bout en bout : routeur en mémoire, vraies fixtures scannées.
 
+mod common;
+
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -59,7 +61,7 @@ async fn fixture() -> Fixture {
     let db = Arc::new(Db::open(&dir.path().join("t.db")).await.unwrap());
     let images = Images::open(dir.path().join("cache"), u64::MAX).unwrap();
     let state = Arc::new(App::new(db.clone(), images));
-    let app = server::router(state.clone(), None);
+    let app = common::router(state.clone()).await;
     Fixture {
         _dir: dir,
         root,
@@ -445,7 +447,7 @@ async fn allowed_hosts_are_accepted_whatever_their_case() {
 #[tokio::test]
 async fn cross_site_writes_are_refused() {
     let f = fixture().await;
-    let app = server::router(f.state.clone(), None);
+    let app = common::router(f.state.clone()).await;
     for (method, site, expected) in [
         ("POST", "cross-site", StatusCode::FORBIDDEN),
         ("DELETE", "cross-site", StatusCode::FORBIDDEN),
