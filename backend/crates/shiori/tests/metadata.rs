@@ -176,6 +176,7 @@ async fn scan(f: &Fixture) {
         library_id: f.library,
         path: None,
         deep: false,
+        trigger: Default::default(),
         rehash: false,
     };
     f.state

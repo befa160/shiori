@@ -132,6 +132,8 @@ Un scan lit les fichiers d'une bibliothèque, vérifie chaque page et met la bas
 - **Contrôle approfondi** : décode entièrement chaque image (lent) ;
 - **Relire tous les fichiers** : relit même les fichiers que Shiori croit inchangés (d'ordinaire, taille et date suffisent).
 
+Les dossiers de chaque bibliothèque sont **surveillés** : un fichier ajouté, remplacé ou retiré lance, 30 secondes après le dernier changement (le temps qu'une copie finisse), un scan du seul dossier de série touché. Au démarrage, chaque bibliothèque surveillée est rescannée pour rattraper ce qui a changé serveur éteint. Un scan complet de toutes les bibliothèques passe en plus toutes les 24 heures (réglable : 1 h, 6 h, jamais) : sur un partage réseau (SMB, NFS) ou avec Docker Desktop, les changements faits depuis une autre machine ne sont pas signalés, et ce scan les rattrape. Si le dossier d'une bibliothèque disparaît (disque débranché, partage démonté), rien n'est retiré de la bibliothèque.
+
 Le scan en cours s'affiche avec son avancement et s'annule. L'historique garde chaque passe 30 jours (option `--scan-log-days`), avec son journal (fichiers lus, problèmes, erreurs) et un lien vers chaque tome concerné. Un tome dont le fichier a changé est relu au scan suivant ; un tome dont le fichier a disparu le signale.
 
 La même vérification existe en ligne de commande, sans serveur : `shiori scan <dossier>` (aide : `shiori scan --help`).

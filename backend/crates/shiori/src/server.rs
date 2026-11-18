@@ -40,7 +40,7 @@ use tower_http::trace::TraceLayer;
 
 use crate::backup::Backups;
 use crate::cache::Images;
-use crate::job::{ScanRequest, Scanner, StartError};
+use crate::job::{ScanRequest, Scanner, StartError, Trigger};
 use crate::meta::{IdentifyStatus, MetaError, Metadata, web_sources};
 
 mod accounts;
@@ -236,7 +236,9 @@ pub async fn run(
     if args.open {
         open_browser(listener.local_addr()?.port());
     }
-    serve(listener, Arc::new(app), args.allowed_hosts, shutdown).await
+    let app = Arc::new(app);
+    crate::watch::spawn(app.clone(), crate::watch::Timing::default());
+    serve(listener, app, args.allowed_hosts, shutdown).await
 }
 
 /// `localhost` : seul nom toujours accepté par la parade au DNS rebinding, quelle que soit
@@ -350,7 +352,10 @@ pub fn router(app: Arc<App>, hosts: Option<Vec<String>>) -> Router {
         .route("/api/admin/users/{id}/totp", delete(totp::reset))
         .route("/api/settings", get(settings).put(save_settings))
         .route("/api/libraries", get(libraries).post(create_library))
-        .route("/api/libraries/{id}", delete(delete_library))
+        .route(
+            "/api/libraries/{id}",
+            patch(patch_library).delete(delete_library),
+        )
         .route("/api/libraries/{id}/series", get(library_series))
         .route("/api/series", get(all_series))
         .route("/api/series/{id}", get(series).patch(patch_series))
@@ -602,6 +607,8 @@ struct NewSettings {
     /// Absent : inchangé ; jamais `null` (`system` pour suivre l'appareil).
     #[serde(default, deserialize_with = "present")]
     theme: Option<Option<Theme>>,
+    /// Absent : inchangé ; 0 (jamais), 1, 6 ou 24 heures.
+    full_scan_hours: Option<u32>,
 }
 
 async fn save_settings(
@@ -616,6 +623,12 @@ async fn save_settings(
     }
     if new.theme == Some(None) {
         return Err(bad("theme ne peut pas être null"));
+    }
+    if new
+        .full_scan_hours
+        .is_some_and(|h| ![0, 1, 6, 24].contains(&h))
+    {
+        return Err(bad("full_scan_hours : 0, 1, 6 ou 24"));
     }
     if new.metadata_online == Some(None) || new.metadata_adult == Some(None) {
         return Err(bad(
@@ -636,6 +649,7 @@ async fn save_settings(
         && new.metadata_adult.is_none()
         && new.metadata_sources.is_none()
         && new.theme.is_none()
+        && new.full_scan_hours.is_none()
     {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -648,6 +662,9 @@ async fn save_settings(
     }
     if let Some(Some(turn)) = new.page_turn {
         app.db.set_page_turn(turn).await?;
+    }
+    if let Some(hours) = new.full_scan_hours {
+        app.db.set_full_scan_hours(hours).await?;
     }
     if let Some(Some(theme)) = new.theme {
         app.db.set_theme(theme).await?;
@@ -713,6 +730,25 @@ async fn create_library(
             kind: library.kind,
         }),
     ))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LibraryChange {
+    watch: bool,
+}
+
+async fn patch_library(
+    _: Admin,
+    State(app): State<Arc<App>>,
+    Path(id): Path<String>,
+    body: Result<Json<LibraryChange>, JsonRejection>,
+) -> Result<StatusCode, ApiError> {
+    let Json(change) = body.map_err(invalid_body)?;
+    match app.db.set_library_watch(int_id(&id)?, change.watch).await? {
+        true => Ok(StatusCode::NO_CONTENT),
+        false => Err(ApiError::not_found("bibliothèque")),
+    }
 }
 
 async fn delete_library(
@@ -1138,6 +1174,7 @@ impl From<StartError> for ApiError {
     fn from(e: StartError) -> Self {
         let (status, code) = match &e {
             StartError::AlreadyRunning => (StatusCode::CONFLICT, "scan_already_running"),
+            StartError::ShuttingDown => (StatusCode::SERVICE_UNAVAILABLE, "shutting_down"),
             StartError::UnknownLibrary => (StatusCode::NOT_FOUND, "not_found"),
             StartError::OutsideLibrary(_) => (StatusCode::BAD_REQUEST, "path_outside_library"),
             StartError::NotFound(_) => (StatusCode::NOT_FOUND, "path_not_found"),
@@ -1182,6 +1219,7 @@ async fn start_scan(
         path: new.path,
         deep: new.deep,
         rehash: new.rehash,
+        trigger: Trigger::Manual,
     };
     let run = app.scanner.start(app.db.clone(), request).await?;
     Ok((StatusCode::ACCEPTED, Json(json!({ "run": run }))))

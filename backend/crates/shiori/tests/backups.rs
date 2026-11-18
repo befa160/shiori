@@ -194,6 +194,7 @@ async fn no_restore_while_a_scan_writes() {
         library_id: library.id,
         path: None,
         deep: false,
+        trigger: Default::default(),
         rehash: true,
     };
     state

@@ -21,6 +21,8 @@ pub struct Library {
     /// Chemin absolu, séparateurs `/`, sans `/` final (comme les clés d'emplacement).
     pub root: String,
     pub kind: LibraryKind,
+    /// Dossiers surveillés : un changement lance un scan ciblé (lot 9.1).
+    pub watch: bool,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -165,13 +167,15 @@ impl Db {
             name: name.to_owned(),
             root: key,
             kind,
+            watch: true,
         })
     }
 
     pub async fn libraries(&self) -> Result<Vec<Library>, Error> {
-        let rows = sqlx::query("SELECT id, name, root, kind FROM libraries ORDER BY name, id")
-            .fetch_all(&self.pool)
-            .await?;
+        let rows =
+            sqlx::query("SELECT id, name, root, kind, watch FROM libraries ORDER BY name, id")
+                .fetch_all(&self.pool)
+                .await?;
         rows.iter()
             .map(|r| {
                 Ok(Library {
@@ -179,9 +183,20 @@ impl Db {
                     name: r.get("name"),
                     root: r.get("root"),
                     kind: from_db(r.get("kind"))?,
+                    watch: r.get("watch"),
                 })
             })
             .collect()
+    }
+
+    /// Active ou arrête la surveillance des dossiers ; `false` si la bibliothèque n'existe pas.
+    pub async fn set_library_watch(&self, id: i64, watch: bool) -> Result<bool, Error> {
+        let done = sqlx::query("UPDATE libraries SET watch = ? WHERE id = ?")
+            .bind(watch)
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        Ok(done.rows_affected() > 0)
     }
 
     /// Supprime une bibliothèque, ses séries et ses emplacements. Les tomes et les pages
