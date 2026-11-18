@@ -454,3 +454,17 @@ fn current_code(secret: &str) -> String {
         .generate_current()
         .to_string()
 }
+
+#[test]
+fn backup_writes_a_copy_in_the_backup_folder() {
+    let data = tempfile::tempdir().unwrap();
+    let out = shiori(&["backup"], data.path());
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    let path = std::path::PathBuf::from(stdout(&out).trim());
+    assert_eq!(path.parent().unwrap(), data.path().join("backups"));
+    assert!(
+        std::fs::read(&path)
+            .unwrap()
+            .starts_with(b"SQLite format 3\0")
+    );
+}

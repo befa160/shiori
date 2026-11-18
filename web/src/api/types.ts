@@ -112,6 +112,21 @@ export interface StoragePaths {
   cache: string
 }
 
+/** Une sauvegarde de la base, dans le dossier des sauvegardes du serveur. */
+export interface BackupFile {
+  name: string
+  size: number
+  modified_ms: number
+}
+
+/** `GET /api/admin/backups` : `every_hours` à `null` sans sauvegarde périodique. */
+export interface Backups {
+  dir: string
+  every_hours: number | null
+  keep: number
+  files: BackupFile[]
+}
+
 /** `GET /api/admin/metadata`. */
 export interface MetadataOverview {
   online: boolean

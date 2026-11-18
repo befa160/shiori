@@ -129,7 +129,7 @@ pub async fn run(args: ScanArgs, quiet: bool) -> Result<ExitCode> {
 
     let db = match args.no_db {
         true => None,
-        false => Some(Arc::new(crate::open_db(args.db.clone()).await?)),
+        false => Some(Arc::new(crate::open_db(args.db.clone(), None).await?.0)),
     };
     let json_options = JsonOptions {
         deep: args.deep,

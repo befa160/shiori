@@ -32,7 +32,7 @@ enum UserCommand {
 }
 
 pub async fn run(args: UserArgs) -> Result<()> {
-    let db = crate::open_db(args.db).await?;
+    let db = crate::open_db(args.db, None).await?.0;
     let password = temporary_password();
     match args.command {
         UserCommand::Add { name, admin } => {

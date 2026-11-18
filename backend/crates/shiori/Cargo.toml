@@ -15,6 +15,7 @@ axum.workspace = true
 clap.workspace = true
 comfy-table.workspace = true
 directories.workspace = true
+http-body-util.workspace = true
 hyper.workspace = true
 hyper-util.workspace = true
 image.workspace = true
@@ -28,7 +29,7 @@ shiori-core.workspace = true
 shiori-db.workspace = true
 shiori-meta.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["rt-multi-thread", "sync", "net", "signal", "macros"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "sync", "net", "signal", "macros", "fs", "io-util", "time"] }
 tower.workspace = true
 tower-http.workspace = true
 tracing.workspace = true
@@ -36,7 +37,6 @@ tracing-subscriber.workspace = true
 webbrowser.workspace = true
 
 [dev-dependencies]
-http-body-util.workspace = true
 sqlx.workspace = true
 tokio = { workspace = true, features = ["macros"] }
 shiori-testkit.workspace = true

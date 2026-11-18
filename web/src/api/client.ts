@@ -1,4 +1,6 @@
 import type {
+  BackupFile,
+  Backups,
   Account,
   AccountPatch,
   ApiToken,
@@ -50,7 +52,8 @@ export class ApiError extends Error {
 export async function request<T>(path: string, init?: RequestInit): Promise<T | null> {
   let response: Response
   try {
-    const headers = { accept: 'application/json', ...(init?.body ? { 'content-type': 'application/json' } : {}) }
+    // Corps texte : du JSON ; un fichier garde son propre type.
+    const headers = { accept: 'application/json', ...(typeof init?.body === 'string' ? { 'content-type': 'application/json' } : {}) }
     response = await fetch(`/api${path}`, { ...init, headers })
   } catch {
     throw new ApiError(0, 'network', 'serveur injoignable')
@@ -112,6 +115,11 @@ export const api = {
     must<SeriesDetail>(`/series/${seriesId}/metadata/cover`, { method: 'POST', body: JSON.stringify({ source }) }),
   metadataOverview: (init?: RequestInit) => must<MetadataOverview>('/admin/metadata', init),
   storage: (init?: RequestInit) => must<StoragePaths>('/admin/storage', init),
+  backups: (init?: RequestInit) => must<Backups>('/admin/backups', init),
+  createBackup: () => must<BackupFile>('/admin/backups', { method: 'POST' }),
+  uploadBackup: (file: File) => must<BackupFile>('/admin/backups/upload', { method: 'POST', body: file }),
+  restoreBackup: (name: string) => request<null>(`/admin/backups/${encodeURIComponent(name)}/restore`, { method: 'POST' }),
+  deleteBackup: (name: string) => request<null>(`/admin/backups/${encodeURIComponent(name)}`, { method: 'DELETE' }),
   identify: () => request<null>('/admin/metadata/identify', { method: 'POST' }),
   authState: (init?: RequestInit) => must<AuthState>('/auth/state', init),
   setup: (body: { token: string; username: string; password: string }) =>

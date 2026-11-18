@@ -32,6 +32,7 @@ macro_rules! now {
 }
 
 mod accounts;
+mod backup;
 mod browse;
 mod library;
 mod metadata;
@@ -46,6 +47,7 @@ pub use accounts::{
     AccountError, Device, NewSession, Preferences, Role, SESSION_SECONDS, Session, User,
     UserChange, temporary_password,
 };
+pub use backup::{RestoreError, temp_file};
 pub use browse::{
     ContinueItem, LibrarySummary, PageFile, PageInfo, PageSource, PublicationStatus, ReadingStatus,
     SeriesDetail, SeriesSummary, SeriesVolume, VolumeDetail, VolumeLocation,
@@ -122,6 +124,12 @@ fn media_type(s: Option<&str>) -> Option<&'static str> {
 impl Db {
     /// Ouvre (ou crée) la base et applique les migrations.
     pub async fn open(path: &Path) -> Result<Self, Error> {
+        Self::open_backing_up(path, None).await
+    }
+
+    /// Comme [`Db::open`] ; avec `backups`, une base existante qui va être migrée y est
+    /// d'abord sauvegardée (`shiori-avant-<migration>-<date>.db`), pour revenir en arrière.
+    pub async fn open_backing_up(path: &Path, backups: Option<&Path>) -> Result<Self, Error> {
         let options = SqliteConnectOptions::new()
             .filename(path)
             .create_if_missing(true)
@@ -132,8 +140,20 @@ impl Db {
             // d'échouer (une écriture de 12 000 pages prend plus d'une seconde).
             .busy_timeout(Duration::from_secs(60));
         let pool = SqlitePoolOptions::new().connect_with(options).await?;
-        sqlx::migrate!().run(&pool).await?;
         let db = Self { pool };
+        let migrator = sqlx::migrate!();
+        let latest = migrator.iter().map(|m| m.version).max().unwrap_or(0);
+        // Base neuve : pas de table des migrations, rien à sauvegarder.
+        let applied: Option<i64> = sqlx::query_scalar("SELECT MAX(version) FROM _sqlx_migrations")
+            .fetch_one(&db.pool)
+            .await
+            .unwrap_or(None);
+        if let (Some(dir), Some(applied)) = (backups, applied)
+            && applied < latest
+        {
+            db.backup(dir, &format!("shiori-avant-{latest:04}")).await?;
+        }
+        migrator.run(&db.pool).await?;
         // Une règle de fusion modifiée par une nouvelle version s'applique dès le démarrage.
         db.refresh_metadata(None).await?;
         Ok(db)

@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use axum::extract::DefaultBodyLimit;
 use axum::extract::rejection::{JsonRejection, QueryRejection};
 use axum::extract::{ConnectInfo, Path, Query, Request, State};
 use axum::http::{Method, StatusCode, header};
@@ -37,12 +38,14 @@ use tower::ServiceExt;
 use tower_http::compression::CompressionLayer;
 use tower_http::trace::TraceLayer;
 
+use crate::backup::Backups;
 use crate::cache::Images;
 use crate::job::{ScanRequest, Scanner, StartError};
 use crate::meta::{IdentifyStatus, MetaError, Metadata, web_sources};
 
 mod accounts;
 mod auth;
+mod backups;
 mod images;
 mod tokens;
 mod totp;
@@ -84,6 +87,27 @@ pub struct ServeArgs {
         value_delimiter = ','
     )]
     pub allowed_hosts: Vec<String>,
+    /// Dossier des sauvegardes de la base (défaut : `backups` à côté d'elle) ; un outil de
+    /// sauvegarde (Backrest, restic) n'a qu'à copier ce dossier.
+    #[arg(long, value_name = "DOSSIER", env = "SHIORI_BACKUP_DIR")]
+    pub backup_dir: Option<PathBuf>,
+    /// Une sauvegarde toutes les N heures, 0 pour aucune.
+    #[arg(
+        long,
+        value_name = "HEURES",
+        default_value_t = 24,
+        env = "SHIORI_BACKUP_EVERY_HOURS"
+    )]
+    pub backup_every_hours: u64,
+    /// Sauvegardes périodiques gardées (les plus récentes) ; celles d'avant une mise à jour ou
+    /// une restauration ne sont jamais effacées.
+    #[arg(
+        long,
+        value_name = "N",
+        default_value_t = 7,
+        env = "SHIORI_BACKUP_KEEP"
+    )]
+    pub backup_keep: usize,
     /// Ouvre l'interface dans le navigateur une fois prêt (double-clic sur le binaire). Si le
     /// port est déjà pris, par un Shiori déjà lancé, ouvre l'interface et s'arrête.
     #[arg(long)]
@@ -96,6 +120,8 @@ pub struct App {
     pub images: Images,
     pub scanner: Scanner,
     pub metadata: Arc<Metadata>,
+    /// Défaut : `backups` à côté de la base, sans sauvegarde périodique.
+    pub backups: Backups,
     /// Décoder et encoder coûte du CPU et de la mémoire : nombre de rendus simultanés borné.
     renders: Semaphore,
     auth: auth::Guard,
@@ -119,7 +145,13 @@ impl App {
         // shortcut: 4 rendus au plus (machine de 4 Gio) ; à rendre réglable si un serveur plus gros le demande.
         let cores = std::thread::available_parallelism().map_or(1, |n| n.get());
         let metadata = Arc::new(Metadata::new(db.clone(), sources));
+        let backups = Backups {
+            dir: crate::backup_dir(db.pool().connect_options().get_filename(), None),
+            every: None,
+            keep: 7,
+        };
         Self {
+            backups,
             db,
             images,
             scanner: Scanner::new(jobs, log_days).with_metadata(metadata.clone()),
@@ -153,7 +185,7 @@ pub async fn run(
         }
         Err(e) => return Err(e).with_context(|| format!("écoute sur {}", args.listen)),
     };
-    let db = crate::open_db(args.db).await?;
+    let (db, backup_dir) = crate::open_db(args.db, args.backup_dir).await?;
     let cache = match args.cache_dir {
         Some(dir) => dir,
         None => crate::cache_dir()?,
@@ -170,6 +202,7 @@ pub async fn run(
             absolute(db.pool().connect_options().get_filename())
         );
         eprintln!("Cache : {}", absolute(&cache));
+        eprintln!("Sauvegardes : {}", absolute(&backup_dir));
     }
     // Une passe restée `running` vient d'un arrêt brutal : elle ne reprendra pas.
     db.interrupt_running_runs().await?;
@@ -179,13 +212,20 @@ pub async fn run(
         .jobs
         .or_else(|| std::thread::available_parallelism().ok())
         .map_or(1, NonZeroUsize::get);
-    let app = App::build(
+    let mut app = App::build(
         Arc::new(db),
         images,
         jobs,
         args.scan_log_days,
         web_sources(),
     );
+    app.backups = Backups {
+        dir: backup_dir,
+        every: (args.backup_every_hours > 0)
+            .then(|| std::time::Duration::from_secs(args.backup_every_hours * 3600)),
+        keep: args.backup_keep,
+    };
+    app.backups.clone().spawn(app.db.clone());
     // Toujours affiché, même avec `--quiet` : sans lui, personne ne peut créer le premier compte.
     if app.db.users().await?.is_empty() {
         eprintln!(
@@ -327,6 +367,20 @@ pub fn router(app: Arc<App>, hosts: Option<Vec<String>>) -> Router {
         .route("/api/covers/{id}", get(cover))
         .route("/api/admin/metadata", get(metadata_status))
         .route("/api/admin/storage", get(storage))
+        .route(
+            "/api/admin/backups",
+            get(backups::list).post(backups::create),
+        )
+        .route(
+            "/api/admin/backups/upload",
+            // Une base avec ses couvertures dépasse vite la limite par défaut de 2 Mio.
+            post(backups::upload).layer(DefaultBodyLimit::disable()),
+        )
+        .route(
+            "/api/admin/backups/{name}",
+            get(backups::download).delete(backups::remove),
+        )
+        .route("/api/admin/backups/{name}/restore", post(backups::restore))
         .route("/api/admin/metadata/identify", post(identify))
         .route("/api/volumes/{id}", get(volume).patch(patch_volume))
         .route(
