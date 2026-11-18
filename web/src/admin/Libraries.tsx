@@ -5,7 +5,8 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { ApiError, api } from '@/api/client'
 import { useLibraries } from '@/api/queries'
-import type { Library, LibraryKind } from '@/api/types'
+import { useSettings } from '@/account/preferences'
+import type { FullScanHours, Library, LibraryKind, Settings } from '@/api/types'
 import { QueryState } from '@/browse/parts'
 import {
   AlertDialog,
@@ -22,10 +23,12 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import { errorText } from '@/i18n/errors'
 import { useStartScan } from './useStartScan'
 
 const KINDS: LibraryKind[] = ['manga', 'comics', 'webtoon']
+const FULL_SCANS: FullScanHours[] = [24, 6, 1, 0]
 // Ce qui montre les bibliothèques et leurs séries : redemandé après une création ou une suppression.
 const LISTS = [['libraries'], ['series'], ['continue']]
 
@@ -34,6 +37,7 @@ export function AdminLibraries() {
   const { t } = useTranslation()
   const libraries = useLibraries()
   const [creating, setCreating] = useState(false)
+  const watchHelp = useId()
   return (
     <section aria-labelledby="admin-libraries" className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -45,11 +49,17 @@ export function AdminLibraries() {
           {t('admin.add')}
         </Button>
       </div>
+      <div className="max-w-prose space-y-3 rounded-md bg-card p-4">
+        <p id={watchHelp} className="text-sm text-muted-foreground">
+          {t('admin.watchHelp')}
+        </p>
+        <FullScanSetting />
+      </div>
       <QueryState query={libraries} isEmpty={(list) => list.length === 0} empty={<p>{t('admin.empty')}</p>}>
         {(list) => (
           <ul className="space-y-2">
             {list.map((library) => (
-              <LibraryRow key={library.id} library={library} />
+              <LibraryRow key={library.id} library={library} watchHelp={watchHelp} />
             ))}
           </ul>
         )}
@@ -61,10 +71,56 @@ export function AdminLibraries() {
   )
 }
 
-function LibraryRow({ library }: { library: Library }) {
+/** Intervalle du scan complet de toutes les bibliothèques, filet de la surveillance. */
+function FullScanSetting() {
   const { t } = useTranslation()
+  const id = useId()
+  const queryClient = useQueryClient()
+  const settings = useSettings()
+  const save = useMutation({
+    mutationFn: (hours: FullScanHours) => api.saveSettings({ full_scan_hours: hours }),
+    onSuccess: (saved: Settings) => queryClient.setQueryData(['settings'], saved),
+    onError: (error) => toast.error(t('admin.fullScanNotSaved'), { description: errorText(error, t) }),
+  })
+  const value = save.isPending ? save.variables : settings.data?.full_scan_hours
+  if (value === undefined) return null
+  return (
+    <div className="space-y-1">
+      <p id={`${id}-label`} className="text-sm font-medium">
+        {t('admin.fullScan')}
+      </p>
+      <p id={`${id}-help`} className="text-sm text-muted-foreground">
+        {t('admin.fullScanHelp')}
+      </p>
+      <Select value={String(value)} onValueChange={(v) => save.mutate(Number(v) as FullScanHours)}>
+        <SelectTrigger aria-labelledby={`${id}-label`} aria-describedby={`${id}-help`} className="w-full max-w-sm">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent position="popper" align="start">
+          {FULL_SCANS.map((hours) => (
+            <SelectItem key={hours} value={String(hours)}>
+              {t(`admin.fullScanEvery.h${hours}`)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  )
+}
+
+/** `watchHelp` : l'aide de la surveillance, commune à toutes les lignes. */
+function LibraryRow({ library, watchHelp }: { library: Library; watchHelp: string }) {
+  const { t } = useTranslation()
+  const id = useId()
   const queryClient = useQueryClient()
   const scan = useStartScan()
+  const watch = useMutation({
+    mutationFn: (on: boolean) => api.setLibraryWatch(library.id, on),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['libraries'] }),
+    onError: (error) => toast.error(t('admin.watchNotSaved'), { description: errorText(error, t) }),
+  })
+  // Pendant l'enregistrement, l'interrupteur montre déjà le choix ; un échec le remet.
+  const watching = watch.isPending ? watch.variables : library.watch
   const remove = useMutation({
     mutationFn: () => api.deleteLibrary(library.id),
     onSuccess: () => {
@@ -83,6 +139,19 @@ function LibraryRow({ library }: { library: Library }) {
           {[t(`kinds.${library.kind}`), t('counts.series', { count: library.series_count }), t('counts.volumes', { count: library.volume_count })].join(' · ')}
         </p>
         <p className="mt-1 font-mono text-xs [overflow-wrap:anywhere] text-muted-foreground">{library.root}</p>
+        <div className="mt-2 flex items-center gap-3">
+          <Switch
+            id={`${id}-watch`}
+            checked={watching}
+            disabled={watch.isPending}
+            onCheckedChange={(on) => watch.mutate(on)}
+            aria-label={t('admin.watchNamed', { name: library.name })}
+            aria-describedby={watchHelp}
+          />
+          <label htmlFor={`${id}-watch`} className="flex min-h-11 items-center text-sm">
+            {t('admin.watch')}
+          </label>
+        </div>
       </div>
       <div className="flex shrink-0 gap-2">
         <Button variant="secondary" disabled={scan.isPending} onClick={() => scan.mutate({ library })} aria-label={t('admin.scanNamed', { name: library.name })}>

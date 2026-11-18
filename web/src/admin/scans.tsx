@@ -1,3 +1,4 @@
+import type { TFunction } from 'i18next'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronRight, Loader2 } from 'lucide-react'
 import { type FormEvent, useEffect, useId, useRef, useState } from 'react'
@@ -187,6 +188,12 @@ function StatusText({ status }: { status: RunStatus }) {
   return <span className={cn('font-medium', status === 'failed' && 'text-destructive', status === 'running' && 'text-primary')}>{t(`scans.status.${status}`)}</span>
 }
 
+/** Passe lancée par la surveillance ou le scan périodique ; `null` pour une demande. */
+function triggerText(run: RunSummary, t: TFunction): string | null {
+  const trigger = run.options.trigger
+  return trigger === 'watch' || trigger === 'schedule' ? t(`scans.triggers.${trigger}`) : null
+}
+
 /** Historique filtrable (statut, bibliothèque), du plus récent au plus ancien, par pages. */
 function History() {
   const { t, i18n } = useTranslation()
@@ -271,6 +278,7 @@ function History() {
                         <StatusText status={run.status} />
                         <span className="text-muted-foreground">{formatDate(run.started_at, i18n.language)}</span>
                         {run.duration_ms !== null && <span className="text-muted-foreground">· {formatDuration(run.duration_ms, i18n.language)}</span>}
+                        {triggerText(run, t) && <span className="text-muted-foreground">· {triggerText(run, t)}</span>}
                       </p>
                       <p title={libraryName(run)} className="truncate">
                         {libraryName(run)}
@@ -356,7 +364,7 @@ export function ScanPage({ id }: { id: number }) {
           const rows: [string, string][] = [
             [t('scans.library'), libraries?.find((l) => l.id === r.library_id)?.name ?? '—'],
             [t('scans.target'), r.root],
-            [t('scans.origin'), t(`scans.origins.${r.origin}`)],
+            [t('scans.origin'), triggerText(r, t) ?? t(`scans.origins.${r.origin}`)],
             [t('scans.started'), formatDate(r.started_at, i18n.language)],
             [t('scans.duration'), r.duration_ms === null ? '—' : formatDuration(r.duration_ms, i18n.language)],
             [t('scans.files'), r.files_total === null ? '—' : new Intl.NumberFormat(i18n.language).format(r.files_total)],

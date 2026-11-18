@@ -107,6 +107,15 @@ export const fr = {
       "Shiori oublie cette bibliothèque et ses séries. Vos fichiers ne sont pas touchés, et la progression de lecture est gardée : elle revient si les fichiers sont ajoutés de nouveau.",
     deleted: 'Bibliothèque « {{name}} » supprimée',
     deleteFailed: 'Bibliothèque non supprimée',
+    watch: 'Surveiller les dossiers',
+    watchNamed: 'Surveiller les dossiers de {{name}}',
+    watchHelp: 'Surveillance des dossiers : un fichier ajouté, remplacé ou retiré est scanné 30 secondes plus tard.',
+    watchNotSaved: 'Surveillance non modifiée',
+    fullScan: 'Scan complet',
+    fullScanHelp:
+      'Rescanne toutes les bibliothèques, pour rattraper ce que la surveillance ne voit pas : partage réseau modifié depuis une autre machine, Docker Desktop.',
+    fullScanEvery: { h0: 'Jamais', h1: 'Toutes les heures', h6: 'Toutes les 6 heures', h24: 'Une fois par jour' },
+    fullScanNotSaved: 'Intervalle non enregistré',
   },
   loadFailed: {
     title: "Cet écran n'a pas pu s'afficher",
@@ -349,6 +358,7 @@ export const fr = {
     target: 'Cible',
     origin: 'Lancé depuis',
     origins: { cli: 'La ligne de commande', api: "L'interface" },
+    triggers: { watch: 'Surveillance des dossiers', schedule: 'Scan complet périodique' },
     started: 'Début',
     duration: 'Durée',
     files: 'Fichiers',

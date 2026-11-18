@@ -10,8 +10,8 @@ afterEach(() => {
 })
 
 const libraries: Library[] = [
-  { id: 1, name: 'Mangas', root: '/srv/manga', kind: 'manga', series_count: 1, volume_count: 2 },
-  { id: 2, name: 'Comics', root: '/srv/comics', kind: 'comics', series_count: 0, volume_count: 0 },
+  { id: 1, name: 'Mangas', root: '/srv/manga', kind: 'manga', watch: true, series_count: 1, volume_count: 2 },
+  { id: 2, name: 'Comics', root: '/srv/comics', kind: 'comics', watch: true, series_count: 0, volume_count: 0 },
 ]
 const counts = { ok: 3, warning: 1, error: 2, unchanged: 4, removed: 0 }
 const progress: ScanProgress = { run: 9, library_id: 1, target: '/srv/manga', total: 10, done: 3, current: '/srv/manga/A/A T01.cbz', counts, cancelling: false }
@@ -135,7 +135,7 @@ describe('page des scans', () => {
   })
 
   it('liste l’historique, le filtre par statut et charge la suite', async () => {
-    const full = Array.from({ length: 20 }, (_, i) => run(40 - i))
+    const full = Array.from({ length: 20 }, (_, i) => run(40 - i, i === 1 ? { options: { trigger: 'schedule' } } : {}))
     const fetch = mockApi({
       '/api/libraries': () => json(libraries),
       '/api/admin/scans/current': none,
@@ -149,6 +149,9 @@ describe('page des scans', () => {
     expect(first).toHaveAttribute('href', '/admin/scans/40')
     expect(first).toHaveTextContent('Mangas')
     expect(first).toHaveTextContent('Sans problème : 3 · Avertissements : 1 · Erreurs : 2')
+    // Un scan demandé ne dit pas d'où il vient ; ceux de la surveillance et du filet, si.
+    expect(first).not.toHaveTextContent('Scan complet périodique')
+    expect((await region.findAllByRole('link'))[1]).toHaveTextContent('· Scan complet périodique')
     await userEvent.click(region.getByRole('button', { name: 'Charger la suite' }))
     expect(await region.findByText('Interrompu')).toBeInTheDocument()
     expect(region.queryByRole('button', { name: 'Charger la suite' })).toBeNull()
@@ -184,7 +187,7 @@ describe('détail d’une passe', () => {
     mockApi({
       '/api/libraries': () => json(libraries),
       '/api/admin/scans/current': none,
-      '/api/admin/scans/9': () => json(run(9, { status: 'failed', options: { deep: true }, error: 'disque débranché' })),
+      '/api/admin/scans/9': () => json(run(9, { status: 'failed', options: { deep: true, trigger: 'watch' }, error: 'disque débranché' })),
       '/api/admin/scans/9/logs?level=info&limit=100': () => json(logs),
       '/api/admin/scans/9/logs?level=error&limit=100': () => json([logs[1]]),
     })
@@ -193,6 +196,7 @@ describe('détail d’une passe', () => {
     expect(await main().findByRole('alert')).toHaveTextContent('Erreur fatale : disque débranché')
     expect(main().getByText('Contrôle approfondi').nextSibling).toHaveTextContent('Oui')
     expect(main().getByText('Relire tous les fichiers').nextSibling).toHaveTextContent('Non')
+    expect(main().getByText('Lancé depuis').nextSibling).toHaveTextContent('Surveillance des dossiers')
     expect(main().getByText('Durée').nextSibling).toHaveTextContent(/12,5\ss/)
     const journal = within(main().getByRole('region', { name: 'Journal' }))
     expect(await journal.findByText(/scanné : ok, 12 page\(s\)/)).toBeInTheDocument()

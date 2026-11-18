@@ -89,6 +89,8 @@ export const api = {
     must<Progress>(`/volumes/${volumeId}/progress`, { ...init, method: 'PUT', body: JSON.stringify({ page_id: pageId }) }),
   createLibrary: (library: { name: string; root: string; kind: LibraryKind; share: boolean }) =>
     must<Library>('/libraries', { method: 'POST', body: JSON.stringify(library) }),
+  setLibraryWatch: (id: number, watch: boolean) =>
+    request<null>(`/libraries/${id}`, { method: 'PATCH', body: JSON.stringify({ watch }) }),
   deleteLibrary: (id: number) => request<null>(`/libraries/${id}`, { method: 'DELETE' }),
   startScan: (libraryId: number, options: { deep?: boolean; rehash?: boolean } = {}) =>
     must<{ run: number }>('/admin/scans', { method: 'POST', body: JSON.stringify({ library_id: libraryId, ...options }) }),
