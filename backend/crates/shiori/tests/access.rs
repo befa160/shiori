@@ -151,6 +151,7 @@ async fn a_reader_is_refused_every_admin_route() {
         ("DELETE", "/api/admin/users/1"),
         ("POST", "/api/admin/users/1/password"),
         ("DELETE", "/api/admin/users/1/sessions"),
+        ("DELETE", "/api/admin/users/1/totp"),
     ];
     for (method, uri) in routes {
         let (status, body) = call(&f, Some(&bob), method, uri, Some(json!({}))).await;

@@ -80,6 +80,7 @@ function summary(account: Account, libraries: Library[], t: ReturnType<typeof us
   if (account.role === 'admin') parts.push(t('accounts.allLibraries'))
   else if (libraries.length > 0 && libraries.every((l) => account.libraries.includes(l.id))) parts.push(t('accounts.allLibraries'))
   else parts.push(t('counts.libraries', { count: account.libraries.length }))
+  if (account.totp) parts.push(t('accounts.totp'))
   if (account.disabled) parts.push(t('accounts.disabled'))
   else if (account.must_change_password) parts.push(t('accounts.provisional'))
   return parts.join(' · ')
@@ -245,6 +246,14 @@ function EditAccount({ account, libraries, onDone }: { account: Account; librari
     },
   })
   const reset = useMutation({ mutationFn: () => api.resetPassword(account.id), onSuccess: refresh, onError: fail(t('accounts.resetFailed')) })
+  const resetTotp = useMutation({
+    mutationFn: () => api.resetTotp(account.id),
+    onSuccess: () => {
+      refresh()
+      toast.success(t('accounts.totpReset', { name: account.username }))
+    },
+    onError: fail(t('accounts.totpResetFailed')),
+  })
   const signOut = useMutation({
     mutationFn: () => api.signOutAccount(account.id),
     onSuccess: () => toast.success(t('accounts.signedOut', { name: account.username })),
@@ -312,6 +321,12 @@ function EditAccount({ account, libraries, onDone }: { account: Account; librari
               <Button variant="secondary" className="w-full" disabled={signOut.isPending} onClick={() => signOut.mutate()}>
                 {t('accounts.signOutAll')}
               </Button>
+              {/* Téléphone perdu et plus de code de secours : la connexion redevient mot de passe seul. */}
+              {account.totp && !resetTotp.isSuccess && (
+                <Button variant="secondary" className="w-full" disabled={resetTotp.isPending} onClick={() => resetTotp.mutate()}>
+                  {t('accounts.resetTotp')}
+                </Button>
+              )}
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button variant="ghost" className="w-full text-destructive">

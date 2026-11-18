@@ -44,6 +44,7 @@ use crate::meta::{IdentifyStatus, MetaError, Metadata, web_sources};
 mod accounts;
 mod auth;
 mod images;
+mod totp;
 
 use auth::{Admin, Me};
 pub(crate) use images::{IMMUTABLE, etag_matches};
@@ -279,10 +280,13 @@ pub fn router(app: Arc<App>, hosts: Option<Vec<String>>) -> Router {
         .route("/api/auth/state", get(auth::state))
         .route("/api/auth/setup", post(auth::setup))
         .route("/api/auth/login", post(auth::login))
+        .route("/api/auth/totp", post(auth::second_factor))
         .route("/api/auth/logout", post(auth::logout))
         .route("/api/me", get(accounts::me).put(accounts::save_me))
         .route("/api/me/password", post(auth::change_password))
         .route("/api/me/sessions", get(accounts::devices))
+        .route("/api/me/totp", post(totp::start).delete(totp::disable))
+        .route("/api/me/totp/confirm", post(totp::confirm))
         .route("/api/me/sessions/{id}", delete(accounts::revoke_device))
         .route(
             "/api/admin/users",
@@ -300,6 +304,7 @@ pub fn router(app: Arc<App>, hosts: Option<Vec<String>>) -> Router {
             "/api/admin/users/{id}/sessions",
             delete(accounts::revoke_sessions),
         )
+        .route("/api/admin/users/{id}/totp", delete(totp::reset))
         .route("/api/settings", get(settings).put(save_settings))
         .route("/api/libraries", get(libraries).post(create_library))
         .route("/api/libraries/{id}", delete(delete_library))

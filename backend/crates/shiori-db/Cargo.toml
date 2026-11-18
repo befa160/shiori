@@ -20,6 +20,7 @@ shiori-core.workspace = true
 shiori-meta.workspace = true
 sqlx.workspace = true
 thiserror.workspace = true
+totp-rs.workspace = true
 tokio = { workspace = true, features = ["rt"] }
 
 [dev-dependencies]

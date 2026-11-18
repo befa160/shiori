@@ -7,6 +7,8 @@
 //!   servie : elle affiche elle-même la page de connexion.
 //! - Connexion : essais ratés comptés par nom et par adresse ; au-delà d'un seuil, pause qui
 //!   double à chaque échec (429 `rate_limited` avec `Retry-After`), sans même calculer le hash.
+//! - Double authentification (lot 7.5) : un mot de passe juste ne donne qu'un défi de 5 minutes ;
+//!   la session s'ouvre avec le code (`/api/auth/totp`), compté dans la même limite d'essais.
 
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
@@ -27,11 +29,12 @@ use tokio::sync::Semaphore;
 use super::{ApiError, App, invalid_body};
 
 /// Routes ouvertes sans session.
-const PUBLIC: [&str; 5] = [
+const PUBLIC: [&str; 6] = [
     "/api/health",
     "/api/auth/state",
     "/api/auth/setup",
     "/api/auth/login",
+    "/api/auth/totp",
     "/api/auth/logout",
 ];
 /// Routes permises avec un mot de passe provisoire : de quoi le changer.
@@ -42,12 +45,23 @@ const COOKIE: &str = "shiori_session";
 const FREE_PER_NAME: u32 = 5;
 const FREE_PER_ADDRESS: u32 = 20;
 const MAX_PAUSE: Duration = Duration::from_secs(15 * 60);
+/// Durée d'un défi de connexion (mot de passe juste, code attendu).
+const CHALLENGE: Duration = Duration::from_secs(5 * 60);
+
+/// Mot de passe juste, second facteur attendu.
+struct Challenge {
+    user_id: i64,
+    client: Client,
+    keys: [(String, u32); 2],
+    at: Instant,
+}
 
 /// État de l'authentification, partagé par les requêtes.
 pub(crate) struct Guard {
     /// Jeton d'installation (Q46) : affiché dans la console, exigé pour créer le premier compte.
     setup_token: String,
     failures: Mutex<HashMap<String, (u32, Instant)>>,
+    challenges: Mutex<HashMap<String, Challenge>>,
     /// Argon2 prend ~20 Mio et des dizaines de ms par essai : peu de calculs à la fois.
     hashing: Semaphore,
 }
@@ -57,6 +71,7 @@ impl Guard {
         Self {
             setup_token: shiori_db::temporary_password(),
             failures: Mutex::default(),
+            challenges: Mutex::default(),
             hashing: Semaphore::new(2),
         }
     }
@@ -88,6 +103,27 @@ impl Guard {
             let entry = failures.entry(key.clone()).or_insert((0, Instant::now()));
             *entry = (entry.0.saturating_add(1), Instant::now());
         }
+    }
+
+    /// Défi de connexion, valable [`CHALLENGE`] ; les défis périmés partent au passage.
+    fn challenge(&self, challenge: Challenge) -> String {
+        let token = shiori_db::temporary_password();
+        let mut challenges = self
+            .challenges
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        challenges.retain(|_, c| c.at.elapsed() < CHALLENGE);
+        challenges.insert(token.clone(), challenge);
+        token
+    }
+
+    /// Remet un défi sorti pour vérification (code faux) : il garde son heure de départ.
+    fn put_back(&self, token: String, challenge: Challenge) {
+        let mut challenges = self
+            .challenges
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        challenges.insert(token, challenge);
     }
 
     fn succeeded(&self, name_key: &str) {
@@ -258,7 +294,7 @@ impl From<AccountError> for ApiError {
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
-enum Client {
+pub(crate) enum Client {
     /// Cookie : le jeton n'est jamais lisible par le JavaScript de la page.
     #[default]
     Browser,
@@ -425,8 +461,91 @@ pub(crate) async fn login(
             "identifiants incorrects",
         ));
     };
+    if app.db.totp_enabled(user.id).await? {
+        // Le nom n'est libéré qu'avec le code : ses échecs comptent encore.
+        let challenge = app.auth.challenge(Challenge {
+            user_id: user.id,
+            client: credentials.client,
+            keys,
+            at: Instant::now(),
+        });
+        return Ok(Json(TotpRequired {
+            totp_required: true,
+            challenge,
+        })
+        .into_response());
+    }
     app.auth.succeeded(&name_key);
     sign_in(&app, &headers, user, credentials.client).await
+}
+
+#[derive(Serialize)]
+struct TotpRequired {
+    totp_required: bool,
+    challenge: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct SecondFactor {
+    challenge: String,
+    code: String,
+}
+
+/// Second facteur de la connexion : code TOTP ou code de secours, sous la limite d'essais.
+pub(crate) async fn second_factor(
+    State(app): State<Arc<App>>,
+    headers: HeaderMap,
+    body: Result<Json<SecondFactor>, JsonRejection>,
+) -> Result<Response, ApiError> {
+    let Json(answer) = body.map_err(invalid_body)?;
+    // Sorti de la table le temps de la vérification : une requête simultanée sur le même défi ne
+    // le trouve pas et ne consomme aucun code (un code de secours ne sert qu'une fois).
+    let taken = app
+        .auth
+        .challenges
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .remove(&answer.challenge)
+        .filter(|c| c.at.elapsed() < CHALLENGE);
+    let Some(challenge) = taken else {
+        return Err(ApiError::new(
+            StatusCode::UNAUTHORIZED,
+            "challenge_expired",
+            "délai dépassé : se reconnecter",
+        ));
+    };
+    if let Some(wait) = app.auth.paused(&challenge.keys) {
+        app.auth.put_back(answer.challenge, challenge);
+        return Err(rate_limited(wait));
+    }
+    let checked = app
+        .db
+        .check_second_factor(challenge.user_id, &answer.code)
+        .await;
+    if !matches!(checked, Ok(true)) {
+        // Faute de frappe ou erreur passagère : le défi reste, sans se reconnecter.
+        let keys = challenge.keys.clone();
+        app.auth.put_back(answer.challenge, challenge);
+        checked?;
+        app.auth.failed(&keys);
+        return Err(ApiError::new(
+            StatusCode::UNAUTHORIZED,
+            "invalid_code",
+            "code incorrect",
+        ));
+    }
+    // Désactivé entre le mot de passe et le code : pas de session.
+    let Some(user) = app
+        .db
+        .user_by_id(challenge.user_id)
+        .await?
+        .filter(|u| !u.disabled)
+    else {
+        return Err(unauthenticated());
+    };
+    app.auth.succeeded(&challenge.keys[0].0);
+    sign_in(&app, &headers, user, challenge.client).await
 }
 
 #[derive(Deserialize)]
@@ -445,8 +564,21 @@ pub(crate) async fn change_password(
     body: Result<Json<PasswordChange>, JsonRejection>,
 ) -> Result<StatusCode, ApiError> {
     let Json(change) = body.map_err(invalid_body)?;
-    let name = session.user.username.as_str();
-    let name_key = format!("nom:{}", name.to_lowercase());
+    check_own_password(&app, &session.user, &change.current).await?;
+    app.db
+        .set_password(&session.user.username, &change.new, false, Some(session.id))
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Mot de passe du compte connecté, exigé avant un changement sensible ; sous la limite
+/// d'essais de la connexion (une session volée ne doit pas permettre de le deviner).
+pub(crate) async fn check_own_password(
+    app: &App,
+    user: &User,
+    password: &str,
+) -> Result<(), ApiError> {
+    let name_key = format!("nom:{}", user.username.to_lowercase());
     let keys = [(name_key.clone(), FREE_PER_NAME)];
     if let Some(wait) = app.auth.paused(&keys) {
         return Err(rate_limited(wait));
@@ -458,7 +590,7 @@ pub(crate) async fn change_password(
             .acquire()
             .await
             .expect("sémaphore jamais fermé");
-        app.db.check_password(name, &change.current).await?
+        app.db.check_password(&user.username, password).await?
     };
     if checked.is_none() {
         app.auth.failed(&keys);
@@ -469,10 +601,28 @@ pub(crate) async fn change_password(
         ));
     }
     app.auth.succeeded(&name_key);
-    app.db
-        .set_password(name, &change.new, false, Some(session.id))
-        .await?;
-    Ok(StatusCode::NO_CONTENT)
+    Ok(())
+}
+
+/// Code de double authentification du compte connecté (TOTP ou secours), exigé pour la
+/// retirer ; même limite d'essais que le mot de passe.
+pub(crate) async fn check_own_code(app: &App, user: &User, code: &str) -> Result<(), ApiError> {
+    let keys = [(
+        format!("nom:{}", user.username.to_lowercase()),
+        FREE_PER_NAME,
+    )];
+    if let Some(wait) = app.auth.paused(&keys) {
+        return Err(rate_limited(wait));
+    }
+    if !app.db.check_second_factor(user.id, code).await? {
+        app.auth.failed(&keys);
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "invalid_code",
+            "code incorrect",
+        ));
+    }
+    Ok(())
 }
 
 /// Ferme la session présentée et efface le cookie ; répond 204 même sans session.

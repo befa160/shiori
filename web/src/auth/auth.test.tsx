@@ -76,6 +76,50 @@ describe('garde de l’application', () => {
     expect(body(fetch.mock.calls.find(([url]) => url === '/api/auth/login')?.[1])).toEqual({ username: 'admin', password: 'mauvais' })
   })
 
+  it('double authentification : le code après le mot de passe, code faux dit, puis connecté', async () => {
+    let tries = 0
+    const fetch = mockApi({
+      '/api/auth/state': () => json({ setup_required: false, user: null }),
+      '/api/auth/login': () => json({ totp_required: true, challenge: 'DEFI' }),
+      '/api/auth/totp': () => (tries++ === 0 ? json({ code: 'invalid_code', message: 'x' }, 401) : json({ user: ADMIN })),
+      '/api/libraries': libraries,
+      '/api/series': libraries,
+    })
+    renderAt('/series', { auth: null })
+    await userEvent.type(await screen.findByLabelText('Nom du compte'), 'admin')
+    await userEvent.type(screen.getByLabelText('Mot de passe'), 'une phrase')
+    await userEvent.click(screen.getByRole('button', { name: 'Se connecter' }))
+    expect(await screen.findByRole('heading', { name: 'Double authentification' })).toBeInTheDocument()
+    const code = screen.getByLabelText('Code')
+    expect(code).toHaveAttribute('autocomplete', 'one-time-code')
+    expect(code).toHaveFocus()
+    await userEvent.type(code, '123 456')
+    await userEvent.click(screen.getByRole('button', { name: 'Vérifier' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Code incorrect')
+    await userEvent.click(screen.getByRole('button', { name: 'Vérifier' }))
+    expect(await screen.findByRole('heading', { name: 'Séries', level: 1 })).toBeInTheDocument()
+    expect(body(fetch.mock.calls.filter(([url]) => url === '/api/auth/totp').at(-1)?.[1])).toEqual({ challenge: 'DEFI', code: '123 456' })
+  })
+
+  it('double authentification : délai dépassé, retour à la connexion', async () => {
+    mockApi({
+      '/api/auth/state': () => json({ setup_required: false, user: null }),
+      '/api/auth/login': () => json({ totp_required: true, challenge: 'DEFI' }),
+      '/api/auth/totp': () => json({ code: 'challenge_expired', message: 'x' }, 401),
+    })
+    renderAt('/', { auth: null })
+    await userEvent.type(await screen.findByLabelText('Nom du compte'), 'admin')
+    await userEvent.type(screen.getByLabelText('Mot de passe'), 'une phrase')
+    await userEvent.click(screen.getByRole('button', { name: 'Se connecter' }))
+    await userEvent.type(await screen.findByLabelText('Code'), '123456')
+    await userEvent.click(screen.getByRole('button', { name: 'Vérifier' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Délai dépassé : reconnectez-vous')
+    expect(screen.queryByLabelText('Code')).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: 'Retour à la connexion' }))
+    expect(await screen.findByRole('heading', { name: 'Connexion' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Mot de passe')).toHaveValue('')
+  })
+
   it('mot de passe provisoire : à changer d’abord, confirmation vérifiée, erreurs sous le champ', async () => {
     let changed = false
     let tries = 0
