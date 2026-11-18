@@ -2,8 +2,8 @@
 //!
 //! Les fichiers sont ouverts en lecture seule et ne sont jamais modifiés. Le CBZ est lu
 //! via l'annuaire central : chaque entrée est accessible directement par son index,
-//! sans extraction complète, zip64 compris. Le CBR (RAR) passe par le même trait : voir
-//! [`rar`].
+//! sans extraction complète, zip64 compris. Le CBR (RAR) et le PDF passent par le même
+//! trait : voir [`rar`] et [`pdf`].
 
 use std::collections::BTreeMap;
 use std::fs::File;
@@ -13,7 +13,9 @@ use std::path::{Path, PathBuf};
 use zip::result::ZipError;
 use zip::{CompressionMethod, ZipArchive};
 
+pub mod pdf;
 pub mod rar;
+pub use pdf::PdfArchive;
 pub use rar::RarArchive;
 
 /// Nature d'une entrée d'archive.
@@ -73,6 +75,8 @@ pub enum ArchiveError {
     EntryTooLarge(u64),
     #[error("l'entrée contient plus d'octets que sa taille déclarée")]
     SizeMismatch,
+    #[error("image illisible : {0}")]
+    ImageUndecodable(String),
     #[error("aucune entrée d'index {0}")]
     NoSuchEntry(usize),
     #[error(transparent)]
@@ -151,6 +155,11 @@ pub trait Archive {
         false
     }
 
+    /// Problèmes relevés à l'ouverture, hors entrées (pages d'un PDF écartées).
+    fn issues(&self) -> &[crate::integrity::Issue] {
+        &[]
+    }
+
     /// Archive découpée en plusieurs fichiers (`.part2.rar`…), non gérée.
     fn is_multivolume(&self) -> bool {
         false
@@ -183,10 +192,12 @@ pub fn is_rar(path: &Path) -> bool {
         && magic == *b"Rar!\x1a\x07"
 }
 
-/// Ouvre un CBZ ou un CBR selon son contenu.
+/// Ouvre un CBZ, un CBR ou un PDF selon son contenu.
 pub fn open(path: &Path) -> Result<Box<dyn Archive + Send>, ArchiveError> {
     Ok(if is_rar(path) {
         Box::new(RarArchive::open(path)?)
+    } else if pdf::is_pdf(path) {
+        Box::new(PdfArchive::open(path)?)
     } else {
         Box::new(CbzArchive::open(path)?)
     })

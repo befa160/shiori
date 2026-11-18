@@ -1,6 +1,6 @@
 //! Bibliothèque des tests de bout en bout du lecteur (`web/e2e`) : un manga CBZ (couverture
-//! JPEG, deux doubles pages), un manga RAR solid écrit à l'envers de l'ordre de lecture et un
-//! webtoon. Écrit aussi `manifest.json` : pour chaque fichier, la couleur attendue de chaque
+//! JPEG, deux doubles pages), un manga RAR solid écrit à l'envers de l'ordre de lecture, un
+//! manga PDF (pages sur fond de marges, une page de texte ignorée) et un webtoon. Écrit aussi `manifest.json` : pour chaque fichier, la couleur attendue de chaque
 //! page dans l'ordre de lecture. Deux pages voisines ont des couleurs très éloignées : afficher
 //! la page d'à côté ne passe jamais inaperçu, même après un encodage AVIF avec pertes.
 //!
@@ -10,6 +10,7 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::Path;
 
+use shiori_testkit::pdf::{PAGE_HEIGHT, PAGE_WIDTH, PdfImage, PdfPage, write_pdf};
 use shiori_testkit::{DEFLATED, RAR5, STORED, jpeg, png, write_rar, write_zip};
 
 /// Teinte tournant de l'angle d'or à chaque page, saturée et claire.
@@ -70,6 +71,25 @@ fn main() {
         .collect();
     write_rar(&manga, "E2E Manga T02.cbr", &files, RAR5, true);
     manifest.push(("E2E Manga T02.cbr", 6));
+
+    // Manga PDF : cinq planches JPEG au centre de pages plus larges (les marges ne doivent pas
+    // s'afficher) et, après la deuxième, une page de texte seul, ignorée.
+    let pdf = root.join("manga/E2E PDF");
+    fs::create_dir_all(&pdf).unwrap();
+    let plate = |i| {
+        PdfPage::image(PdfImage {
+            at: [60.0, 40.0, PAGE_WIDTH - 120.0, PAGE_HEIGHT - 80.0],
+            ..PdfImage::full(600, 900, color(i), true)
+        })
+    };
+    let mut pages: Vec<PdfPage> = (0..5).map(plate).collect();
+    let text = PdfPage {
+        text: Some(true),
+        ..PdfPage::default()
+    };
+    pages.insert(2, text);
+    write_pdf(&pdf, "E2E PDF T01.pdf", &pages);
+    manifest.push(("E2E PDF T01.pdf", 5));
 
     // Webtoon : 60 bandes de 400×1200, servies en originales (PNG exact).
     let strip = root.join("webtoon/E2E Strip");

@@ -366,7 +366,7 @@ export const fr = {
   severity: { error: 'Erreur', warning: 'Avertissement', info: 'Information' },
   // Codes de diagnostic du scan (shiori-core, `IssueCode`) ; un code inconnu garde le message du serveur.
   issues: {
-    archive_unreadable: "Archive illisible : ce n'est pas un CBZ ou un CBR valide",
+    archive_unreadable: "Fichier illisible : ce n'est pas un CBZ, un CBR ou un PDF valide",
     archive_truncated: 'Archive incomplète : le fichier est coupé',
     multivolume_archive: "Archive en plusieurs volumes : seule une archive d'un seul fichier se lit",
     encrypted_entry: 'Page chiffrée par un mot de passe',
@@ -387,6 +387,8 @@ export const fr = {
     ignored_entry: 'Fichier annexe ignoré',
     solid_archive: 'Archive RAR solide : la première page est plus lente à ouvrir',
     metadata_invalid: 'Fichier de métadonnées (ComicInfo.xml, index.json) illisible, ignoré',
+    pdf_page_without_image: 'Page du PDF sans image (texte seul, ou image trop petite), ignorée',
+    pdf_text_ignored: "Texte de la page ignoré : seule l'image est affichée",
   },
   offline: {
     title: 'Tomes téléchargés',

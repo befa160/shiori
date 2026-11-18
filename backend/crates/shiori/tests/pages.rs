@@ -134,6 +134,7 @@ async fn every_page_served_over_http_is_the_right_image() {
         fixtures::rar(f.dir.path(), "rar5-solid.cbr", RAR5, true),
         fixtures::rar(f.dir.path(), "rar4.cbr", RAR4, false),
         fixtures::rar(f.dir.path(), "rar4-solid.cbr", RAR4, true),
+        fixtures::pdf(f.dir.path()),
     ] {
         let volume = f.scan(&path).await;
         let pages = f.pages(&volume).await;

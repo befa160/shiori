@@ -363,7 +363,7 @@ export const en: Translations = {
   },
   severity: { error: 'Error', warning: 'Warning', info: 'Information' },
   issues: {
-    archive_unreadable: 'Unreadable archive: not a valid CBZ or CBR',
+    archive_unreadable: 'Unreadable file: not a valid CBZ, CBR or PDF',
     archive_truncated: 'Incomplete archive: the file is cut off',
     multivolume_archive: 'Multi-volume archive: only single-file archives can be read',
     encrypted_entry: 'Page encrypted with a password',
@@ -384,6 +384,8 @@ export const en: Translations = {
     ignored_entry: 'Extra file skipped',
     solid_archive: 'Solid RAR archive: the first page takes longer to open',
     metadata_invalid: 'Unreadable metadata file (ComicInfo.xml, index.json), skipped',
+    pdf_page_without_image: 'PDF page without an image (text only, or image too small), skipped',
+    pdf_text_ignored: 'Text on this page is ignored: only the image is shown',
   },
   offline: {
     title: 'Downloaded volumes',

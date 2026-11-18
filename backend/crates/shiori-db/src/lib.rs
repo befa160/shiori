@@ -375,6 +375,7 @@ impl Db {
             volume_id: Some(*volume),
             format: match row.get::<&str, _>("format") {
                 "cbr" => "cbr",
+                "pdf" => "pdf",
                 _ => "cbz",
             },
             size: row.get::<i64, _>("size") as u64,

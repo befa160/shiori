@@ -51,6 +51,8 @@ pub enum IssueCode {
     IgnoredEntry,
     SolidArchive,
     MetadataInvalid,
+    PdfPageWithoutImage,
+    PdfTextIgnored,
 }
 
 impl IssueCode {
@@ -75,8 +77,9 @@ impl IssueCode {
             | NonImageEntry
             | Subdirectories
             | ArchiveOrderDiffers
-            | MetadataInvalid => Severity::Warning,
-            IgnoredEntry | SolidArchive => Severity::Info,
+            | MetadataInvalid
+            | PdfPageWithoutImage => Severity::Warning,
+            IgnoredEntry | SolidArchive | PdfTextIgnored => Severity::Info,
         }
     }
 }
@@ -129,7 +132,7 @@ pub struct FileReport {
     pub path: PathBuf,
     /// Absent si le fichier n'a même pas pu être lu.
     pub volume_id: Option<VolumeId>,
-    /// `cbz` ou `cbr`, d'après le contenu du fichier.
+    /// `cbz`, `cbr` ou `pdf`, d'après le contenu du fichier.
     pub format: &'static str,
     pub size: u64,
     pub status: Status,
@@ -187,7 +190,7 @@ impl FileReport {
     }
 }
 
-/// Scanne un fichier CBZ ou CBR. Ne modifie jamais le fichier et ne panique pas sur une
+/// Scanne un fichier CBZ, CBR ou PDF. Ne modifie jamais le fichier et ne panique pas sur une
 /// archive invalide : tout problème devient un [`Issue`].
 pub fn scan_file(path: &Path, options: ScanOptions) -> FileReport {
     guarded(path, || scan_unguarded(path, options))
@@ -235,15 +238,17 @@ fn scan_unguarded(path: &Path, options: ScanOptions) -> FileReport {
     report.volume_id = Some(volume);
     if archive::is_rar(path) {
         report.format = "cbr";
+    } else if archive::pdf::is_pdf(path) {
+        report.format = "pdf";
     }
 
     let mut archive = match archive::open(path) {
         Ok(a) => a,
         Err(e) => {
-            let code = if matches!(e, ArchiveError::Truncated(_)) || starts_like_zip(path) {
+            let code = if starts_like_zip(path) {
                 IssueCode::ArchiveTruncated
             } else {
-                IssueCode::ArchiveUnreadable
+                issue_for(&e)
             };
             report.issue(code, None, e.to_string());
             return report.finish();
@@ -257,6 +262,7 @@ fn scan_unguarded(path: &Path, options: ScanOptions) -> FileReport {
         );
         return report.finish();
     }
+    report.issues.extend_from_slice(archive.issues());
     if archive.is_solid() {
         report.issue(
             IssueCode::SolidArchive,
@@ -383,6 +389,7 @@ fn issue_for(err: &ArchiveError) -> IssueCode {
         ArchiveError::CrcMismatch => IssueCode::CrcMismatch,
         ArchiveError::SizeMismatch => IssueCode::SizeMismatch,
         ArchiveError::EntryTooLarge(_) => IssueCode::EntryTooLarge,
+        ArchiveError::ImageUndecodable(_) => IssueCode::ImageUndecodable,
         ArchiveError::Unreadable(_) | ArchiveError::NoSuchEntry(_) | ArchiveError::Io(_) => {
             IssueCode::ArchiveUnreadable
         }

@@ -12,6 +12,8 @@ use image::{ImageFormat, RgbImage};
 use zip::CompressionMethod;
 use zip::write::SimpleFileOptions;
 
+pub mod pdf;
+
 pub use rars::ArchiveVersion::{Rar29 as RAR4, Rar50 as RAR5};
 pub use zip::CompressionMethod::{Deflated as DEFLATED, Stored as STORED};
 
@@ -402,6 +404,22 @@ pub mod fixtures {
             .collect();
         files.push(("ComicInfo.xml", b"<ComicInfo/>"));
         write_rar(dir, name, &files, version, solid)
+    }
+
+    /// PDF de trois planches (deux JPEG, une en pixels bruts) séparées par une page de texte
+    /// sans image, ignorée.
+    pub fn pdf(dir: &Path) -> PathBuf {
+        use crate::pdf::{PdfImage, PdfPage, write_pdf};
+        let page = |i, jpeg| PdfPage::image(PdfImage::full(60, 90, page_color(i), jpeg));
+        let text = PdfPage {
+            text: Some(true),
+            ..PdfPage::default()
+        };
+        write_pdf(
+            dir,
+            "comic.pdf",
+            &[page(0, true), text, page(1, true), page(2, false)],
+        )
     }
 
     pub fn not_a_zip(dir: &Path) -> PathBuf {

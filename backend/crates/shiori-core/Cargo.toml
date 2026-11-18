@@ -12,6 +12,8 @@ workspace = true
 [dependencies]
 alphanumeric-sort.workspace = true
 blake3.workspace = true
+crc32fast.workspace = true
+hayro-interpret.workspace = true
 image.workspace = true
 imagesize.workspace = true
 quick-xml.workspace = true

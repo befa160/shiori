@@ -12,5 +12,6 @@ workspace = true
 
 [dependencies]
 image.workspace = true
+pdf-writer.workspace = true
 rars = { workspace = true, features = ["write", "encryption"] }
 zip.workspace = true

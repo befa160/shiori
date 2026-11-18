@@ -124,6 +124,16 @@ test.describe('invariant de lecture : chaque page affichée est la bonne image',
     await readThrough(page, 'E2E Manga T02.cbr', 'ArrowLeft')
   })
 
+  test('PDF : les images incluses, sans les marges de la page', async ({ page }) => {
+    await page.setViewportSize({ width: 800, height: 1280 })
+    await page.goto(`/read/${all['E2E PDF T01.pdf'].volume_id}`)
+    // L'image servie est la planche (600 × 900), pas la page PDF avec ses marges.
+    const img = page.locator('main img').first()
+    await img.waitFor()
+    expect(await img.evaluate((i) => (i as HTMLImageElement).naturalWidth / (i as HTMLImageElement).naturalHeight)).toBeCloseTo(600 / 900, 2)
+    await readThrough(page, 'E2E PDF T01.pdf', 'ArrowLeft')
+  })
+
   test('webtoon : chaque bande à sa place jusqu’en bas', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     await page.goto(`/read/${all['E2E Strip T01.cbz'].volume_id}`)
