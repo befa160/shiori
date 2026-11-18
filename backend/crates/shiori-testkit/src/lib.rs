@@ -406,19 +406,27 @@ pub mod fixtures {
         write_rar(dir, name, &files, version, solid)
     }
 
-    /// PDF de trois planches (deux JPEG, une en pixels bruts) séparées par une page de texte
-    /// sans image, ignorée.
+    /// PDF de quatre planches (deux JPEG, une en pixels bruts, une en deux bandes de 60 × 45)
+    /// séparées par une page de texte sans image, ignorée.
     pub fn pdf(dir: &Path) -> PathBuf {
-        use crate::pdf::{PdfImage, PdfPage, write_pdf};
+        use crate::pdf::{PAGE_HEIGHT, PAGE_WIDTH, PdfImage, PdfPage, write_pdf};
         let page = |i, jpeg| PdfPage::image(PdfImage::full(60, 90, page_color(i), jpeg));
         let text = PdfPage {
             text: Some(true),
             ..PdfPage::default()
         };
+        let strip = |y| PdfImage {
+            at: [0.0, y, PAGE_WIDTH, PAGE_HEIGHT / 2.0],
+            ..PdfImage::full(60, 45, page_color(3), false)
+        };
+        let strips = PdfPage {
+            images: vec![strip(0.0), strip(PAGE_HEIGHT / 2.0)],
+            ..PdfPage::default()
+        };
         write_pdf(
             dir,
             "comic.pdf",
-            &[page(0, true), text, page(1, true), page(2, false)],
+            &[page(0, true), text, page(1, true), page(2, false), strips],
         )
     }
 

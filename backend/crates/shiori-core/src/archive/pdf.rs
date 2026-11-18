@@ -3,8 +3,9 @@
 //!
 //! Chaque page du PDF dont les images couvrent au moins la moitié de la surface donne une
 //! entrée. Un JPEG droit, sans masque, est servi tel quel (ses octets lus directement dans
-//! le fichier) ; toute autre image est décodée par hayro puis encodée en PNG. Les pages
-//! écartées et le texte visible perdu sont des [`Issue`] du fichier (principe 4).
+//! le fichier) ; toute autre page est décodée par hayro, recomposée si elle est faite de
+//! plusieurs images ([`compose`]), puis encodée en PNG. Les pages écartées et le texte
+//! visible perdu sont des [`Issue`] du fichier (principe 4).
 
 use std::fs::File;
 use std::io::{self, Cursor, Read, Seek, SeekFrom};
@@ -21,7 +22,7 @@ use hayro_interpret::{
     InterpreterCache, InterpreterSettings, LumaData, RenderContent, SoftMask, TransformExt,
     interpret_page,
 };
-use image::{DynamicImage, GrayImage, ImageFormat, RgbImage};
+use image::{DynamicImage, GrayImage, ImageFormat, RgbImage, Rgba, RgbaImage, imageops};
 
 use super::{Archive, ArchiveError, Duplicate, Entry, EntryKind, MAX_ENTRY_SIZE};
 use crate::integrity::{Issue, IssueCode};
@@ -29,6 +30,10 @@ use crate::integrity::{Issue, IssueCode};
 /// Part minimale de la page couverte par ses images (Q56) : en dessous, c'est une page de
 /// texte avec une vignette, pas une planche.
 const MIN_COVERAGE: f64 = 0.5;
+
+/// En dessous d'un millième de la page, un morceau (pixel de suivi, image dessinée à taille
+/// nulle) n'entre pas dans la recomposition : sa densité ferait une page démesurée.
+const MIN_PIECE: f64 = 0.001;
 
 /// Le format se reconnaît à son contenu : l'en-tête `%PDF-` doit figurer dans le premier Kio,
 /// et pas dans un zip (un CBZ dont la première entrée est un PDF stocké tel quel).
@@ -64,9 +69,9 @@ struct Probe {
     page: Rect,
     images: Vec<Found>,
     visible_text: bool,
-    /// Décode l'unique image au lieu de seulement la relever.
+    /// Décode aussi chaque image, avec sa place sur la page.
     decode: bool,
-    decoded: Option<Result<DynamicImage, String>>,
+    decoded: Vec<Result<(RgbaImage, Rect), String>>,
 }
 
 struct Found {
@@ -76,10 +81,15 @@ struct Found {
     raw_len: u64,
 }
 
+/// Rectangle occupé par l'image sur la page (points, y vers le bas).
+fn placed(image: &Image<'_, '_>, transform: Affine) -> Rect {
+    let pixels = Rect::new(0.0, 0.0, image.width().into(), image.height().into());
+    (transform * pixels.to_path(0.1)).bounding_box()
+}
+
 impl Probe {
     fn found(&self, image: &Image<'_, '_>, props: &ImageDrawProps<'_>) -> Found {
-        let pixels = Rect::new(0.0, 0.0, image.width().into(), image.height().into());
-        let placed = (props.transform * pixels.to_path(0.1)).bounding_box();
+        let placed = placed(image, props.transform);
         let coverage = placed.intersect(self.page).area() / self.page.area().max(1.0);
         let (stream, raster) = match image {
             Image::Raster(r) => (r.stream(), true),
@@ -140,15 +150,17 @@ impl<'a> Device<'a> for Probe {
 
     fn draw_image(&mut self, image: Image<'a, '_>, props: ImageDrawProps<'a>) {
         let found = self.found(&image, &props);
-        if self.decode && self.images.is_empty() {
-            self.decoded = Some(decode(&image).map(|img| orient(img, props.transform)));
+        if self.decode {
+            let img = decode(&image).map(|img| orient(img, props.transform));
+            self.decoded
+                .push(img.map(|img| (img, placed(&image, props.transform))));
         }
         self.images.push(found);
     }
 }
 
-/// Pixels de l'image, aplatis sur fond blanc s'ils ont une transparence.
-fn decode(image: &Image<'_, '_>) -> Result<DynamicImage, String> {
+/// Pixels de l'image, avec sa transparence (`SMask`, masque 1 bit).
+fn decode(image: &Image<'_, '_>) -> Result<RgbaImage, String> {
     // Les dimensions viennent du fichier : un PDF piégé annoncerait des Go de pixels.
     let pixels = u64::from(image.width()) * u64::from(image.height());
     if pixels.saturating_mul(4) > MAX_ENTRY_SIZE {
@@ -161,13 +173,14 @@ fn decode(image: &Image<'_, '_>) -> Result<DynamicImage, String> {
     let mut out = None;
     match image {
         Image::Raster(r) => r.with_rgba(|data, alpha| out = to_image(data, alpha), None),
-        // Masque 1 bit (scan noir et blanc) : peint en noir sur blanc.
+        // Masque 1 bit (scan noir et blanc) : du noir là où il peint, transparent ailleurs.
         // shortcut: la couleur de peinture du masque est ignorée (toujours noire).
         Image::Stencil(s) => s.with_stencil(
             |mask, _| {
-                out = GrayImage::from_raw(mask.width, mask.height, mask.data).map(|mut g| {
-                    g.pixels_mut().for_each(|p| p.0[0] = 255 - p.0[0]);
-                    DynamicImage::ImageLuma8(g)
+                out = GrayImage::from_raw(mask.width, mask.height, mask.data).map(|g| {
+                    RgbaImage::from_fn(g.width(), g.height(), |x, y| {
+                        Rgba([0, 0, 0, g.get_pixel(x, y).0[0]])
+                    })
                 })
             },
             None,
@@ -176,30 +189,65 @@ fn decode(image: &Image<'_, '_>) -> Result<DynamicImage, String> {
     out.ok_or_else(|| "image du PDF illisible".to_owned())
 }
 
-fn to_image(data: ImageData, alpha: Option<LumaData>) -> Option<DynamicImage> {
-    let alpha = alpha.filter(|a| a.width == data.width() && a.height == data.height());
-    let over_white =
-        |c: u8, a: u8| ((u16::from(c) * u16::from(a) + 255 * (255 - u16::from(a))) / 255) as u8;
-    match data {
-        ImageData::Rgb(d) => {
-            let mut px = d.data;
-            if let Some(a) = &alpha {
-                for (rgb, &a) in px.as_chunks_mut::<3>().0.iter_mut().zip(&a.data) {
-                    rgb.iter_mut().for_each(|c| *c = over_white(*c, a));
-                }
-            }
-            RgbImage::from_raw(d.width, d.height, px).map(DynamicImage::ImageRgb8)
-        }
-        ImageData::Luma(d) => {
-            let mut px = d.data;
-            if let Some(a) = &alpha {
-                px.iter_mut()
-                    .zip(&a.data)
-                    .for_each(|(c, &a)| *c = over_white(*c, a));
-            }
-            GrayImage::from_raw(d.width, d.height, px).map(DynamicImage::ImageLuma8)
+fn to_image(data: ImageData, alpha: Option<LumaData>) -> Option<RgbaImage> {
+    let (w, h) = (data.width(), data.height());
+    let mut img = match data {
+        ImageData::Rgb(d) => DynamicImage::ImageRgb8(RgbImage::from_raw(w, h, d.data)?),
+        ImageData::Luma(d) => DynamicImage::ImageLuma8(GrayImage::from_raw(w, h, d.data)?),
+    }
+    .to_rgba8();
+    if let Some(alpha) = alpha.filter(|a| (a.width, a.height) == (w, h)) {
+        for (p, a) in img.pixels_mut().zip(alpha.data) {
+            p.0[3] = a;
         }
     }
+    Some(img)
+}
+
+/// Recompose une page à partir de ses images (bandes, tuiles, calques), chacune à sa place,
+/// sur fond blanc. La page est rognée aux images : pas de marge. Une image seule garde ses
+/// pixels, même dessinée déformée (une planche étirée pour remplir la page, par Calibre).
+fn compose(images: Vec<(RgbaImage, Rect)>) -> Result<RgbaImage, String> {
+    let blank = |w, h| RgbaImage::from_pixel(w, h, Rgba([255, 255, 255, 255]));
+    if let [(img, _)] = images.as_slice() {
+        let mut page = blank(img.width(), img.height());
+        imageops::overlay(&mut page, img, 0, 0);
+        return Ok(page);
+    }
+    let union = images
+        .iter()
+        .map(|(_, r)| *r)
+        .reduce(|a, b| a.union(b))
+        .ok_or("page sans image")?;
+    // Densité de l'image la plus fine, sur chaque axe : aucune ne perd de pixels.
+    let density = |px: fn(&RgbaImage) -> u32, len: fn(&Rect) -> f64| {
+        images
+            .iter()
+            .map(|(img, r)| f64::from(px(img)) / len(r).max(f64::EPSILON))
+            .fold(0.0, f64::max)
+    };
+    let (sx, sy) = (
+        density(|i| i.width(), Rect::width),
+        density(|i| i.height(), Rect::height),
+    );
+    let size = |len: f64, scale: f64| (len * scale).round().max(1.0);
+    let (w, h) = (size(union.width(), sx), size(union.height(), sy));
+    if w * h * 4.0 > MAX_ENTRY_SIZE as f64 {
+        return Err(format!("page recomposée trop grande ({w} × {h} pixels)"));
+    }
+    let mut page = blank(w as u32, h as u32);
+    for (img, r) in images {
+        let (tw, th) = (size(r.width(), sx) as u32, size(r.height(), sy) as u32);
+        let img = if img.dimensions() == (tw, th) {
+            img
+        } else {
+            imageops::resize(&img, tw, th, imageops::FilterType::Triangle)
+        };
+        let x = ((r.x0 - union.x0) * sx).round() as i64;
+        let y = ((r.y0 - union.y0) * sy).round() as i64;
+        imageops::overlay(&mut page, &img, x, y);
+    }
+    Ok(page)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -236,16 +284,17 @@ fn orientation(transform: Affine) -> Orientation {
     }
 }
 
-fn orient(img: DynamicImage, transform: Affine) -> DynamicImage {
+fn orient(img: RgbaImage, transform: Affine) -> RgbaImage {
+    use imageops::{flip_horizontal, flip_vertical, rotate90, rotate180, rotate270};
     match orientation(transform) {
         Orientation::Upright => img,
-        Orientation::FlipH => img.fliph(),
-        Orientation::FlipV => img.flipv(),
-        Orientation::Rotate180 => img.rotate180(),
-        Orientation::Rotate90 => img.rotate90(),
-        Orientation::Rotate270 => img.rotate270(),
-        Orientation::Transpose => img.rotate90().fliph(),
-        Orientation::Transverse => img.rotate270().fliph(),
+        Orientation::FlipH => flip_horizontal(&img),
+        Orientation::FlipV => flip_vertical(&img),
+        Orientation::Rotate180 => rotate180(&img),
+        Orientation::Rotate90 => rotate90(&img),
+        Orientation::Rotate270 => rotate270(&img),
+        Orientation::Transpose => flip_horizontal(&rotate90(&img)),
+        Orientation::Transverse => flip_horizontal(&rotate270(&img)),
     }
 }
 
@@ -383,18 +432,19 @@ impl PdfArchive {
         if probe.images.first().map(|i| i.raw_crc) != Some(crc) {
             return Err(ArchiveError::CrcMismatch);
         }
-        if probe.images.len() > 1 {
-            // Recomposition des pages en plusieurs images : lot 8.2.
-            return Err(ArchiveError::ImageUndecodable(
-                "page faite de plusieurs images, pas encore recomposée".into(),
-            ));
-        }
-        let img = probe
+        let images = probe
             .decoded
-            .unwrap_or_else(|| Err("image du PDF illisible".into()))
+            .into_iter()
+            .zip(&probe.images)
+            .filter(|(_, found)| found.coverage >= MIN_PIECE)
+            .map(|(img, _)| img)
+            .collect::<Result<Vec<_>, _>>()
+            .and_then(compose)
             .map_err(ArchiveError::ImageUndecodable)?;
         let mut out = Cursor::new(Vec::new());
-        img.write_to(&mut out, ImageFormat::Png)
+        DynamicImage::ImageRgba8(images)
+            .to_rgb8()
+            .write_to(&mut out, ImageFormat::Png)
             .map_err(|e| ArchiveError::ImageUndecodable(e.to_string()))?;
         Ok(out.into_inner())
     }

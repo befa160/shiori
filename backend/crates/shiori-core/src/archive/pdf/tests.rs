@@ -167,23 +167,82 @@ fn read_each_gives_every_page_once_in_order() {
 }
 
 #[test]
-fn a_page_of_several_images_is_not_composed_yet() {
+fn a_page_of_strips_is_composed_without_its_margins() {
     let dir = tempfile::tempdir().unwrap();
-    let half = |y: f32, i| PdfImage {
-        at: [0.0, y, PAGE_WIDTH, PAGE_HEIGHT / 2.0],
-        ..PdfImage::full(30, 20, page_color(i), true)
+    // Deux bandes de 30 × 20 pixels l'une sur l'autre, dans des marges de 60 et 40 points.
+    let strip = |y: f32, rgb| PdfImage {
+        at: [60.0, y, 480.0, 360.0],
+        ..PdfImage::full(30, 20, rgb, false)
     };
     let page = PdfPage {
-        images: vec![half(0.0, 0), half(PAGE_HEIGHT / 2.0, 1)],
+        images: vec![strip(40.0, [200, 0, 0]), strip(400.0, [0, 0, 200])],
         ..PdfPage::default()
     };
     let path = write_pdf(dir.path(), "strips.pdf", &[page]);
     let mut archive = PdfArchive::open(&path).unwrap();
     assert_eq!(archive.entries()[0].name, "0001.png");
-    assert!(matches!(
-        archive.read_entry(0),
-        Err(ArchiveError::ImageUndecodable(_))
-    ));
+    let img = decoded(&archive.read_entry(0).unwrap()).to_rgb8();
+    assert_eq!(img.dimensions(), (30, 40));
+    // La bande dessinée plus haut sur la page (y PDF plus grand) est en haut de l'image.
+    assert_eq!(img.get_pixel(15, 5).0, [0, 0, 200]);
+    assert_eq!(img.get_pixel(15, 35).0, [200, 0, 0]);
+}
+
+#[test]
+fn tiles_take_the_finest_density_and_layers_keep_their_transparency() {
+    let dir = tempfile::tempdir().unwrap();
+    let left = PdfImage {
+        at: [0.0, 0.0, PAGE_WIDTH / 2.0, PAGE_HEIGHT],
+        ..PdfImage::full(10, 40, [200, 0, 0], false)
+    };
+    let right = PdfImage {
+        at: [PAGE_WIDTH / 2.0, 0.0, PAGE_WIDTH / 2.0, PAGE_HEIGHT],
+        ..PdfImage::full(30, 40, [0, 200, 0], false)
+    };
+    // Calque transparent par-dessus le fond : le fond reste visible, pas du blanc.
+    let back = PdfImage::full(20, 20, [0, 0, 200], false);
+    let clear = PdfImage {
+        alpha: Some(0),
+        ..PdfImage::full(20, 20, [9, 9, 9], false)
+    };
+    let pages = [
+        PdfPage {
+            images: vec![left, right],
+            ..PdfPage::default()
+        },
+        PdfPage {
+            images: vec![back, clear],
+            ..PdfPage::default()
+        },
+    ];
+    let path = write_pdf(dir.path(), "tiles.pdf", &pages);
+    let mut archive = PdfArchive::open(&path).unwrap();
+
+    let tiles = decoded(&archive.read_entry(0).unwrap()).to_rgb8();
+    // 30 pixels pour 300 points à droite : la gauche (10 pixels) est agrandie à 30.
+    assert_eq!(tiles.dimensions(), (60, 40));
+    assert_eq!(tiles.get_pixel(5, 20).0, [200, 0, 0]);
+    assert_eq!(tiles.get_pixel(55, 20).0, [0, 200, 0]);
+
+    let layers = decoded(&archive.read_entry(1).unwrap()).to_rgb8();
+    assert_eq!(layers.get_pixel(10, 10).0, [0, 0, 200]);
+}
+
+#[test]
+fn a_tiny_piece_does_not_blow_up_the_page() {
+    let dir = tempfile::tempdir().unwrap();
+    let speck = PdfImage {
+        at: [10.0, 10.0, 0.01, 0.01],
+        ..PdfImage::full(1, 1, [0, 0, 0], false)
+    };
+    let page = PdfPage {
+        images: vec![PdfImage::full(30, 40, [200, 0, 0], false), speck],
+        ..PdfPage::default()
+    };
+    let path = write_pdf(dir.path(), "speck.pdf", &[page]);
+    let mut archive = PdfArchive::open(&path).unwrap();
+    let img = decoded(&archive.read_entry(0).unwrap()).to_rgb8();
+    assert_eq!(img.dimensions(), (30, 40));
 }
 
 #[test]
@@ -257,11 +316,11 @@ fn orientation_follows_the_drawing_matrix() {
         ([0.0, -1.0, -1.0, 0.0], Transverse),
     ];
     // Une image 2 × 1 : pixel gauche noir, droit blanc.
-    let img = DynamicImage::ImageLuma8(GrayImage::from_raw(2, 1, vec![0, 255]).unwrap());
+    let img = DynamicImage::ImageLuma8(GrayImage::from_raw(2, 1, vec![0, 255]).unwrap()).to_rgba8();
     for ([a, b, c, d], want) in cases {
         let m = Affine::new([a, b, c, d, 0.0, 0.0]);
         assert_eq!(orientation(m), want);
-        let out = orient(img.clone(), m).to_luma8();
+        let out = DynamicImage::ImageRgba8(orient(img.clone(), m)).to_luma8();
         // Le pixel noir (0, 0) de l'image arrive là où la matrice l'envoie.
         let (w, h) = out.dimensions();
         let black = out
@@ -276,7 +335,7 @@ fn orientation_follows_the_drawing_matrix() {
 }
 
 #[test]
-fn transparency_is_flattened_on_white() {
+fn transparency_is_kept_then_flattened_on_white() {
     let luma = |data: Vec<u8>| LumaData {
         data,
         width: 2,
@@ -291,19 +350,25 @@ fn transparency_is_flattened_on_white() {
         interpolate: false,
         scale_factors: (1.0, 1.0),
     });
-    let out = to_image(rgb, Some(luma(vec![255, 0]))).unwrap().to_rgb8();
-    assert_eq!(out.get_pixel(0, 0).0, [0, 0, 0]);
-    assert_eq!(out.get_pixel(1, 0).0, [255, 255, 255]);
+    let img = to_image(rgb, Some(luma(vec![255, 0]))).unwrap();
+    assert_eq!(img.as_raw(), &[0, 0, 0, 255, 0, 0, 0, 0]);
+    let page = compose(vec![(img, Rect::new(0.0, 0.0, 1.0, 1.0))]).unwrap();
+    assert_eq!(page.as_raw(), &[0, 0, 0, 255, 255, 255, 255, 255]);
 
-    let gray = to_image(ImageData::Luma(luma(vec![0, 0])), Some(luma(vec![0, 255])))
-        .unwrap()
-        .to_luma8();
-    assert_eq!(gray.as_raw(), &[255, 0]);
-    // Un masque d'une autre taille est ignoré.
+    // Un masque d'une autre taille est ignoré : l'image reste opaque.
     let other = LumaData {
         width: 1,
         ..luma(vec![0])
     };
     let kept = to_image(ImageData::Luma(luma(vec![7, 7])), Some(other)).unwrap();
-    assert_eq!(kept.to_luma8().as_raw(), &[7, 7]);
+    assert_eq!(kept.as_raw(), &[7, 7, 7, 255, 7, 7, 7, 255]);
+
+    assert!(compose(Vec::new()).is_err());
+    // Deux images qui demanderaient des Go de pixels une fois recomposées.
+    let dot = || RgbaImage::new(1, 1);
+    let huge = compose(vec![
+        (dot(), Rect::new(0.0, 0.0, 0.001, 0.001)),
+        (dot(), Rect::new(0.0, 0.0, 1000.0, 1000.0)),
+    ]);
+    assert!(huge.unwrap_err().contains("trop grande"));
 }

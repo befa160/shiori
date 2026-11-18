@@ -41,7 +41,7 @@ fn pdf_pages_are_its_images_and_skipped_pages_are_reported() {
         issue_entry(&r, IssueCode::PdfPageWithoutImage),
         Some("page 2")
     );
-    assert_eq!(names(&r), ["0001.jpg", "0003.jpg", "0004.png"]);
+    assert_eq!(names(&r), ["0001.jpg", "0003.jpg", "0004.png", "0005.png"]);
     for p in &r.pages {
         assert_eq!(p.status, PageStatus::Ok);
         assert_eq!((p.width, p.height), (Some(60), Some(90)));
