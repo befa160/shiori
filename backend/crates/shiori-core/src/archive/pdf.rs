@@ -71,7 +71,10 @@ struct Probe {
     visible_text: bool,
     /// Décode aussi chaque image, avec sa place sur la page.
     decode: bool,
+    /// Les morceaux décodés ([`MIN_PIECE`] au moins), dans l'ordre de dessin.
     decoded: Vec<Result<(RgbaImage, Rect), String>>,
+    /// Pixels déjà décodés pour cette page : toutes ses images sont en mémoire à la fois.
+    decoded_pixels: u64,
 }
 
 struct Found {
@@ -88,6 +91,11 @@ fn placed(image: &Image<'_, '_>, transform: Affine) -> Rect {
 }
 
 impl Probe {
+    /// Les images qui comptent : les miettes (pixel de suivi) sont écartées.
+    fn pieces(&self) -> impl Iterator<Item = &Found> {
+        self.images.iter().filter(|i| i.coverage >= MIN_PIECE)
+    }
+
     fn found(&self, image: &Image<'_, '_>, props: &ImageDrawProps<'_>) -> Found {
         let placed = placed(image, props.transform);
         let coverage = placed.intersect(self.page).area() / self.page.area().max(1.0);
@@ -150,10 +158,19 @@ impl<'a> Device<'a> for Probe {
 
     fn draw_image(&mut self, image: Image<'a, '_>, props: ImageDrawProps<'a>) {
         let found = self.found(&image, &props);
-        if self.decode {
-            let img = decode(&image).map(|img| orient(img, props.transform));
-            self.decoded
-                .push(img.map(|img| (img, placed(&image, props.transform))));
+        if self.decode && found.coverage >= MIN_PIECE {
+            self.decoded_pixels += u64::from(image.width()) * u64::from(image.height());
+            let img = if self.decoded_pixels.saturating_mul(4) > MAX_ENTRY_SIZE {
+                Err("images de la page trop grandes, ensemble".to_owned())
+            } else {
+                decode(&image).map(|img| {
+                    (
+                        orient(img, props.transform),
+                        placed(&image, props.transform),
+                    )
+                })
+            };
+            self.decoded.push(img);
         }
         self.images.push(found);
     }
@@ -236,15 +253,23 @@ fn compose(images: Vec<(RgbaImage, Rect)>) -> Result<RgbaImage, String> {
         return Err(format!("page recomposée trop grande ({w} × {h} pixels)"));
     }
     let mut page = blank(w as u32, h as u32);
+    // Les deux bords de chaque morceau sont arrondis, pas sa position et sa taille : deux
+    // bandes voisines partagent exactement le même bord, sans filet blanc entre elles.
+    let edges = |a: f64, b: f64, origin: f64, scale: f64| {
+        let (lo, hi) = (
+            ((a - origin) * scale).round(),
+            ((b - origin) * scale).round(),
+        );
+        (lo as i64, (hi - lo).max(1.0) as u32)
+    };
     for (img, r) in images {
-        let (tw, th) = (size(r.width(), sx) as u32, size(r.height(), sy) as u32);
+        let (x, tw) = edges(r.x0, r.x1, union.x0, sx);
+        let (y, th) = edges(r.y0, r.y1, union.y0, sy);
         let img = if img.dimensions() == (tw, th) {
             img
         } else {
             imageops::resize(&img, tw, th, imageops::FilterType::Triangle)
         };
-        let x = ((r.x0 - union.x0) * sx).round() as i64;
-        let y = ((r.y0 - union.y0) * sy).round() as i64;
         imageops::overlay(&mut page, &img, x, y);
     }
     Ok(page)
@@ -356,7 +381,8 @@ impl PdfArchive {
             let probe = probe(&pdf, page, file.clone(), false);
             let label = format!("page {}", page + 1);
             let coverage: f64 = probe.images.iter().map(|i| i.coverage).sum();
-            if coverage < MIN_COVERAGE {
+            let pieces: Vec<&Found> = probe.pieces().collect();
+            if coverage < MIN_COVERAGE || pieces.is_empty() {
                 archive.issue(
                     IssueCode::PdfPageWithoutImage,
                     &label,
@@ -371,8 +397,8 @@ impl PdfArchive {
                     "texte visible de la page ignoré : seule l'image est affichée",
                 );
             }
-            let first = &probe.images[0];
-            let jpeg = first.jpeg.clone().filter(|_| probe.images.len() == 1);
+            let first = pieces[0];
+            let jpeg = first.jpeg.clone().filter(|_| pieces.len() == 1);
             let ext = if jpeg.is_some() { "jpg" } else { "png" };
             let name = format!("{:04}.{ext}", page + 1);
             archive.entries.push(Entry {
@@ -429,15 +455,12 @@ impl PdfArchive {
         }
         let (pdf, file) = loaded.as_ref().expect("chargé juste au-dessus");
         let probe = probe(pdf, source.page, file.clone(), true);
-        if probe.images.first().map(|i| i.raw_crc) != Some(crc) {
+        if probe.pieces().next().map(|i| i.raw_crc) != Some(crc) {
             return Err(ArchiveError::CrcMismatch);
         }
         let images = probe
             .decoded
             .into_iter()
-            .zip(&probe.images)
-            .filter(|(_, found)| found.coverage >= MIN_PIECE)
-            .map(|(img, _)| img)
             .collect::<Result<Vec<_>, _>>()
             .and_then(compose)
             .map_err(ArchiveError::ImageUndecodable)?;

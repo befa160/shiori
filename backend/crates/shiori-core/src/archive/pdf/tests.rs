@@ -229,20 +229,67 @@ fn tiles_take_the_finest_density_and_layers_keep_their_transparency() {
 }
 
 #[test]
-fn a_tiny_piece_does_not_blow_up_the_page() {
+fn a_tiny_piece_is_left_out_and_the_plate_stays_a_jpeg() {
     let dir = tempfile::tempdir().unwrap();
+    // Pixel de suivi dessiné avant la planche : il ne compte ni pour le JPEG ni pour la page.
     let speck = PdfImage {
         at: [10.0, 10.0, 0.01, 0.01],
         ..PdfImage::full(1, 1, [0, 0, 0], false)
     };
     let page = PdfPage {
-        images: vec![PdfImage::full(30, 40, [200, 0, 0], false), speck],
+        images: vec![speck, PdfImage::full(30, 40, page_color(2), true)],
         ..PdfPage::default()
     };
     let path = write_pdf(dir.path(), "speck.pdf", &[page]);
     let mut archive = PdfArchive::open(&path).unwrap();
+    assert_eq!(archive.entries()[0].name, "0001.jpg");
+    assert_eq!(archive.read_entry(0).unwrap(), jpeg(30, 40, page_color(2)));
+}
+
+#[test]
+fn strips_at_fractional_positions_leave_no_white_seam() {
+    let dir = tempfile::tempdir().unwrap();
+    // À 0,1 pixel par point, la bande du milieu va de 10,4 à 20,6 pixels : arrondir sa position
+    // et sa largeur séparément laissait la colonne 20 blanche.
+    let strip = |x: f32, w: f32, px, rgb| PdfImage {
+        at: [x, 0.0, w, PAGE_HEIGHT],
+        ..PdfImage::full(px, 10, rgb, false)
+    };
+    let page = PdfPage {
+        images: vec![
+            strip(0.0, 104.0, 10, [200, 0, 0]),
+            strip(104.0, 102.0, 10, [0, 200, 0]),
+            strip(206.0, 200.0, 20, [0, 0, 200]),
+        ],
+        ..PdfPage::default()
+    };
+    let path = write_pdf(dir.path(), "seams.pdf", &[page]);
+    let mut archive = PdfArchive::open(&path).unwrap();
     let img = decoded(&archive.read_entry(0).unwrap()).to_rgb8();
-    assert_eq!(img.dimensions(), (30, 40));
+    assert_eq!(img.dimensions(), (41, 10));
+    let white = (0..img.width()).filter(|&x| img.get_pixel(x, 5).0 == [255, 255, 255]);
+    assert_eq!(white.count(), 0);
+    assert_eq!(img.get_pixel(20, 5).0, [0, 200, 0]);
+}
+
+#[test]
+fn many_large_images_on_one_page_are_refused_together() {
+    let dir = tempfile::tempdir().unwrap();
+    // Chacune sous le plafond (81 Mpx annoncés), mais pas les deux à la fois.
+    let big = PdfImage {
+        declared: Some((9_000, 9_000)),
+        ..PdfImage::full(4, 4, [9, 9, 9], false)
+    };
+    let page = PdfPage {
+        images: vec![big.clone(), big],
+        ..PdfPage::default()
+    };
+    let path = write_pdf(dir.path(), "heavy.pdf", &[page]);
+    let mut archive = PdfArchive::open(&path).unwrap();
+    assert!(matches!(
+        archive.read_entry(0),
+        Err(ArchiveError::ImageUndecodable(m)) if m.contains("ensemble")
+    ));
 }
 
 #[test]
