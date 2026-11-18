@@ -1,7 +1,7 @@
 # Exemple pour lancer Shiori avec Docker Compose : décommentez la ligne de vos bibliothèques,
-# `docker compose up -d`, puis http://localhost:7878. L'API n'a pas d'authentification : ne
-# l'ouvrez pas au-delà d'un réseau de confiance (voir la documentation d'installation, reverse
-# proxy avec mot de passe).
+# `docker compose up -d`, puis http://localhost:7878 : créez le compte administrateur avec le
+# jeton d'installation affiché par `docker compose logs shiori`. Depuis Internet, passez par un
+# reverse proxy HTTPS (voir la documentation d'installation).
 services:
   shiori:
     image: ghcr.io/befa160/shiori:latest

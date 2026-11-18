@@ -16,6 +16,29 @@ Chaque **sous-dossier** de la bibliothèque est une **série**, et chaque fichie
 
 Un tome est reconnu par son contenu, pas par son nom : renommer ou déplacer un fichier, ou renommer le dossier d'une série, ne perd ni la progression ni les métadonnées.
 
+## Comptes
+
+Chaque personne se connecte avec son compte. Deux rôles :
+
+| Rôle | Peut |
+|---|---|
+| **Administrateur** | tout : bibliothèques, scans, métadonnées (communes à tous), comptes, réglages par défaut, sauvegardes ; voit toutes les bibliothèques |
+| **Lecteur** | lire les bibliothèques qui lui sont ouvertes, avec sa progression, ses réglages de lecture et ses préférences |
+
+- **Premier compte** : page **Installation** tant qu'aucun compte n'existe, avec le jeton d'installation affiché au démarrage de Shiori ([installation](installation.fr.md#premiers-pas)). Il reprend la progression et les réglages enregistrés avant l'arrivée des comptes.
+- **Administration → Comptes** : créer un compte (nom, rôle, bibliothèques ouvertes ; toutes les existantes sont cochées d'avance), modifier son rôle et ses bibliothèques, le désactiver, lui donner un nouveau mot de passe provisoire, déconnecter tous ses appareils et jetons, retirer sa double authentification, le supprimer (sa progression part avec lui, pas les fichiers ni les fiches). Le dernier administrateur actif ne peut être ni rétrogradé, ni désactivé, ni supprimé. Un mot de passe provisoire est montré une seule fois et doit être changé à la première connexion.
+- **Nouvelle bibliothèque** : visible de l'administrateur seulement, jusqu'à ce qu'il l'ouvre aux comptes voulus (**Administration → Comptes → Modifier**).
+- **Connexion** : nom et mot de passe (8 caractères au moins), puis le code de la double authentification si elle est active. Après plusieurs mots de passe faux, Shiori fait patienter avant le prochain essai, de plus en plus longtemps. Une session dure **90 jours après le dernier usage** : la tablette reste connectée tant qu'on s'en sert.
+
+Page **Compte** (dernier onglet sur mobile, nom du compte dans la barre latérale) :
+
+- **Préférences** : langue, thème et sens des pages de ce compte, sur tous ses appareils.
+- **Mot de passe** : le changer déconnecte ses autres appareils.
+- **Appareils connectés** : chaque session avec son dernier usage ; déconnecter un appareil perdu.
+- **Double authentification** : en plus du mot de passe, un code à 6 chiffres d'une application d'authentification (Aegis, Google Authenticator, 2FAS…). L'activation demande le mot de passe, montre un QR code (ou une clé à saisir), vérifie un premier code et donne **10 codes de secours**, montrés une seule fois, qui remplacent chacun une fois le code du téléphone. Conseillée si Shiori est ouvert sur Internet.
+- **Jetons d'API** : pour qu'un autre logiciel (liseuse, application de lecture) lise les bibliothèques du compte et enregistre sa progression sans le mot de passe. Un jeton est montré une seule fois, peut expirer (30 jours, 90 jours, 1 an ou jamais) et ne permet que la lecture et la progression : ni administration, ni changement de compte. Il se présente en en-tête `Authorization: Bearer shiori_t_…`.
+- **Se déconnecter** : ferme la session de cet appareil et efface les pages gardées en cache ; propose aussi d'effacer les tomes téléchargés.
+
 ## Ranger ses fichiers
 
 ```
@@ -153,13 +176,17 @@ Chaque problème trouvé par un scan a un code stable et une gravité. Un tome a
 
 ## Apparence et langue
 
-- **Thème** (**Administration → Thème**) : Sombre (par défaut), Clair, Noir OLED, Sépia, ou Système (sombre ou clair selon l'appareil). Le lecteur reste toujours sombre.
-- **Langue** : français ou anglais, choisie dans la barre latérale ou l'administration ; sans choix, celle du navigateur.
+- **Thème** : Sombre (par défaut), Clair, Noir OLED, Sépia, ou Système (sombre ou clair selon l'appareil). Le lecteur reste toujours sombre.
+- **Langue** : français ou anglais ; sans choix, celle du navigateur.
 
-Thème et langue sont enregistrés sur le serveur et s'appliquent à tous les appareils.
+Chaque compte choisit les siens dans **Compte → Préférences** (la langue aussi dans la barre latérale), enregistrés sur le serveur pour tous ses appareils. L'administration fixe ceux des comptes qui n'ont rien choisi (**Administration → Langue de l'interface**, **Thème**, **Lecture**).
+
+## Sauvegardes
+
+Shiori sauvegarde sa base chaque jour (les 7 plus récentes gardées), avant chaque mise à jour de son format et avant chaque restauration. **Administration → Données** montre le dossier des sauvegardes et la liste, et permet de sauvegarder tout de suite, de télécharger, de supprimer ou de **restaurer** une sauvegarde, depuis la liste ou un fichier, sans arrêter Shiori. Après une restauration, tout le monde se reconnecte. Détails et réglages : [installation](installation.fr.md#sauvegarder).
 
 ## Limites actuelles
 
-- **Pas de comptes ni de mot de passe** : la progression et les réglages sont communs, et l'accès doit être protégé par le réseau ou un reverse proxy. Les comptes arrivent en phase 7 ([ROADMAP](../ROADMAP.md)).
+- Les comptes se créent par l'administrateur seulement : pas encore de lien d'invitation, ni de connexion déléguée à un proxy d'authentification (en-tête `Remote-User`) ([ROADMAP](../ROADMAP.md)).
 - Une seule adresse par installation de l'application : pour passer par l'adresse locale à la maison et l'adresse publique ailleurs, voir le [DNS local](installation.fr.md#la-même-adresse-à-la-maison-et-dehors).
 - Les métadonnées web viennent d'AniList et de MangaDex seulement.
