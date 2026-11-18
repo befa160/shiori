@@ -362,6 +362,16 @@ impl Db {
         .bind(run)
         .execute(&mut *tx)
         .await?;
+        // Fichier illisible (sans tome) disparu : relu à chaque passe tant qu'il existe, ses
+        // problèmes ne viennent pas de celle-ci.
+        sqlx::query(
+            "DELETE FROM scan_issues
+             WHERE volume_id IS NULL AND substr(path, 1, length(?1)) = ?1 AND scan_run_id != ?2",
+        )
+        .bind(&prefix)
+        .bind(run)
+        .execute(&mut *tx)
+        .await?;
         tx.commit().await?;
         Ok(done.rows_affected())
     }

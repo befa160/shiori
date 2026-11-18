@@ -38,6 +38,15 @@ export function AdminPage() {
         </Button>
       </section>
       <AdminLibraries />
+      <section aria-labelledby="admin-health" className="max-w-prose space-y-3 rounded-md bg-card p-4">
+        <h2 id="admin-health" className="text-lg font-semibold">
+          {t('health.title')}
+        </h2>
+        <p className="text-sm text-muted-foreground">{t('health.adminHelp')}</p>
+        <Button asChild variant="secondary">
+          <Link to="/admin/health">{t('health.link')}</Link>
+        </Button>
+      </section>
       <section aria-labelledby="admin-offline" className="max-w-prose space-y-3 rounded-md bg-card p-4">
         <h2 id="admin-offline" className="text-lg font-semibold">
           {t('offline.title')}

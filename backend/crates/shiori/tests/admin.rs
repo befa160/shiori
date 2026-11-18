@@ -352,3 +352,56 @@ async fn database_failure_when_starting() {
         json!({ "code": "internal", "message": "erreur interne" })
     );
 }
+
+/// Santé : états des tomes, fichiers à réparer filtrés, date de la vérification complète posée
+/// par une passe `deep` de toute la bibliothèque, pas par celle d'un dossier.
+#[tokio::test]
+async fn health_shows_what_to_repair_and_the_last_deep_check() {
+    let f = Fixture::new().await;
+    f.scan().await;
+    let (status, health) = f.call("GET", "/api/admin/health", None).await;
+    assert_eq!(status, StatusCode::OK);
+    let library = &health["libraries"][0];
+    assert_eq!(library["error"], 1, "{health}");
+    assert_eq!(library["deep_checked_at"], Value::Null);
+    let code = health["codes"][0]["code"].as_str().unwrap().to_owned();
+    assert_eq!(health["codes"][0]["severity"], "error");
+
+    let (_, files) = f.call("GET", "/api/admin/health/files", None).await;
+    let bad = files
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["status"] == "error")
+        .expect("le tome en erreur");
+    assert!(bad["path"].as_str().unwrap().ends_with("bad-crc.cbz"));
+    assert!(bad["series_id"].is_i64() && bad["volume_id"].is_string());
+    let uri = format!(
+        "/api/admin/health/files?library_id={}&code={code}&limit=1",
+        f.library
+    );
+    let (_, filtered) = f.call("GET", &uri, None).await;
+    assert_eq!(filtered.as_array().unwrap().len(), 1);
+    let (status, error) = f
+        .call("GET", "/api/admin/health/files?code=inconnu", None)
+        .await;
+    assert_eq!(
+        (status, error["code"].as_str()),
+        (StatusCode::BAD_REQUEST, Some("invalid_query"))
+    );
+
+    // Un dossier vérifié en profondeur ne suffit pas.
+    let folder = json!({ "library_id": f.library, "path": f.root.join("Série A"), "deep": true });
+    assert_eq!(f.start(folder).await.0, StatusCode::ACCEPTED);
+    f.state.scanner.wait().await;
+    let (_, health) = f.call("GET", "/api/admin/health", None).await;
+    assert_eq!(health["libraries"][0]["deep_checked_at"], Value::Null);
+    let all = json!({ "library_id": f.library, "deep": true });
+    assert_eq!(f.start(all).await.0, StatusCode::ACCEPTED);
+    f.state.scanner.wait().await;
+    let (_, health) = f.call("GET", "/api/admin/health", None).await;
+    assert!(
+        health["libraries"][0]["deep_checked_at"].is_string(),
+        "{health}"
+    );
+}

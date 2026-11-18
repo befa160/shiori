@@ -136,6 +136,8 @@ Les dossiers de chaque bibliothèque sont **surveillés** : un fichier ajouté, 
 
 Le scan en cours s'affiche avec son avancement et s'annule. L'historique garde chaque passe 30 jours (option `--scan-log-days`), avec son journal (fichiers lus, problèmes, erreurs) et un lien vers chaque tome concerné. Un tome dont le fichier a changé est relu au scan suivant ; un tome dont le fichier a disparu le signale.
 
+**Administration → Santé des bibliothèques** fait le point : pour chaque bibliothèque, le nombre de tomes sains, en avertissement, en erreur et de fichiers illisibles, la date de la dernière vérification complète, et un bouton **Vérifier en profondeur** (contrôle approfondi de toute la bibliothèque, seul à mettre cette date à jour). En dessous, la liste des fichiers **à réparer**, filtrable par bibliothèque et par problème, avec chaque problème expliqué et un lien vers le tome.
+
 La même vérification existe en ligne de commande, sans serveur : `shiori scan <dossier>` (aide : `shiori scan --help`).
 
 ## Codes de diagnostic

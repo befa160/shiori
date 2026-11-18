@@ -144,6 +144,8 @@ async fn a_reader_is_refused_every_admin_route() {
         ("GET", "/api/admin/storage"),
         ("POST", "/api/admin/metadata/identify"),
         ("PATCH", "/api/volumes/x"),
+        ("GET", "/api/admin/health"),
+        ("GET", "/api/admin/health/files"),
         ("GET", "/api/admin/scans"),
         ("POST", "/api/admin/scans"),
         ("GET", "/api/admin/scans/current"),
