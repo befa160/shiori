@@ -2424,7 +2424,7 @@ dependencies = [
 
 [[package]]
 name = "shiori"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -2459,7 +2459,7 @@ dependencies = [
 
 [[package]]
 name = "shiori-core"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "alphanumeric-sort",
  "blake3",
@@ -2478,7 +2478,7 @@ dependencies = [
 
 [[package]]
 name = "shiori-db"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "argon2",
  "blake3",
@@ -2498,7 +2498,7 @@ dependencies = [
 
 [[package]]
 name = "shiori-meta"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2509,7 +2509,7 @@ dependencies = [
 
 [[package]]
 name = "shiori-testkit"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "image",
  "rars",
