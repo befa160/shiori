@@ -11,12 +11,12 @@
 
 Lecteur de mangas, BD et webtoons auto-hébergé. Un seul binaire Rust sert la bibliothèque et une application web installable (PWA), pensée d'abord pour la lecture sur tablette.
 
-> **État : version 0.1.1 (phase 6 terminée).** Bibliothèque en couvertures avec « Continuer la lecture », recherche, filtres et tags ; lecteur manga, BD et webtoon (double page, zoom, reprise) ; administration des bibliothèques et des scans ; métadonnées des fichiers (ComicInfo.xml, `index.json`) et, si vous l'autorisez, d'AniList et de MangaDex, modifiables champ par champ ; application installable (PWA) avec lecture hors ligne des tomes téléchargés ; thèmes sombre, clair, noir OLED et sépia ; français et anglais. Image Docker et binaires Linux, Windows et macOS (un double-clic ouvre l'interface). Pas encore de comptes (phase 7). L'avancement détaillé est dans [ROADMAP.md](ROADMAP.md).
+> **État : version 0.1.1 publiée ; phase 7 terminée sur `main`, pour la prochaine version.** Bibliothèque en couvertures avec « Continuer la lecture », recherche, filtres et tags ; lecteur manga, BD et webtoon (double page, zoom, reprise) ; administration des bibliothèques et des scans ; métadonnées des fichiers (ComicInfo.xml, `index.json`) et, si vous l'autorisez, d'AniList et de MangaDex, modifiables champ par champ ; application installable (PWA) avec lecture hors ligne des tomes téléchargés ; thèmes sombre, clair, noir OLED et sépia ; français et anglais. Image Docker et binaires Linux, Windows et macOS (un double-clic ouvre l'interface). Sur `main` : comptes (administrateur, lecteurs, bibliothèques ouvertes par compte, progression et préférences de chacun), double authentification, jetons d'API, sauvegarde quotidienne et restauration depuis l'interface. L'avancement détaillé est dans [ROADMAP.md](ROADMAP.md).
 
 ## Documentation
 
-- **[Installer Shiori](docs/installation.fr.md)** ([English](docs/installation.en.md)) : Docker ou programme seul, premiers pas, accès depuis la tablette ou Internet, mise à jour, sauvegarde.
-- **[Utiliser Shiori](docs/fonctionnel.md)** : bibliothèques, rangement des fichiers, lecture, hors-ligne, métadonnées, scans et codes de diagnostic.
+- **[Installer Shiori](docs/installation.fr.md)** ([English](docs/installation.en.md)) : Docker ou programme seul, premiers pas, comptes, accès depuis la tablette ou Internet, mise à jour, sauvegarde et restauration.
+- **[Utiliser Shiori](docs/fonctionnel.md)** : bibliothèques, comptes, rangement des fichiers, lecture, hors-ligne, métadonnées, scans et codes de diagnostic.
 - **[Documentation technique](docs/technique.md)** : architecture, identités et invariants, base, API, images, front, tests, distribution.
 
 ## Démarrage rapide
@@ -25,7 +25,7 @@ Lecteur de mangas, BD et webtoons auto-hébergé. Un seul binaire Rust sert la b
 docker compose up -d
 ```
 
-avec le [`compose.yaml`](compose.yaml) du dépôt (décommentez la ligne de vos bibliothèques), puis <http://localhost:7878> → **Administration → Ajouter une bibliothèque**. Sans Docker : téléchargez le programme de votre système dans les [Releases](https://github.com/befa160/shiori/releases) et lancez-le. Détails : [installation](docs/installation.fr.md).
+avec le [`compose.yaml`](compose.yaml) du dépôt (décommentez la ligne de vos bibliothèques), puis <http://localhost:7878> : créez le compte administrateur avec le jeton d'installation affiché dans `docker compose logs shiori`, puis **Administration → Ajouter une bibliothèque**. Sans Docker : téléchargez le programme de votre système dans les [Releases](https://github.com/befa160/shiori/releases) et lancez-le. Détails : [installation](docs/installation.fr.md).
 
 ## Pourquoi
 
@@ -48,6 +48,8 @@ Shiori est conçu pour que ces défauts soient impossibles :
 | **Bibliothèque** | Grille d'affiches, séries, « Continuer la lecture », recherche, filtres par statut de publication et de lecture |
 | **Métadonnées** | ComicInfo.xml, `index.json`, AniList et MangaDex ; édition manuelle avec verrouillage par champ ; MangaUpdates et Comic Vine plus tard |
 | **Formats** | CBZ (zip, zip64) et CBR (RAR 4 et 5, solid compris, en Rust pur). Images jpg, png, webp, avif, servies redimensionnées en AVIF (pages) et JPEG (miniatures) |
+| **Comptes** | Administrateur et lecteurs, bibliothèques ouvertes par compte, progression et préférences de chacun, double authentification (TOTP), jetons d'API en lecture seule |
+| **Sauvegarde** | Sauvegarde quotidienne de la base dans un dossier à confier à Backrest ou restic, restauration depuis l'interface |
 | **Application** | PWA installable, lecture hors ligne des tomes téléchargés (page par page), thèmes, français et anglais |
 | **Déploiement** | Image Docker (amd64, arm64) et binaires autonomes Linux, Windows et macOS |
 

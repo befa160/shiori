@@ -75,6 +75,8 @@ SQLite (`sqlx`, `sqlite-bundled`), un fichier `shiori.db`, migrations appliquée
 | `libraries`, `series` | bibliothèques (racine, type) et séries (dossier, nom, statut) |
 | `scan_runs`, `scan_issues`, `scan_run_logs` | passes de scan, problèmes par tome, journal de chaque passe (conservé `--scan-log-days`) |
 | `users`, `sessions`, `user_libraries` | comptes (Argon2id, rôle), sessions (hash BLAKE3 du jeton, 90 jours glissants), bibliothèques ouvertes à un lecteur |
+| `user_totp`, `user_recovery_codes` | secret TOTP d'un compte (dernier pas accepté, pour qu'un code ne resserve pas), codes de secours (hash BLAKE3, usage unique) |
+| `api_tokens` | jetons d'API (`shiori_t_` + 256 bits, seul le hash BLAKE3 gardé, préfixe pour les reconnaître, expiration facultative) |
 | `reading_progress` | page lue par compte et par tome |
 | `user_series_settings`, `user_settings` | réglages de lecture d'une série et préférences (langue, thème, sens des pages), par compte |
 | `legacy_progress`, `legacy_series_settings` | progression et réglages d'avant les comptes, repris par le premier administrateur |
@@ -86,17 +88,21 @@ SQLite (`sqlx`, `sqlite-bundled`), un fichier `shiori.db`, migrations appliquée
 
 Une série garde son identité quand son dossier est renommé : elle est retrouvée par le hash de ses tomes.
 
+**Sauvegardes** (`shiori-db::backup`, `shiori::backup`) : `VACUUM INTO` (copie cohérente, Shiori allumé) dans un fichier temporaire caché, renommé une fois complet, droits 0600 sous Unix, nom `<préfixe>-AAAAMMJJ-HHMMSS.db` (UTC, suffixé plutôt qu'écrasé). Une base existante qui va être migrée est d'abord copiée (`shiori-avant-<migration>-…`), quelle que soit la commande. La tâche périodique compte l'échéance depuis la plus récente `shiori-<date>.db` et n'efface qu'elles au-delà de `--backup-keep`. **Restauration** Shiori allumé : copie de travail vérifiée (`integrity_check`, table `_sqlx_migrations` présente, sinon une base SQLite quelconque serait migrée vide), migrée au schéma courant (une version plus récente est refusée), schémas comparés, puis la copie est attachée et chaque table vidée et remplie en une transaction (`defer_foreign_keys`) ; les sessions sont effacées, les jetons d'API reviennent à leur état d'alors.
+
 ## API
 
-JSON sous `/api`, erreurs `{ "code", "message" }` avec un code stable que l'interface traduit. Session exigée sauf `/api/health` et `/api/auth/*` (cookie `shiori_session` ou `Authorization: Bearer`) ; progression, réglages de lecture et langue des titres sont ceux du compte connecté. Un lecteur ne voit que les bibliothèques qui lui sont ouvertes (404 pour le reste) ; les routes marquées **admin**, et toutes celles sous `/api/admin`, répondent 403 `forbidden` à un lecteur. Avec un mot de passe provisoire, seules `/api/me` et `/api/me/password` répondent (403 `password_change_required`).
+JSON sous `/api`, erreurs `{ "code", "message" }` avec un code stable que l'interface traduit. Session exigée sauf `/api/health` et `/api/auth/*` (cookie `shiori_session` ou `Authorization: Bearer`, avec le jeton de session ou un jeton d'API) ; un jeton d'API n'ouvre que les `GET` hors `/api/me` et `/api/admin`, et `PUT /api/volumes/{id}/progress` (403 `token_forbidden` sinon) ; progression, réglages de lecture et langue des titres sont ceux du compte connecté. Un lecteur ne voit que les bibliothèques qui lui sont ouvertes (404 pour le reste) ; les routes marquées **admin**, et toutes celles sous `/api/admin`, répondent 403 `forbidden` à un lecteur. Avec un mot de passe provisoire, seules `/api/me` et `/api/me/password` répondent (403 `password_change_required`).
 
 | Route | Rôle |
 |---|---|
 | `GET /api/health` | état et version |
-| `GET /api/auth/state`, `POST /api/auth/setup`, `.../login`, `.../logout` | installation (premier administrateur, jeton affiché au démarrage), connexion, déconnexion |
+| `GET /api/auth/state`, `POST /api/auth/setup`, `.../login`, `.../totp`, `.../logout` | installation (premier administrateur, jeton affiché au démarrage), connexion (avec la double authentification, un défi de 5 minutes puis le code ou un code de secours), déconnexion |
 | `GET, PUT /api/me`, `POST /api/me/password` | compte connecté et ses préférences, changer son mot de passe (ferme les autres appareils) |
 | `GET /api/me/sessions`, `DELETE /api/me/sessions/{id}` | appareils connectés, en déconnecter un |
-| `GET, POST /api/admin/users`, `PATCH, DELETE .../{id}`, `POST .../{id}/password`, `DELETE .../{id}/sessions` | **admin** : comptes (mot de passe provisoire montré une fois), rôle, bibliothèques, désactivation, nouveau mot de passe, déconnexion de tous ses appareils ; le dernier administrateur actif reste |
+| `POST, DELETE /api/me/totp`, `POST /api/me/totp/confirm` | double authentification : commencer l'activation (mot de passe exigé, secret et URI `otpauth`), confirmer par un premier code (codes de secours rendus une fois), désactiver (mot de passe et code) |
+| `GET, POST /api/me/tokens`, `DELETE /api/me/tokens/{id}` | jetons d'API du compte (le jeton en clair rendu une seule fois) |
+| `GET, POST /api/admin/users`, `PATCH, DELETE .../{id}`, `POST .../{id}/password`, `DELETE .../{id}/sessions`, `DELETE .../{id}/totp` | **admin** : comptes (mot de passe provisoire montré une fois), rôle, bibliothèques, désactivation, nouveau mot de passe, déconnexion de tous ses appareils et jetons, retrait de la double authentification ; le dernier administrateur actif reste |
 | `GET, PUT /api/settings` | réglages de l'instance (mise à jour partielle, **admin**) |
 | `GET, POST /api/libraries`, `DELETE /api/libraries/{id}` | bibliothèques visibles ; créer (**admin**, `share` l'ouvre aux lecteurs existants) ; supprimer (**admin**, ne touche pas aux fichiers) |
 | `GET /api/libraries/{id}/series`, `GET /api/series` | séries d'une bibliothèque, toutes les séries (filtres côté client) |
@@ -116,6 +122,8 @@ JSON sous `/api`, erreurs `{ "code", "message" }` avec un code stable que l'inte
 | `GET /api/admin/scans/current`, `POST .../current/cancel` | scan en cours, annulation |
 | `GET /api/admin/metadata`, `POST /api/admin/metadata/identify` | état des sources, identification de toutes les séries |
 | `GET /api/admin/storage` | chemins complets de la base et du cache |
+| `GET, POST /api/admin/backups`, `GET, DELETE .../{nom}` | sauvegardes : liste (dossier, fréquence), en faire une, la télécharger, la supprimer |
+| `POST /api/admin/backups/upload`, `POST .../{nom}/restore` | téléverser une sauvegarde (corps brut, en-tête SQLite exigé), restaurer (refusé pendant un scan, `invalid_backup`, `backup_too_new`) |
 
 Tout le reste est l'application web : un fichier de `web/dist`, ou `index.html` pour une route de l'application (React Router). En debug, `web/dist` est lu sur le disque ; en release, il est intégré au binaire (`rust-embed`) : `npm run build` avant `cargo build --release`.
 
@@ -137,6 +145,8 @@ Sources web (`shiori-meta`, désactivées par défaut) : AniList (GraphQL) et Ma
 - **axum** + **tokio**, compression brotli / gzip des réponses texte, journaux `tracing` (`-v`, `-vv`, ou `RUST_LOG`).
 - **Job de scan** (`job.rs`) : une passe à la fois (bibliothèque, dossier ou fichier), fichiers scannés en parallèle (`--jobs`), progression en mémoire, annulation entre deux fichiers ; une passe interrompue par un arrêt brutal est close au lancement suivant.
 - **Arrêt propre** sur Ctrl-C et SIGTERM (`docker stop`) : le scan en cours est annulé et sa passe close.
+- **Authentification** (`server/auth.rs`) : cookie `shiori_session` `HttpOnly`, `SameSite=Lax`, `Secure` quand le proxy annonce `X-Forwarded-Proto: https` ; essais ratés comptés par nom (5 libres) et par adresse (20 libres), puis pause qui double jusqu'à 15 minutes (429 `rate_limited`, `Retry-After`) sans calculer le hash ; l'adresse est celle de la connexion, ou le dernier `X-Forwarded-For` quand la connexion vient d'un proxy local (loopback ou réseau privé). Jeton d'installation tiré au démarrage, affiché même avec `--quiet` tant qu'aucun compte n'existe. TOTP (`totp-rs`) : SHA-1, 6 chiffres, 30 s, un pas de tolérance. Écritures refusées si `Sec-Fetch-Site: cross-site` (CSRF).
+- **Sauvegardes** : `--backup-dir` / `SHIORI_BACKUP_DIR` (défaut `backups` à côté de la base), `--backup-every-hours` (24, 0 : aucune), `--backup-keep` (7) ; `shiori backup` à la demande.
 - **Parade au DNS rebinding** : en écoute locale, seul un `Host` local est accepté ; `--allowed-host` / `SHIORI_ALLOWED_HOSTS` ajoute des noms et active ce contrôle en écoute réseau (l'image Docker le fait pour `localhost`).
 - **Dossiers** : données et cache dans les dossiers de l'OS (crate `directories`), ou `SHIORI_DATA_DIR`, `SHIORI_CACHE_DIR`, `--db`, `--cache-dir`.
 

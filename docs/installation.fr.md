@@ -9,7 +9,7 @@ Deux façons de l'installer :
 - **[Docker](#avec-docker)** : le plus simple sur un NAS, un serveur ou un Raspberry Pi.
 - **[Le programme seul](#avec-le-programme-seul)** : Linux, Windows ou macOS, sans rien d'autre à installer.
 
-> **Important : Shiori n'a pas encore de comptes ni de mot de passe.** Toute personne qui atteint son adresse peut lire et administrer la bibliothèque. Par défaut, il n'est joignable que depuis l'appareil où il tourne. Pour l'ouvrir à votre réseau ou à Internet, suivez [Accéder depuis d'autres appareils](#accéder-depuis-dautres-appareils).
+Chaque personne a son **compte** (sa progression, ses réglages, les bibliothèques qui lui sont ouvertes). Par défaut, Shiori n'est joignable que depuis l'appareil où il tourne ; pour l'ouvrir à votre réseau ou à Internet, suivez [Accéder depuis d'autres appareils](#accéder-depuis-dautres-appareils).
 
 ## Avec Docker
 
@@ -31,7 +31,7 @@ Il faut Docker et Docker Compose ([installer Docker](https://docs.docker.com/get
 
 4. Ouvrez <http://localhost:7878> et passez à [Premiers pas](#premiers-pas).
 
-L'image tourne sans droits d'administrateur et garde ses données dans deux volumes Docker : `shiori-data` (la base : progression, métadonnées, couvertures, **à sauvegarder**) et `shiori-cache` (pages redimensionnées, qui se reconstruit tout seul).
+L'image tourne sans droits d'administrateur et garde ses données dans deux volumes Docker : `shiori-data` (la base : comptes, progression, métadonnées, couvertures, et ses [sauvegardes](#sauvegarder)) et `shiori-cache` (pages redimensionnées, qui se reconstruit tout seul).
 
 ## Avec le programme seul
 
@@ -63,9 +63,12 @@ Leur emplacement exact s'affiche dans **Administration → Données** et au dém
 
 ## Premiers pas
 
-1. **Administration → Ajouter une bibliothèque** : un nom, le chemin complet du dossier (avec Docker : le chemin de droite, par exemple `/bibliotheques/mangas`) et son type (manga, BD ou webtoon, qui donne le sens de lecture par défaut).
-2. Le scan démarre tout seul ; son avancement s'affiche dans l'administration. Un premier scan lit chaque fichier en entier : comptez quelques minutes pour une grande bibliothèque. Les suivants ne relisent que ce qui a changé.
-3. Vos séries apparaissent sur l'accueil. Rangez vos fichiers **un dossier par série** : voir [Ranger ses fichiers](fonctionnel.md#ranger-ses-fichiers). Les **liens symboliques** ne sont pas suivis : montez le dossier lui-même (volume Docker, lien dur, montage réseau). Si le dossier d'une bibliothèque est absent ou illisible (disque réseau non monté), le scan échoue sans rien retirer.
+1. **Créez le compte administrateur.** Au premier lancement, l'interface affiche la page **Installation** : choisissez un nom de compte et un mot de passe (8 caractères au moins), et recopiez le **jeton d'installation**. Ce jeton s'affiche au démarrage dans la fenêtre de Shiori, ou dans le journal Docker (`docker compose logs shiori`) ; il change à chaque lancement et empêche le premier venu de votre réseau de prendre l'instance. Le compte créé reprend la progression et les réglages déjà enregistrés par une version précédente. Sans interface : `shiori user add <nom> --admin` (avec Docker : `docker compose exec shiori shiori user add <nom> --admin`) affiche un mot de passe provisoire, à changer à la première connexion.
+2. **Administration → Ajouter une bibliothèque** : un nom, le chemin complet du dossier (avec Docker : le chemin de droite, par exemple `/bibliotheques/mangas`) et son type (manga, BD ou webtoon, qui donne le sens de lecture par défaut).
+3. Le scan démarre tout seul ; son avancement s'affiche dans l'administration. Un premier scan lit chaque fichier en entier : comptez quelques minutes pour une grande bibliothèque. Les suivants ne relisent que ce qui a changé.
+4. Vos séries apparaissent sur l'accueil. Rangez vos fichiers **un dossier par série** : voir [Ranger ses fichiers](fonctionnel.md#ranger-ses-fichiers). Les **liens symboliques** ne sont pas suivis : montez le dossier lui-même (volume Docker, lien dur, montage réseau). Si le dossier d'une bibliothèque est absent ou illisible (disque réseau non monté), le scan échoue sans rien retirer.
+
+5. **Créez les comptes de la famille** dans **Administration → Comptes** : un nom, le rôle (lecteur ou administrateur) et les bibliothèques ouvertes. Shiori donne un mot de passe provisoire, montré une seule fois, que la personne remplace à sa première connexion. Un lecteur lit, garde sa progression et ses réglages, et ne voit ni l'administration ni les autres comptes. Une bibliothèque créée plus tard n'est visible que de l'administrateur : ouvrez-la aux comptes voulus dans **Administration → Comptes**.
 
 Facultatif : **Administration → Métadonnées web** complète vos séries (résumé, auteurs, genres, couvertures) avec AniList et MangaDex. C'est désactivé par défaut ; seul le titre des séries est envoyé.
 
@@ -78,23 +81,21 @@ Shiori n'écoute que l'appareil où il tourne. Pour le joindre depuis la tablett
 - programme seul : `shiori serve --listen 0.0.0.0:7878 --allowed-host 192.168.1.10` (l'adresse de l'ordinateur) ;
 - Docker : dans `compose.yaml`, `"7878:7878"` au lieu de `"127.0.0.1:7878:7878"`, et `SHIORI_ALLOWED_HOSTS: localhost,192.168.1.10`.
 
-Puis ouvrez `http://192.168.1.10:7878` sur la tablette. Ne faites cela que sur un réseau de confiance (votre maison), puisqu'il n'y a pas de mot de passe.
+Puis ouvrez `http://192.168.1.10:7878` sur la tablette et connectez-vous. En `http://`, le mot de passe circule en clair sur le réseau : réservez cela à un réseau de confiance (votre maison).
 
-### Depuis Internet, avec un mot de passe
+### Depuis Internet
 
-Mettez un **reverse proxy** devant Shiori : il donne une adresse HTTPS (par exemple `https://shiori.mondomaine.fr`) et demande un mot de passe avant de laisser passer. Exemple avec [Caddy](https://caddyserver.com), qui obtient le certificat HTTPS tout seul :
+Mettez un **reverse proxy** devant Shiori : il donne une adresse HTTPS (par exemple `https://shiori.mondomaine.fr`), pour que mots de passe et sessions ne circulent jamais en clair. Exemple avec [Caddy](https://caddyserver.com), qui obtient le certificat HTTPS tout seul :
 
 ```caddyfile
 shiori.mondomaine.fr {
-    basic_auth {
-        # Mot de passe haché : caddy hash-password --plaintext 'votre mot de passe'
-        lecteur $2a$14$...
-    }
     reverse_proxy 127.0.0.1:7878
 }
 ```
 
-Et dites à Shiori ce nom : `--allowed-host shiori.mondomaine.fr` (ou `SHIORI_ALLOWED_HOSTS: localhost,shiori.mondomaine.fr` avec Docker). Nginx Proxy Manager, Traefik, Authelia ou Cloudflare Access conviennent aussi. Utilisez un **sous-domaine** : Shiori ne fonctionne pas dans un sous-chemin (`mondomaine.fr/shiori`).
+Et dites à Shiori ce nom : `--allowed-host shiori.mondomaine.fr` (ou `SHIORI_ALLOWED_HOSTS: localhost,shiori.mondomaine.fr` avec Docker). Nginx Proxy Manager, Traefik ou Cloudflare Tunnel conviennent aussi. Utilisez un **sous-domaine** : Shiori ne fonctionne pas dans un sous-chemin (`mondomaine.fr/shiori`).
+
+Ouvert sur Internet, Shiori se protège seul : connexion obligatoire, pause qui s'allonge après plusieurs mots de passe faux (par compte et par adresse), cookie de session réservé au HTTPS derrière le proxy (`X-Forwarded-Proto`, `X-Forwarded-For`, que les reverse proxies ajoutent d'eux-mêmes). Activez la **double authentification** sur les comptes administrateurs (**Compte → Double authentification**, avec une application comme Aegis ou Google Authenticator). Une protection en plus devant Shiori (mot de passe du proxy, Authelia, Cloudflare Access) reste possible ; l'application installée la redemande quand il le faut.
 
 Avec Cloudflare (compte gratuit) : la limite de 100 Mo porte sur chaque requête, et Shiori n'envoie et ne reçoit que des pages de quelques centaines de Ko, y compris pour les tomes téléchargés.
 
@@ -148,6 +149,11 @@ Dans **Administration → Données** : le bouton de restauration d'une sauvegard
 Si Shiori ne démarre plus : arrêtez-le, remplacez `shiori.db` par une sauvegarde, **supprimez `shiori.db-wal` et `shiori.db-shm`** s'ils existent, relancez.
 
 ## En cas de problème
+
+- **Mot de passe oublié** : l'administrateur en donne un nouveau dans **Administration → Comptes** (mot de passe provisoire). Pour l'administrateur lui-même : `shiori user password <nom>` (avec Docker : `docker compose exec shiori shiori user password <nom>`), qui ferme aussi ses sessions.
+- **Téléphone de la double authentification perdu** : connectez-vous avec un **code de secours** (donnés à l'activation, chacun sert une fois). Sinon, un administrateur la retire dans **Administration → Comptes**, ou `shiori user totp-reset <nom>`.
+- **« Trop d’essais »** : après plusieurs mots de passe faux, Shiori fait patienter avant le prochain essai, de plus en plus longtemps (15 minutes au plus).
+- **Jeton d'installation introuvable** : il n'est demandé que tant qu'aucun compte n'existe ; il s'affiche à chaque démarrage dans la fenêtre de Shiori ou dans `docker compose logs shiori`.
 
 - **« nom d'hôte non autorisé »** : vous ouvrez Shiori par un nom ou une adresse qu'il ne connaît pas. Ajoutez-le à `--allowed-host` / `SHIORI_ALLOWED_HOSTS`.
 - **Docker, « unable to open database file »** : un dossier de l'hôte monté sur `/data` appartient à root. Gardez les volumes nommés du `compose.yaml` fourni, ou donnez ce dossier à l'utilisateur du conteneur (`user:` dans `compose.yaml`).
