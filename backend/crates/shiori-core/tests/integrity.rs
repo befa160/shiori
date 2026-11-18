@@ -50,6 +50,39 @@ fn pdf_pages_are_its_images_and_skipped_pages_are_reported() {
 }
 
 #[test]
+fn pdf_info_is_read_as_local_metadata_without_its_title() {
+    use shiori_testkit::pdf::{PdfImage, PdfPage, write_pdf_with_info};
+    let dir = tempfile::tempdir().unwrap();
+    let page = PdfPage::image(PdfImage::full(30, 40, page_color(0), true));
+    let info = [
+        ("Title", "Hell's Paradise T04 (French Edition)"),
+        ("Author", "Yûji Kaku"),
+        ("Keywords", "shonen"),
+    ];
+    let r = scan(&write_pdf_with_info(
+        dir.path(),
+        "info.pdf",
+        std::slice::from_ref(&page),
+        &info,
+    ));
+    assert_eq!(r.metadata.len(), 1);
+    let (source, meta) = &r.metadata[0];
+    assert_eq!(*source, MetadataSource::Pdf);
+    assert_eq!(meta.title, None);
+    assert_eq!(meta.authors[0].name, "Yûji Kaku");
+    assert_eq!(meta.tags, ["shonen"]);
+    // Rien d'utile (le titre seul) : pas de source.
+    let only_title = [("Title", "Sans intérêt")];
+    let r = scan(&write_pdf_with_info(
+        dir.path(),
+        "title.pdf",
+        &[page],
+        &only_title,
+    ));
+    assert!(r.metadata.is_empty());
+}
+
+#[test]
 fn an_encrypted_pdf_is_an_error() {
     let dir = tempfile::tempdir().unwrap();
     let r = scan(&shiori_testkit::pdf::encrypted_pdf(dir.path()));

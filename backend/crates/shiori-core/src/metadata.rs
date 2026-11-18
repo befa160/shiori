@@ -1,5 +1,5 @@
-//! Métadonnées locales lues dans l'archive : `ComicInfo.xml` (format ComicRack) et
-//! `index.json` (application de téléchargement). Normalisées dans [`LocalMetadata`],
+//! Métadonnées locales lues dans l'archive : `ComicInfo.xml` (format ComicRack),
+//! `index.json` (application de téléchargement) et le dictionnaire `Info` d'un PDF. Normalisées dans [`LocalMetadata`],
 //! sans rien inférer : un champ absent ou vide reste vide.
 
 use serde::{Deserialize, Serialize};
@@ -12,6 +12,8 @@ pub const MAX_METADATA_SIZE: u64 = 4 * 1024 * 1024;
 pub enum MetadataSource {
     Comicinfo,
     IndexJson,
+    /// Dictionnaire `Info` d'un PDF (lot 8.3), lu par `archive::pdf`.
+    Pdf,
 }
 
 impl MetadataSource {
@@ -70,7 +72,60 @@ pub fn parse(source: MetadataSource, bytes: &[u8]) -> Result<LocalMetadata, Stri
     match source {
         MetadataSource::Comicinfo => comic_info(&text),
         MetadataSource::IndexJson => index_json(&text),
+        // Pas un fichier de l'archive : lu à l'ouverture du PDF.
+        MetadataSource::Pdf => Err("source sans fichier".into()),
     }
+}
+
+/// Dictionnaire `Info` d'un PDF (Q54, Q57) : auteur (séparés par `;` ou ` & `, comme les joint
+/// Calibre ; scénario et dessin),
+/// sujet → résumé, mots-clés (séparés par `,` ou `;`) → tags. Le titre et la date de création
+/// ne sont pas lus : les outils de conversion y mettent leur propre titre et la date de
+/// conversion. Rien d'utile : `None`.
+pub fn pdf_info(
+    author: Option<&[u8]>,
+    subject: Option<&[u8]>,
+    keywords: Option<&[u8]>,
+) -> Option<LocalMetadata> {
+    // Chaîne de texte PDF : UTF-16 avec BOM, ou PDFDocEncoding.
+    // shortcut: PDFDocEncoding lu comme du Latin-1 (ils diffèrent de 0x80 à 0xA0 : guillemets,
+    // tirets) ; à corriger si un vrai PDF montre des caractères faux.
+    // Un champ démesuré (fichier abîmé ou piégé) n'entre pas en base, comme un ComicInfo.xml.
+    let text = |b: &[u8]| match b.len() as u64 > MAX_METADATA_SIZE {
+        true => String::new(),
+        false => decode(b).unwrap_or_else(|_| b.iter().map(|&c| char::from(c)).collect()),
+    };
+    let split = |all: String, seps: &[char]| -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        for part in all.split(seps) {
+            let part = part.trim();
+            if !part.is_empty() && !out.iter().any(|o| o.eq_ignore_ascii_case(part)) {
+                out.push(part.to_owned());
+            }
+        }
+        out
+    };
+    let meta = LocalMetadata {
+        // « & » ne sépare que des auteurs : le tag « Sword & Sorcery » reste entier.
+        authors: split(
+            author.map(text).unwrap_or_default().replace(" & ", ";"),
+            &[';'],
+        )
+        .into_iter()
+        .map(|name| Author {
+            name,
+            story: true,
+            art: true,
+        })
+        .collect(),
+        summary: subject
+            .map(text)
+            .map(|s| s.trim().to_owned())
+            .filter(|s| !s.is_empty()),
+        tags: split(keywords.map(text).unwrap_or_default(), &[',', ';']),
+        ..LocalMetadata::default()
+    };
+    (meta != LocalMetadata::default()).then_some(meta)
 }
 
 /// UTF-8 (BOM accepté) ou UTF-16 avec BOM, comme en écrivent certains outils Windows.

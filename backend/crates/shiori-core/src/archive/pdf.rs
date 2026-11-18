@@ -26,6 +26,7 @@ use image::{DynamicImage, GrayImage, ImageFormat, RgbImage, Rgba, RgbaImage, ima
 
 use super::{Archive, ArchiveError, Duplicate, Entry, EntryKind, MAX_ENTRY_SIZE};
 use crate::integrity::{Issue, IssueCode};
+use crate::metadata::{self, LocalMetadata};
 
 /// Part minimale de la page couverte par ses images (Q56) : en dessous, c'est une page de
 /// texte avec une vignette, pas une planche.
@@ -52,6 +53,7 @@ pub struct PdfArchive {
     /// Une par entrée, même index.
     sources: Vec<Source>,
     issues: Vec<Issue>,
+    metadata: Option<LocalMetadata>,
 }
 
 struct Source {
@@ -376,6 +378,14 @@ impl PdfArchive {
             entries: Vec::new(),
             sources: Vec::new(),
             issues: Vec::new(),
+            metadata: {
+                let info = pdf.metadata();
+                metadata::pdf_info(
+                    info.author.as_deref(),
+                    info.subject.as_deref(),
+                    info.keywords.as_deref(),
+                )
+            },
         };
         for page in 0..pdf.pages().len() {
             let probe = probe(&pdf, page, file.clone(), false);
@@ -504,6 +514,10 @@ impl Archive for PdfArchive {
 
     fn issues(&self) -> &[Issue] {
         &self.issues
+    }
+
+    fn metadata(&self) -> Option<LocalMetadata> {
+        self.metadata.clone()
     }
 }
 

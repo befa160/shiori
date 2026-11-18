@@ -138,7 +138,8 @@ pub struct FileReport {
     pub status: Status,
     pub pages: Vec<Page>,
     pub issues: Vec<Issue>,
-    /// Métadonnées des fichiers `ComicInfo.xml` et `index.json` à la racine de l'archive.
+    /// Métadonnées des fichiers `ComicInfo.xml` et `index.json` à la racine de l'archive, ou du
+    /// dictionnaire `Info` d'un PDF.
     pub metadata: Vec<(MetadataSource, LocalMetadata)>,
 }
 
@@ -263,6 +264,9 @@ fn scan_unguarded(path: &Path, options: ScanOptions) -> FileReport {
         return report.finish();
     }
     report.issues.extend_from_slice(archive.issues());
+    report
+        .metadata
+        .extend(archive.metadata().map(|m| (MetadataSource::Pdf, m)));
     if archive.is_solid() {
         report.issue(
             IssueCode::SolidArchive,

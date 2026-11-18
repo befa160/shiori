@@ -11,11 +11,9 @@ async fn previous_version(path: &Path) {
     db.create_user("ancien", "mot de passe", Role::Admin)
         .await
         .unwrap();
-    sqlx::query("DROP TABLE api_tokens")
-        .execute(db.pool())
-        .await
-        .unwrap();
-    sqlx::query("DELETE FROM _sqlx_migrations WHERE version = 17")
+    // Défait la dernière migration (18) : elle recrée `volume_metadata` à l'identique, la
+    // rejouer est sans risque. À recaler sur chaque nouvelle migration.
+    sqlx::query("DELETE FROM _sqlx_migrations WHERE version = 18")
         .execute(db.pool())
         .await
         .unwrap();
@@ -147,7 +145,7 @@ async fn a_migration_is_preceded_by_a_backup_and_old_backups_still_restore() {
         .collect();
     assert_eq!(saved.len(), 1);
     let name = saved[0].file_name().unwrap().to_str().unwrap();
-    assert!(name.starts_with("shiori-avant-0017-"), "{name}");
+    assert!(name.starts_with("shiori-avant-0018-"), "{name}");
 
     // Base à jour : pas de nouvelle sauvegarde ; base neuve non plus.
     db.pool().close().await;

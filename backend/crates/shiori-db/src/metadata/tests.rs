@@ -139,6 +139,31 @@ fn bad_patches_are_refused() {
 }
 
 #[test]
+fn a_pdf_describes_its_volume_and_comes_after_comic_info() {
+    let pdf = (
+        MetadataSource::Pdf,
+        LocalMetadata {
+            summary: Some("Du PDF".into()),
+            authors: vec![author("Kaku")],
+            tags: vec!["Ninja".into()],
+            ..LocalMetadata::default()
+        },
+    );
+    assert_eq!(
+        volume_from_locals(std::slice::from_ref(&pdf)),
+        VolumeMetadata {
+            summary: Some("Du PDF".into()),
+            authors: vec![author("Kaku")],
+            ..VolumeMetadata::default()
+        }
+    );
+    // Dans une série, un ComicInfo.xml l'emporte sur un PDF, même s'il vient après.
+    let meta = from_locals("x", &[pdf, comic("One Piece", "Tome 1", "1997")]);
+    assert_eq!(meta.summary.as_deref(), Some("Tome 1"));
+    assert_eq!(meta.tags, ["Ninja"]);
+}
+
+#[test]
 fn a_volume_reads_only_its_comic_info() {
     let index = (
         MetadataSource::IndexJson,
