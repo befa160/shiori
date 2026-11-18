@@ -35,6 +35,8 @@ pub struct PdfImage {
     /// Dimensions annoncées par le dictionnaire, si elles diffèrent des pixels écrits (image
     /// piégée qui annonce des Go).
     pub declared: Option<(u32, u32)>,
+    /// Opacité uniforme donnée par un `SMask` (0 : transparent).
+    pub alpha: Option<u8>,
 }
 
 impl PdfImage {
@@ -48,6 +50,7 @@ impl PdfImage {
             at: [0.0, 0.0, PAGE_WIDTH, PAGE_HEIGHT],
             space: Space::DeviceRgb,
             declared: None,
+            alpha: None,
         }
     }
 }
@@ -115,6 +118,7 @@ pub fn write_pdf(dir: &Path, name: &str, pages: &[PdfPage]) -> PathBuf {
 
         for (image, &image_id) in page.images.iter().zip(&image_ids) {
             let icc = id();
+            let smask = id();
             let mask = image.space == Space::Mask;
             let data = if mask {
                 // Échantillon 0 = peint : des octets nuls peignent toute l'image.
@@ -139,7 +143,17 @@ pub fn write_pdf(dir: &Path, name: &str, pages: &[PdfPage]) -> PathBuf {
                 }
             }
             xobject.bits_per_component(if mask { 1 } else { 8 });
+            if image.alpha.is_some() {
+                xobject.s_mask(smask);
+            }
             xobject.finish();
+            if let Some(alpha) = image.alpha {
+                let data = vec![alpha; (image.width * image.height) as usize];
+                let mut s = pdf.image_xobject(smask, &data);
+                s.width(image.width as i32).height(image.height as i32);
+                s.color_space().device_gray();
+                s.bits_per_component(8);
+            }
             if image.space == Space::IccRgb {
                 pdf.icc_profile(icc, b"profil de test").n(3);
             }
