@@ -38,6 +38,7 @@ mod metadata;
 mod reading;
 mod runs;
 mod settings;
+mod tokens;
 mod totp;
 mod web;
 
@@ -57,6 +58,7 @@ pub use reading::{
 };
 pub use runs::{LogLine, RunCounts, RunFilter, RunOrigin, RunStatus, RunSummary};
 pub use settings::{Language, Settings, Theme};
+pub use tokens::{ApiToken, NewToken};
 pub use totp::{Enrollment, TotpError};
 pub use web::{Cover, MatchedBy, Outcome, SourceIssue, SourceState, ToIdentify};
 

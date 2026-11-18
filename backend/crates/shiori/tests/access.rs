@@ -63,7 +63,8 @@ async fn fixture() -> Fixture {
     }
 }
 
-/// Requête avec ce cookie (`None` : celui de l'administrateur des tests).
+/// Requête avec ce cookie (`None` : celui de l'administrateur des tests), ou ce jeton s'il
+/// commence par `Bearer `.
 async fn call(
     f: &Fixture,
     cookie: Option<&str>,
@@ -72,8 +73,12 @@ async fn call(
     body: Option<Value>,
 ) -> (StatusCode, Value) {
     let mut request = Request::builder().method(method).uri(uri);
-    if let Some(cookie) = cookie {
-        request = request.header("cookie", cookie);
+    match cookie {
+        Some(bearer) if bearer.starts_with("Bearer ") => {
+            request = request.header("authorization", bearer)
+        }
+        Some(cookie) => request = request.header("cookie", cookie),
+        None => {}
     }
     if body.is_some() {
         request = request.header("content-type", "application/json");
@@ -392,4 +397,120 @@ async fn the_admin_manages_accounts_but_keeps_the_last_admin() {
         let (status, _) = call(&f, None, method, &uri, Some(json!({}))).await;
         assert_eq!(status, StatusCode::NOT_FOUND, "{method} {uri}");
     }
+}
+
+#[tokio::test]
+async fn an_api_token_reads_and_saves_progress_within_the_account_only() {
+    let f = fixture().await;
+    let (bob_id, bob) = reader(&f, "bob").await;
+
+    // Création par la session : jeton montré une fois, liste sans le secret.
+    let new = json!({ "name": "  Liseuse  ", "expires_in_days": 30 });
+    let (status, created) = call(&f, Some(&bob), "POST", "/api/me/tokens", Some(new)).await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    assert_eq!(created["name"], "Liseuse");
+    assert!(created["expires_at"].is_string());
+    let bearer = format!("Bearer {}", created["token"].as_str().unwrap());
+    let (_, listed) = call(&f, Some(&bob), "GET", "/api/me/tokens", None).await;
+    assert_eq!(listed.as_array().unwrap().len(), 1);
+    assert!(listed[0].get("token").is_none());
+    for bad in [
+        json!({ "name": " " }),
+        json!({ "name": "x", "expires_in_days": 0 }),
+        json!({}),
+    ] {
+        let (status, _) = call(&f, Some(&bob), "POST", "/api/me/tokens", Some(bad.clone())).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{bad}");
+    }
+
+    // Sans accès à la bibliothèque, pas avec son jeton non plus.
+    let closed = shiori_db::UserChange {
+        libraries: Some(vec![]),
+        ..Default::default()
+    };
+    f.db.update_user(bob_id, closed).await.unwrap();
+    let series = format!("/api/series/{}", f.series);
+    let (status, _) = call(&f, Some(&bearer), "GET", &series, None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let change = shiori_db::UserChange {
+        libraries: Some(vec![f.library]),
+        ..Default::default()
+    };
+    f.db.update_user(bob_id, change).await.unwrap();
+    let (status, _) = call(&f, Some(&bearer), "GET", &series, None).await;
+    assert_eq!(status, StatusCode::OK);
+    let progress = format!("/api/volumes/{}/progress", f.volume);
+    let page = json!({ "page_id": f.page });
+    let (status, body) = call(&f, Some(&bearer), "PUT", &progress, Some(page)).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    // Rien d'autre : ni le compte, ni ses jetons, ni d'autre écriture.
+    for (method, uri) in [
+        ("GET", "/api/me".to_owned()),
+        ("GET", "/api/me/tokens".to_owned()),
+        ("DELETE", progress.clone()),
+        ("PUT", "/api/settings".to_owned()),
+    ] {
+        let (status, body) = call(&f, Some(&bearer), method, &uri, Some(json!({}))).await;
+        assert_eq!(
+            (status, body["code"].as_str()),
+            (StatusCode::FORBIDDEN, Some("token_forbidden")),
+            "{method} {uri}"
+        );
+    }
+
+    // Révoqué : plus rien ; jeton inconnu : 401.
+    let uri = format!("/api/me/tokens/{}", created["id"]);
+    let (status, _) = call(&f, Some(&bob), "DELETE", &uri, None).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, _) = call(&f, Some(&bob), "DELETE", &uri, None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, body) = call(&f, Some(&bearer), "GET", &series, None).await;
+    assert_eq!(
+        (status, body["code"].as_str()),
+        (StatusCode::UNAUTHORIZED, Some("unauthenticated"))
+    );
+}
+
+#[tokio::test]
+async fn an_admin_token_is_never_an_admin() {
+    let f = fixture().await;
+    let admin = f.db.user_by_name("admin").await.unwrap().unwrap();
+    let token =
+        f.db.create_token(admin.id, "OPDS", None)
+            .await
+            .unwrap()
+            .token;
+    let bearer = format!("Bearer {token}");
+    // Voit tout ce que voit l'administrateur…
+    let (status, _) = call(
+        &f,
+        Some(&bearer),
+        "GET",
+        &format!("/api/series/{}", f.series),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    // … sans aucun de ses pouvoirs, même en lecture.
+    let search = "/api/series/1/metadata/search?source=anilist&q=x";
+    let (status, body) = call(&f, Some(&bearer), "GET", search, None).await;
+    assert_eq!(
+        (status, body["code"].as_str()),
+        (StatusCode::FORBIDDEN, Some("forbidden"))
+    );
+    let (status, body) = call(&f, Some(&bearer), "GET", "/api/admin/users", None).await;
+    assert_eq!(
+        (status, body["code"].as_str()),
+        (StatusCode::FORBIDDEN, Some("token_forbidden"))
+    );
+    // Mot de passe remis à zéro par sécurité : le jeton attend lui aussi qu'il soit changé.
+    f.db.set_password("admin", "provisoire 123", true, None)
+        .await
+        .unwrap();
+    let (status, body) = call(&f, Some(&bearer), "GET", "/api/series", None).await;
+    assert_eq!(
+        (status, body["code"].as_str()),
+        (StatusCode::FORBIDDEN, Some("password_change_required"))
+    );
 }

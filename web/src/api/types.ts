@@ -388,6 +388,18 @@ export interface Account extends User {
   totp: boolean
 }
 
+/** Jeton d'API (lecture et progression seulement), sans son secret. */
+export interface ApiToken {
+  id: number
+  name: string
+  /** `shiori_t_` et 8 caractères : de quoi le reconnaître. */
+  prefix: string
+  created_at: string
+  last_used_at: string | null
+  /** `null` : sans expiration. */
+  expires_at: string | null
+}
+
 export interface AccountPatch {
   role?: Role
   disabled?: boolean

@@ -1,6 +1,7 @@
 import type {
   Account,
   AccountPatch,
+  ApiToken,
   AuthState,
   ContinueItem,
   Device,
@@ -124,6 +125,10 @@ export const api = {
     must<{ recovery_codes: string[] }>('/me/totp/confirm', { method: 'POST', body: JSON.stringify({ code }) }),
   disableTotp: (password: string, code: string) =>
     request<null>('/me/totp', { method: 'DELETE', body: JSON.stringify({ password, code }) }),
+  tokens: (init?: RequestInit) => must<ApiToken[]>('/me/tokens', init),
+  createToken: (body: { name: string; expires_in_days?: number }) =>
+    must<ApiToken & { token: string }>('/me/tokens', { method: 'POST', body: JSON.stringify(body) }),
+  revokeToken: (id: number) => request<null>(`/me/tokens/${id}`, { method: 'DELETE' }),
   resetTotp: (id: number) => request<null>(`/admin/users/${id}/totp`, { method: 'DELETE' }),
   logout: () => request<null>('/auth/logout', { method: 'POST' }),
   me: (init?: RequestInit) => must<Me>('/me', init),

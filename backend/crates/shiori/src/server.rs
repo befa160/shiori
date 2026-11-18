@@ -44,6 +44,7 @@ use crate::meta::{IdentifyStatus, MetaError, Metadata, web_sources};
 mod accounts;
 mod auth;
 mod images;
+mod tokens;
 mod totp;
 
 use auth::{Admin, Me};
@@ -287,6 +288,8 @@ pub fn router(app: Arc<App>, hosts: Option<Vec<String>>) -> Router {
         .route("/api/me/sessions", get(accounts::devices))
         .route("/api/me/totp", post(totp::start).delete(totp::disable))
         .route("/api/me/totp/confirm", post(totp::confirm))
+        .route("/api/me/tokens", get(tokens::list).post(tokens::create))
+        .route("/api/me/tokens/{id}", delete(tokens::revoke))
         .route("/api/me/sessions/{id}", delete(accounts::revoke_device))
         .route(
             "/api/admin/users",

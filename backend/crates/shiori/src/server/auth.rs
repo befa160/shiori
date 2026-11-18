@@ -19,7 +19,7 @@ use axum::Json;
 use axum::extract::rejection::JsonRejection;
 use axum::extract::{ConnectInfo, FromRequestParts, Request, State};
 use axum::http::request::Parts;
-use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
+use axum::http::{HeaderMap, HeaderValue, Method, StatusCode, header};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use serde::{Deserialize, Serialize};
@@ -198,7 +198,42 @@ pub(crate) async fn require_session(
     if !path.starts_with("/api/") || PUBLIC.contains(&path.as_str()) {
         return next.run(request).await;
     }
-    let session = match presented_token(request.headers()) {
+    let presented = presented_token(request.headers());
+    // Jeton d'API (lot 7.6) : présenté en `Bearer` seulement, droits réduits.
+    if let Some((token, false)) = &presented
+        && token.starts_with(API_TOKEN_PREFIX)
+    {
+        let user = match app.db.token_user(token).await {
+            Ok(Some(user)) => user,
+            Ok(None) => return unauthenticated().into_response(),
+            Err(e) => return ApiError::from(e).into_response(),
+        };
+        if !token_allows(request.method(), &path) {
+            return ApiError::new(
+                StatusCode::FORBIDDEN,
+                "token_forbidden",
+                "un jeton d'API ne permet que la lecture et la progression",
+            )
+            .into_response();
+        }
+        if user.must_change_password {
+            return password_change_required().into_response();
+        }
+        // Jamais administrateur, même le jeton d'un administrateur : un jeton volé ne prend pas
+        // l'instance (l'extracteur `Admin` refuse). Les bibliothèques visibles restent celles
+        // du compte, lues en base.
+        let user = User {
+            role: Role::Reader,
+            ..user
+        };
+        request.extensions_mut().insert(Session {
+            id: 0,
+            user,
+            renewed: false,
+        });
+        return next.run(request).await;
+    }
+    let session = match presented {
         Some((token, from_cookie)) => match app.db.session_user(&token).await {
             Ok(Some(session)) => Some((session, token, from_cookie)),
             Ok(None) => None,
@@ -211,12 +246,7 @@ pub(crate) async fn require_session(
     };
     // Mot de passe provisoire (Q45) : rien d'autre tant qu'il n'est pas changé.
     if session.user.must_change_password && !MUST_CHANGE_OPEN.contains(&path.as_str()) {
-        return ApiError::new(
-            StatusCode::FORBIDDEN,
-            "password_change_required",
-            "mot de passe provisoire : le changer d'abord",
-        )
-        .into_response();
+        return password_change_required().into_response();
     }
     let renew = (session.renewed && from_cookie)
         .then(|| cookie(request.headers(), &token, SESSION_SECONDS));
@@ -226,6 +256,32 @@ pub(crate) async fn require_session(
         response.headers_mut().append(header::SET_COOKIE, cookie);
     }
     response
+}
+
+fn password_change_required() -> ApiError {
+    ApiError::new(
+        StatusCode::FORBIDDEN,
+        "password_change_required",
+        "mot de passe provisoire : le changer d'abord",
+    )
+}
+
+/// Préfixe des jetons d'API (`shiori_db::Db::create_token`) ; ceux des sessions : `shiori_s_`.
+const API_TOKEN_PREFIX: &str = "shiori_t_";
+
+/// Ce qu'un jeton d'API peut faire (Q43) : lire, et envoyer la progression d'un tome. Jamais le
+/// compte (`/api/me`), l'administration, ni aucune autre écriture.
+fn token_allows(method: &Method, path: &str) -> bool {
+    let private = path.starts_with("/api/me") || path.starts_with("/api/admin");
+    let progress = path
+        .strip_prefix("/api/volumes/")
+        .and_then(|rest| rest.strip_suffix("/progress"))
+        .is_some_and(|id| !id.is_empty() && !id.contains('/'));
+    match *method {
+        Method::GET | Method::HEAD => !private,
+        Method::PUT => progress,
+        _ => false,
+    }
 }
 
 fn unauthenticated() -> ApiError {

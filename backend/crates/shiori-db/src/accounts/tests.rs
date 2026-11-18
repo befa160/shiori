@@ -564,8 +564,17 @@ async fn devices_are_listed_and_closed_one_by_one_or_all_but_the_current() {
         .unwrap();
     assert!(db.session_user(&phone.token).await.unwrap().is_some());
     assert_eq!(db.session_user(&laptop.token).await.unwrap(), None);
+    // … mais garde ses jetons d'API (la liseuse ne casse pas à chaque changement) ; couper tous
+    // les appareils (perte, vol) les supprime aussi.
+    let reader = db.create_token(bob.id, "liseuse", None).await.unwrap();
+    db.set_password("bob", "autre secret", false, Some(phone.id))
+        .await
+        .unwrap();
+    assert!(db.token_user(&reader.token).await.unwrap().is_some());
     db.revoke_devices(bob.id).await.unwrap();
     assert!(db.devices(bob.id).await.unwrap().is_empty());
+    assert_eq!(db.token_user(&reader.token).await.unwrap(), None);
+    assert!(db.tokens(bob.id).await.unwrap().is_empty());
 }
 
 #[tokio::test]

@@ -28,6 +28,7 @@ import { useOffline } from '@/offline/downloads'
 import { LanguageSelect } from '@/pages/LanguageSelect'
 import { deviceName } from './device'
 import { PasswordForm } from './PasswordForm'
+import { TokensSection } from './TokensSection'
 import { TotpSection } from './TotpSection'
 
 /** Mon compte : préférences, mot de passe, double authentification, appareils connectés, déconnexion ; raccourcis vers
@@ -92,6 +93,7 @@ export function AccountPage() {
       </section>
       <TotpSection />
       <Devices />
+      <TokensSection />
     </section>
   )
 }
