@@ -44,10 +44,14 @@ impl Default for Timing {
 
 /// Ce qui mérite un scan. Lire un fichier (le scan lui-même, le lecteur) produit des accès
 /// et parfois une date d'accès : les compter relancerait un scan sans fin.
-fn relevant(kind: &EventKind) -> bool {
+fn relevant(kind: &EventKind, path: &Path) -> bool {
     match kind {
         EventKind::Access(AccessKind::Close(AccessMode::Write)) => true,
         EventKind::Access(_) | EventKind::Modify(ModifyKind::Metadata(_)) => false,
+        EventKind::Modify(ModifyKind::Name(_)) => true,
+        // Windows signale aussi le dossier dont une entrée change : l'entrée a déjà son
+        // événement, et le dossier d'une série viserait toute la racine.
+        EventKind::Modify(_) => !path.is_dir(),
         _ => true,
     }
 }
@@ -55,9 +59,12 @@ fn relevant(kind: &EventKind) -> bool {
 /// Dossier à scanner pour un changement en `path` : le dossier de série (premier niveau
 /// sous la racine) ; la racine elle-même pour ce qui est posé, renommé ou retiré directement
 /// dessous (un renommage de série n'est reconnu que si une même passe voit les deux noms).
-fn target(roots: &[(i64, PathBuf)], path: &Path) -> Option<(i64, PathBuf)> {
-    roots.iter().find_map(|(id, root)| {
-        let mut rest = path.strip_prefix(root).ok()?.components();
+/// `real` : la racine sans lien symbolique, telle que macOS la signale (`/private/var/…` pour
+/// `/var/…`) ; le dossier rendu est toujours sous la racine enregistrée.
+fn target(roots: &[(i64, PathBuf, PathBuf)], path: &Path) -> Option<(i64, PathBuf)> {
+    roots.iter().find_map(|(id, root, real)| {
+        let rest = path.strip_prefix(root).or_else(|_| path.strip_prefix(real));
+        let mut rest = rest.ok()?.components();
         let folder = match (rest.next(), rest.next()) {
             (Some(first), Some(_)) => root.join(first),
             _ => root.clone(),
@@ -84,7 +91,7 @@ async fn run(app: Arc<App>, timing: Timing) {
     .inspect_err(|e| tracing::error!("surveillance des dossiers indisponible : {e}"))
     .ok();
     // Racines surveillées, et celles en échec avec la date du prochain essai.
-    let mut watched: Vec<(i64, PathBuf)> = Vec::new();
+    let mut watched: Vec<(i64, PathBuf, PathBuf)> = Vec::new();
     let mut failed: HashMap<i64, Instant> = HashMap::new();
     let mut pending: HashMap<(i64, PathBuf), Pending> = HashMap::new();
     let mut last_full = Instant::now();
@@ -118,18 +125,21 @@ async fn run(app: Arc<App>, timing: Timing) {
                 };
                 // File d'événements débordée : tout peut avoir changé.
                 let paths: Vec<PathBuf> = match event.need_rescan() {
-                    true => watched.iter().map(|(_, root)| root.clone()).collect(),
-                    false if relevant(&event.kind) => {
-                        event.paths.into_iter().filter(|p| !ours(p)).collect()
-                    }
-                    false => Vec::new(),
+                    true => watched.iter().map(|(_, root, _)| root.clone()).collect(),
+                    false => event
+                        .paths
+                        .into_iter()
+                        .filter(|p| relevant(&event.kind, p) && !ours(p))
+                        .collect(),
                 };
                 for path in paths {
                     let Some(key) = target(&watched, &path) else { continue };
                     // Racine retirée ou démontée : le système a lâché sa surveillance.
-                    if matches!(event.kind, EventKind::Remove(_)) && key.1 == path {
-                        watched.retain(|(id, _)| *id != key.0);
-                    }
+                    tracing::debug!("{:?} {} : scan de {}", event.kind, path.display(), key.1.display());
+                    let removed = matches!(event.kind, EventKind::Remove(_));
+                    watched.retain(|(id, root, real)| {
+                        !(removed && *id == key.0 && (path == *root || path == *real))
+                    });
                     let due = Instant::now() + timing.calm;
                     pending.insert(key, Pending { due, trigger: Trigger::Watch });
                 }
@@ -139,7 +149,7 @@ async fn run(app: Arc<App>, timing: Timing) {
                 if let Some(watcher) = watcher.as_mut() {
                     for library in &libraries {
                         let root = PathBuf::from(&library.root);
-                        let known = watched.iter().any(|(id, _)| *id == library.id);
+                        let known = watched.iter().any(|(id, _, _)| *id == library.id);
                         let waiting = failed.get(&library.id).is_some_and(|t| *t > Instant::now());
                         if !library.watch || known || waiting {
                             continue;
@@ -149,7 +159,8 @@ async fn run(app: Arc<App>, timing: Timing) {
                                 if failed.remove(&library.id).is_some() {
                                     tracing::info!("{} de nouveau surveillé", root.display());
                                 }
-                                watched.push((library.id, root.clone()));
+                                let real = std::fs::canonicalize(&root).unwrap_or_else(|_| root.clone());
+                                watched.push((library.id, root.clone(), real));
                                 // Ce qui a changé pendant qu'on ne regardait pas. Pas pour une
                                 // bibliothèque qui vient d'être créée : l'interface lance son
                                 // propre scan, qui sinon recevrait `scan_already_running`.
@@ -165,7 +176,7 @@ async fn run(app: Arc<App>, timing: Timing) {
                             }
                         }
                     }
-                    watched.retain(|(id, root)| {
+                    watched.retain(|(id, root, _)| {
                         let keep = libraries.iter().any(|l| l.id == *id && l.watch);
                         if !keep {
                             let _ = watcher.unwatch(root);

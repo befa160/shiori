@@ -27,6 +27,11 @@ struct Fixture {
 }
 
 async fn fixture(watch: bool) -> Fixture {
+    // Événements reçus, montrés si un test échoue (Windows et macOS diffèrent de Linux).
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter("shiori::watch=debug")
+        .with_test_writer()
+        .try_init();
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("manga");
     std::fs::create_dir_all(root.join("Série A")).unwrap();
