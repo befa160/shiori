@@ -17,6 +17,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -124,8 +125,10 @@ function NewLibrary({ onDone }: { onDone: () => void }) {
   const [name, setName] = useState('')
   const [root, setRoot] = useState('')
   const [kind, setKind] = useState<LibraryKind>('manga')
+  // Fermée aux lecteurs par défaut (Q49) : l'administrateur choisit qui la voit.
+  const [share, setShare] = useState(false)
   const create = useMutation({
-    mutationFn: () => api.createLibrary({ name: name.trim(), root: root.trim(), kind }),
+    mutationFn: () => api.createLibrary({ name: name.trim(), root: root.trim(), kind, share }),
     onSuccess: (library) => {
       for (const queryKey of LISTS) void queryClient.invalidateQueries({ queryKey })
       toast.success(t('admin.created', { name: library.name }))
@@ -212,6 +215,17 @@ function NewLibrary({ onDone }: { onDone: () => void }) {
               ))}
             </SelectContent>
           </Select>
+        </div>
+        <div className="space-y-1">
+          <div className="flex items-center gap-3">
+            <Checkbox id={`${id}-share`} checked={share} onCheckedChange={(v) => setShare(v === true)} aria-describedby={`${id}-share-help`} />
+            <label htmlFor={`${id}-share`} className="flex min-h-11 items-center text-sm font-medium">
+              {t('admin.share')}
+            </label>
+          </div>
+          <p id={`${id}-share-help`} className="text-sm text-muted-foreground">
+            {t('admin.shareHelp')}
+          </p>
         </div>
         <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
           <Button type="button" variant="secondary" onClick={onDone}>

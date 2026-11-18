@@ -137,7 +137,7 @@ describe('page du compte', () => {
       },
     })
     renderAt('/account')
-    await userEvent.click(screen.getByRole('button', { name: 'Se déconnecter' }))
+    await userEvent.click(within(screen.getByRole('main')).getByRole('button', { name: 'Se déconnecter' }))
     const dialog = within(await screen.findByRole('alertdialog'))
     await userEvent.click(dialog.getByRole('checkbox', { name: 'Effacer aussi le tome téléchargé' }))
     await userEvent.click(dialog.getByRole('button', { name: 'Se déconnecter' }))
@@ -156,15 +156,33 @@ describe('page du compte', () => {
     })
     const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
     renderAt('/account')
-    expect(screen.getByRole('button', { name: 'Se déconnecter' })).toBeDisabled()
+    const page = within(screen.getByRole('main'))
+    expect(page.getByRole('button', { name: 'Se déconnecter' })).toBeDisabled()
     online.mockReturnValue(true)
     dispatchEvent(new Event('online'))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Se déconnecter' })).toBeEnabled())
-    await userEvent.click(screen.getByRole('button', { name: 'Se déconnecter' }))
+    await waitFor(() => expect(page.getByRole('button', { name: 'Se déconnecter' })).toBeEnabled())
+    await userEvent.click(page.getByRole('button', { name: 'Se déconnecter' }))
     const dialog = within(await screen.findByRole('alertdialog'))
     expect(dialog.queryByRole('checkbox')).toBeNull()
     await userEvent.click(dialog.getByRole('button', { name: 'Se déconnecter' }))
     expect(await screen.findByText('Déconnexion impossible')).toBeInTheDocument()
+  })
+
+  it('se déconnecte aussi depuis la barre latérale', async () => {
+    let signedIn = true
+    mockApi({
+      '/api/libraries': empty,
+      '/api/auth/state': () => json({ setup_required: false, user: signedIn ? ADMIN : null }),
+      '/api/auth/logout': () => {
+        signedIn = false
+        return new Response(null, { status: 204 })
+      },
+    })
+    renderAt('/')
+    // Hors de la page Compte, seule la barre latérale le propose.
+    await userEvent.click(await screen.findByRole('button', { name: 'Se déconnecter' }))
+    await userEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Se déconnecter' }))
+    expect(await screen.findByRole('heading', { name: 'Connexion' })).toBeInTheDocument()
   })
 
   it('active la double authentification : QR en image, premier code vérifié, codes de secours montrés une fois', async () => {

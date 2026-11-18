@@ -34,10 +34,14 @@ describe('administration des bibliothèques', () => {
     await userEvent.type(dialog.getByRole('textbox', { name: 'Dossier' }), '/srv/webtoon')
     await userEvent.click(dialog.getByRole('combobox', { name: 'Type' }))
     await userEvent.click(await screen.findByRole('option', { name: 'Webtoon' }))
+    // Fermée aux lecteurs sauf demande.
+    const share = dialog.getByRole('checkbox', { name: 'Donner accès à tous les lecteurs' })
+    expect(share).not.toBeChecked()
+    await userEvent.click(share)
     await userEvent.click(dialog.getByRole('button', { name: 'Créer et scanner' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(sent(fetch, 'POST')).toEqual([
-      ['/api/libraries', { name: 'Webtoons', root: '/srv/webtoon', kind: 'webtoon' }],
+      ['/api/libraries', { name: 'Webtoons', root: '/srv/webtoon', kind: 'webtoon', share: true }],
       ['/api/admin/scans', { library_id: 2 }],
     ])
     expect(await screen.findByText('Bibliothèque « Webtoons » créée')).toBeInTheDocument()

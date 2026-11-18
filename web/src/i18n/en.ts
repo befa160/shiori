@@ -91,6 +91,8 @@ export const en: Translations = {
     rootHelp: 'Full path of the folder on the server, for example /srv/manga or D:\\Manga.',
     kind: 'Type',
     kindHelp: 'It sets the default reading direction of its series.',
+    share: 'Give access to all readers',
+    shareHelp: 'Otherwise only administrators see it; open it account by account later in Administration → Accounts.',
     cancel: 'Cancel',
     create: 'Create and scan',
     created: 'Library “{{name}}” created',
