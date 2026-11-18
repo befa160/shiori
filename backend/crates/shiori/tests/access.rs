@@ -132,6 +132,7 @@ async fn a_reader_is_refused_every_admin_route() {
     let routes = [
         ("POST", "/api/libraries"),
         ("DELETE", "/api/libraries/1"),
+        ("PATCH", "/api/libraries/1"),
         ("PATCH", "/api/series/1"),
         ("GET", "/api/series/1/metadata/search?source=anilist&q=x"),
         ("PUT", "/api/series/1/metadata/links/anilist"),

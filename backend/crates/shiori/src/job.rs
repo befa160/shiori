@@ -19,12 +19,28 @@ pub struct ScanRequest {
     pub path: Option<PathBuf>,
     pub deep: bool,
     pub rehash: bool,
+    pub trigger: Trigger,
+}
+
+/// Qui a demandé la passe ; noté dans ses options pour l'historique.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Trigger {
+    /// Un administrateur, depuis l'interface ou l'API.
+    #[default]
+    Manual,
+    /// Un changement vu par la surveillance des dossiers.
+    Watch,
+    /// Le scan complet périodique.
+    Schedule,
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum StartError {
     #[error("un scan est déjà en cours")]
     AlreadyRunning,
+    #[error("le serveur s'arrête")]
+    ShuttingDown,
     #[error("bibliothèque inconnue")]
     UnknownLibrary,
     #[error("{0} n'est pas sous la racine de la bibliothèque")]
@@ -59,6 +75,8 @@ pub struct Scanner {
     jobs: usize,
     log_days: u32,
     running: Mutex<Option<Running>>,
+    /// Posé à l'arrêt du serveur : plus aucune passe ne démarre (surveillance comprise).
+    closed: AtomicBool,
     /// Identification des nouvelles séries à la fin d'une passe complète.
     metadata: Option<Arc<crate::meta::Metadata>>,
 }
@@ -76,6 +94,7 @@ impl Scanner {
             jobs: jobs.max(1),
             log_days,
             running: Mutex::new(None),
+            closed: AtomicBool::new(false),
             metadata: None,
         }
     }
@@ -92,6 +111,9 @@ impl Scanner {
     /// Lance une passe et renvoie son numéro ; refuse s'il en tourne déjà une.
     pub async fn start(&self, db: Arc<Db>, request: ScanRequest) -> Result<i64, StartError> {
         let mut running = self.running.lock().await;
+        if self.closed.load(Ordering::Relaxed) {
+            return Err(StartError::ShuttingDown);
+        }
         if running.as_ref().is_some_and(|r| !r.handle.is_finished()) {
             return Err(StartError::AlreadyRunning);
         }
@@ -105,7 +127,11 @@ impl Scanner {
         let shown = match &target {
             Target::Folder(p) | Target::File(p) => p.display().to_string(),
         };
-        let options = serde_json::json!({ "deep": request.deep, "rehash": request.rehash });
+        let options = serde_json::json!({
+            "deep": request.deep,
+            "rehash": request.rehash,
+            "trigger": request.trigger,
+        });
         let run = db
             .begin_run(
                 RunOrigin::Api,
@@ -174,6 +200,7 @@ impl Scanner {
 
     /// Arrêt du serveur : annule la passe en cours et attend qu'elle soit close.
     pub async fn shutdown(&self) {
+        self.closed.store(true, Ordering::Relaxed);
         self.cancel().await;
         self.wait().await;
     }

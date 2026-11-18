@@ -39,6 +39,8 @@ tokio = "1.54"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 webbrowser = { version = "1.2.7", features = ["hardened"] }
+# Surveillance des dossiers (lot 9.1) : inotify, ReadDirectoryChangesW, FSEvents.
+notify = "8.2"
 shiori-db = { path = "crates/shiori-db" }
 shiori-core = { path = "crates/shiori-core" }
 shiori-meta = { path = "crates/shiori-meta" }
@@ -70,3 +72,8 @@ shiori-testkit = { path = "crates/shiori-testkit" }
 # debug, sinon les tests passent leur temps dans l'encodeur PNG.
 [profile.dev.package."*"]
 opt-level = 3
+
+# Numéros de ligne seulement (backtraces lisibles) : les infos de debug complètes faisaient
+# grossir `target/` de dizaines de Go sur une petite machine.
+[profile.dev]
+debug = "line-tables-only"

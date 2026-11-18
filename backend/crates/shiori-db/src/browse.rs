@@ -25,6 +25,7 @@ pub struct LibrarySummary {
     pub name: String,
     pub root: String,
     pub kind: LibraryKind,
+    pub watch: bool,
     pub series_count: i64,
     pub volume_count: i64,
 }
@@ -330,7 +331,7 @@ impl Db {
     /// Bibliothèques visibles du compte.
     pub async fn library_summaries(&self, viewer: &Viewer) -> Result<Vec<LibrarySummary>, Error> {
         let rows = sqlx::query(concat!(
-            "SELECT b.id, b.name, b.root, b.kind,
+            "SELECT b.id, b.name, b.root, b.kind, b.watch,
                     (SELECT COUNT(*) FROM series s WHERE s.library_id = b.id) AS series_count,
                     (SELECT COUNT(DISTINCT l.volume_id) FROM file_locations l
                      WHERE l.library_id = b.id) AS volume_count
@@ -349,6 +350,7 @@ impl Db {
                     name: r.get("name"),
                     root: r.get("root"),
                     kind: from_db(r.get("kind"))?,
+                    watch: r.get("watch"),
                     series_count: r.get("series_count"),
                     volume_count: r.get("volume_count"),
                 })

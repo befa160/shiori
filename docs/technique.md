@@ -82,7 +82,7 @@ SQLite (`sqlx`, `sqlite-bundled`), un fichier `shiori.db`, migrations appliquée
 | `reading_progress` | page lue par compte et par tome |
 | `user_series_settings`, `user_settings` | réglages de lecture d'une série et préférences (langue, thème, sens des pages), par compte |
 | `legacy_progress`, `legacy_series_settings` | progression et réglages d'avant les comptes, repris par le premier administrateur |
-| `app_settings` | réglages de l'instance : langue, thème et sens des pages par défaut, métadonnées web |
+| `app_settings` | réglages de l'instance : langue, thème et sens des pages par défaut, métadonnées web, intervalle du scan complet périodique (`full_scan_hours`) |
 | `volume_metadata`, `volume_edits` | métadonnées des fichiers par tome, et champs édités à la main |
 | `series_metadata` | champs édités d'une série (`edited`) et vue fusionnée, en français (`merged`) et en anglais (`merged_en`) |
 | `series_sources` | fiches web liées ou candidates par série et par source |
@@ -106,7 +106,7 @@ JSON sous `/api`, erreurs `{ "code", "message" }` avec un code stable que l'inte
 | `GET, POST /api/me/tokens`, `DELETE /api/me/tokens/{id}` | jetons d'API du compte (le jeton en clair rendu une seule fois) |
 | `GET, POST /api/admin/users`, `PATCH, DELETE .../{id}`, `POST .../{id}/password`, `DELETE .../{id}/sessions`, `DELETE .../{id}/totp` | **admin** : comptes (mot de passe provisoire montré une fois), rôle, bibliothèques, désactivation, nouveau mot de passe, déconnexion de tous ses appareils et jetons, retrait de la double authentification ; le dernier administrateur actif reste |
 | `GET, PUT /api/settings` | réglages de l'instance (mise à jour partielle, **admin**) |
-| `GET, POST /api/libraries`, `DELETE /api/libraries/{id}` | bibliothèques visibles ; créer (**admin**, `share` l'ouvre aux lecteurs existants) ; supprimer (**admin**, ne touche pas aux fichiers) |
+| `GET, POST /api/libraries`, `PATCH, DELETE /api/libraries/{id}` | bibliothèques visibles ; créer (**admin**, `share` l'ouvre aux lecteurs existants) ; surveillance des dossiers (**admin**, `{ "watch": bool }`) ; supprimer (**admin**, ne touche pas aux fichiers) |
 | `GET /api/libraries/{id}/series`, `GET /api/series` | séries d'une bibliothèque, toutes les séries (filtres côté client) |
 | `GET, PATCH /api/series/{id}` | détail d'une série (tomes, progression, métadonnées), modification de ses métadonnées (**admin**) |
 | `PATCH /api/series/{id}/settings` | réglages de lecture de la série pour le compte |
@@ -146,6 +146,7 @@ Sources web (`shiori-meta`, désactivées par défaut) : AniList (GraphQL) et Ma
 
 - **axum** + **tokio**, compression brotli / gzip des réponses texte, journaux `tracing` (`-v`, `-vv`, ou `RUST_LOG`).
 - **Job de scan** (`job.rs`) : une passe à la fois (bibliothèque, dossier ou fichier), fichiers scannés en parallèle (`--jobs`), progression en mémoire, annulation entre deux fichiers ; une passe interrompue par un arrêt brutal est close au lancement suivant.
+- **Surveillance des dossiers** (`watch.rs`, crate `notify`) : un watcher récursif par bibliothèque surveillée ; un changement vise le dossier de série (premier niveau), ou la racine pour ce qui est posé directement dessous ; scan ciblé après 30 s sans événement sur ce dossier. Les cibles attendent dans la surveillance (une par dossier) et partent une à une, quand aucune passe ne tourne. Accès et métadonnées ignorés (le scan et le lecteur lisent les fichiers). Une racine qui devient surveillée est scannée aussitôt (rattrapage) ; scan complet de toutes les bibliothèques toutes les `full_scan_hours` heures. `trigger` (`manual`, `watch`, `schedule`) dans les options de la passe.
 - **Arrêt propre** sur Ctrl-C et SIGTERM (`docker stop`) : le scan en cours est annulé et sa passe close.
 - **Authentification** (`server/auth.rs`) : cookie `shiori_session` `HttpOnly`, `SameSite=Lax`, `Secure` quand le proxy annonce `X-Forwarded-Proto: https` ; essais ratés comptés par nom (5 libres) et par adresse (20 libres), puis pause qui double jusqu'à 15 minutes (429 `rate_limited`, `Retry-After`) sans calculer le hash ; l'adresse est celle de la connexion, ou le dernier `X-Forwarded-For` quand la connexion vient d'un proxy local (loopback ou réseau privé). Jeton d'installation tiré au démarrage, affiché même avec `--quiet` tant qu'aucun compte n'existe. TOTP (`totp-rs`) : SHA-1, 6 chiffres, 30 s, un pas de tolérance. Écritures refusées si `Sec-Fetch-Site: cross-site` (CSRF).
 - **Sauvegardes** : `--backup-dir` / `SHIORI_BACKUP_DIR` (défaut `backups` à côté de la base), `--backup-every-hours` (24, 0 : aucune), `--backup-keep` (7) ; `shiori backup` à la demande.

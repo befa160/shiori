@@ -331,7 +331,7 @@ async fn language_setting_round_trip() {
         call(&f.app, "GET", "/api/settings", None).await,
         (
             StatusCode::OK,
-            json!({ "language": null, "page_turn": "reading", "metadata_online": false, "metadata_sources": null, "metadata_adult": false, "theme": "system" })
+            json!({ "language": null, "page_turn": "reading", "metadata_online": false, "metadata_sources": null, "metadata_adult": false, "theme": "system", "full_scan_hours": 24 })
         )
     );
     let (status, saved) = call(
@@ -345,12 +345,12 @@ async fn language_setting_round_trip() {
         (status, saved),
         (
             StatusCode::OK,
-            json!({ "language": "en", "page_turn": "reading", "metadata_online": false, "metadata_sources": null, "metadata_adult": false, "theme": "system" })
+            json!({ "language": "en", "page_turn": "reading", "metadata_online": false, "metadata_sources": null, "metadata_adult": false, "theme": "system", "full_scan_hours": 24 })
         )
     );
     assert_eq!(
         call(&f.app, "GET", "/api/settings", None).await.1,
-        json!({ "language": "en", "page_turn": "reading", "metadata_online": false, "metadata_sources": null, "metadata_adult": false, "theme": "system" })
+        json!({ "language": "en", "page_turn": "reading", "metadata_online": false, "metadata_sources": null, "metadata_adult": false, "theme": "system", "full_scan_hours": 24 })
     );
     let (_, reset) = call(
         &f.app,
@@ -361,7 +361,7 @@ async fn language_setting_round_trip() {
     .await;
     assert_eq!(
         reset,
-        json!({ "language": null, "page_turn": "reading", "metadata_online": false, "metadata_sources": null, "metadata_adult": false, "theme": "system" })
+        json!({ "language": null, "page_turn": "reading", "metadata_online": false, "metadata_sources": null, "metadata_adult": false, "theme": "system", "full_scan_hours": 24 })
     );
     // Un champ absent reste inchangé.
     let (_, turned) = call(
@@ -373,7 +373,7 @@ async fn language_setting_round_trip() {
     .await;
     assert_eq!(
         turned,
-        json!({ "language": null, "page_turn": "ltr", "metadata_online": false, "metadata_sources": null, "metadata_adult": false, "theme": "system" })
+        json!({ "language": null, "page_turn": "ltr", "metadata_online": false, "metadata_sources": null, "metadata_adult": false, "theme": "system", "full_scan_hours": 24 })
     );
     let (_, themed) = call(
         &f.app,
@@ -386,7 +386,16 @@ async fn language_setting_round_trip() {
         (themed["theme"].as_str(), themed["page_turn"].as_str()),
         (Some("sepia"), Some("ltr"))
     );
+    let (_, hourly) = call(
+        &f.app,
+        "PUT",
+        "/api/settings",
+        Some(json!({ "full_scan_hours": 6 })),
+    )
+    .await;
+    assert_eq!(hourly["full_scan_hours"], 6);
     for body in [
+        json!({ "full_scan_hours": 5 }),
         json!({ "language": "de" }),
         json!({ "theme": null }),
         json!({ "theme": "rose" }),

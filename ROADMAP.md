@@ -1355,12 +1355,24 @@ Lire les BD et mangas en PDF **sans les marges** qui rendent la page minuscule s
   - limites connues : rotation d'un angle quelconque arrondie au quart de tour, masque 1 bit toujours peint en noir, PDFDocEncoding lu comme du Latin-1, PDF lu en entier en mémoire à l'ouverture ;
   - seuil de 50 % : l'exemple réel est à 55 %, un PDF aux marges plus larges perdrait ses pages (avertissement visible) ; à revoir si un vrai fichier le montre.
 
-## Phase 9 : maintenance de la bibliothèque (à planifier)
+## Phase 9 : maintenance de la bibliothèque, documentation
 
-Idées retenues le 2026-11-16 (audit fonctionnel externe, comparé à l'existant) : Shiori « prend soin de la bibliothèque autant que de la lecture ».
+Idées retenues le 2026-11-16 (audit fonctionnel externe, comparé à l'existant) : Shiori « prend soin de la bibliothèque autant que de la lecture ». Plan validé le 2026-11-18.
 
-- **9.1 Surveillance des dossiers** (décidée le 2026-11-16) : crate `notify` (8.2, dernière stable ; inotify, ReadDirectoryChangesW, FSEvents). Chaque bibliothèque est surveillée ; les événements sont regroupés et, après un temps calme (fichier encore en copie), un scan ciblé part sur le dossier de série touché (file d'attente : un scan à la fois). Limite connue : sur un montage réseau (SMB, NFS), les changements faits depuis une autre machine ne sont pas signalés ; un **scan complet périodique** sert de filet. À trancher au plan : surveillance activable par bibliothèque, temps calme, intervalle du scan périodique, comportement quand la racine disparaît (le garde-fou de l'audit s'applique).
-- **9.2 Santé des bibliothèques** : tableau de bord (Administration → Santé) : tomes sains, en avertissement, en erreur, par bibliothèque ; date de la dernière vérification complète (`--deep`) ; liste des tomes à réparer, filtrable par code de diagnostic, avec le lien vers les problèmes du tome ; bouton « Vérifier en profondeur ». Les données existent déjà (dernier rapport de chaque tome, journaux des passes).
+Décisions (2026-11-18) : surveillance active par défaut, 30 s de calme, scan complet toutes les 24 h (réglable : jamais, 1 h, 6 h, 24 h) ; documentation VitePress entièrement bilingue (guide, installation, technique, API), publiée sur GitHub Pages ; fonctions d'abord, documentation ensuite.
+
+- **9.1 Surveillance des dossiers** (backend) : crate `notify` 8.2 (inotify, ReadDirectoryChangesW, FSEvents ; la 9 n'est qu'en release candidate).
+  - ✅ Chaque bibliothèque est surveillée (`libraries.watch`, migration 0019, `PATCH /api/libraries/{id}` `{ "watch": bool }`). Un changement vise le dossier de série (premier niveau sous la racine) ; ce qui est posé, renommé ou retiré directement sous la racine, ou un dossier de série disparu, vise la racine (un renommage de série n'est reconnu que si une même passe voit les deux noms).
+  - ✅ Temps calme de 30 s par dossier (un fichier en copie relance l'attente), puis scan ciblé. Pas de file dans le `Scanner` : les cibles attendent dans la surveillance, une par dossier, et partent une à une quand aucune passe ne tourne ; une passe de la racine couvre les dossiers en attente de sa bibliothèque.
+  - ✅ Lire un fichier (scan, lecteur) n'est pas un changement : accès et métadonnées ignorés, sauf la fermeture d'un fichier écrit. File d'événements débordée : toutes les racines surveillées sont rescannées.
+  - ✅ Rattrapage : une racine qui (re)devient surveillée (démarrage, surveillance rétablie, racine revenue) est scannée tout de suite, pour ce qui a changé pendant qu'on ne regardait pas. Pas une bibliothèque créée serveur lancé : l'interface lance son propre scan, qui recevrait sinon `scan_already_running`.
+  - ✅ Scan complet périodique de toutes les bibliothèques (`full_scan_hours` dans `/api/settings` : 0, 1, 6, 24 ; 24 par défaut), filet des montages réseau (SMB, NFS : changements faits ailleurs non signalés) et de Docker Desktop.
+  - ✅ Racine disparue : la surveillance est lâchée, un scan de la racine part et le garde-fou de l'audit refuse de retirer quoi que ce soit (passe `failed`) ; nouvel essai de surveillance toutes les 5 min. Racine impossible à surveiller (trop de dossiers : `fs.inotify.max_user_watches`) : avertissement, même nouvel essai.
+  - ✅ Options de la passe : `trigger` (`manual`, `watch`, `schedule`) pour l'historique. Arrêt du serveur : plus aucune passe ne démarre (`shutting_down`).
+- **9.2 Surveillance dans l'interface** : interrupteur par bibliothèque (Administration → Bibliothèques), intervalle du scan complet, origine des passes dans l'historique.
+- **9.3 Santé des bibliothèques** : tableau de bord (Administration → Santé) : tomes sains, en avertissement, en erreur, par bibliothèque ; date de la dernière vérification complète (`--deep`) ; liste des tomes à réparer, filtrable par code de diagnostic, avec le lien vers les problèmes du tome ; bouton « Vérifier en profondeur ». Les données existent déjà (dernier rapport de chaque tome, journaux des passes).
+- **9.4 Documentation VitePress** (sur le modèle de Nid) : site bilingue (`/fr/`, `/en/`), recherche locale, accueil (héros + fonctionnalités) ; Guide, Installation, Technique (vue d'ensemble, backend, frontend, base, scan et archives, images, sécurité), Référence API (une page par ressource : méthode, chemin, droits, paramètres, exemples, codes d'erreur) ; publication GitHub Pages (`docs.yml`). README principal refait (ce que fait Shiori, pourquoi, démarrage rapide), description et topics du dépôt.
+- **9.5 Bilan** : maturité pour une V1, fonctionnalités restantes.
 
 Plus tard, sans ordre : collections et listes de lecture, relations entre séries (suites, éditions), OPDS (avec les jetons d'API), statistiques de lecture, Comic Vine et MangaUpdates. EPUB : non. PDF : phase 8.
 

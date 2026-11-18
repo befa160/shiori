@@ -251,7 +251,26 @@ async fn delete_keeps_files_and_volumes() {
         .unwrap()
         .to_owned();
 
-    let (status, body) = call(&f.app, "DELETE", &format!("/api/libraries/{id}"), None).await;
+    // Surveillance : active par défaut, arrêtée sur demande.
+    let uri = format!("/api/libraries/{id}");
+    let (_, libraries) = get(&f.app, "/api/libraries").await;
+    assert_eq!(libraries[0]["watch"], true);
+    let (status, _) = call(&f.app, "PATCH", &uri, Some(r#"{"watch":false}"#)).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (_, libraries) = get(&f.app, "/api/libraries").await;
+    assert_eq!(libraries[0]["watch"], false);
+    let (status, _) = call(&f.app, "PATCH", &uri, Some(r#"{"watch":"oui"}"#)).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let (status, _) = call(
+        &f.app,
+        "PATCH",
+        "/api/libraries/999",
+        Some(r#"{"watch":true}"#),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    let (status, body) = call(&f.app, "DELETE", &uri, None).await;
     assert_eq!((status, body), (StatusCode::NO_CONTENT, Value::Null));
     let (status, _) = call(&f.app, "DELETE", &format!("/api/libraries/{id}"), None).await;
     assert_eq!(status, StatusCode::NOT_FOUND);

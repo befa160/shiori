@@ -117,7 +117,10 @@ async fn scan_then_read_history_detail_and_logs() {
         detail["counts"],
         json!({ "ok": 0, "warning": 1, "error": 1, "unchanged": 0, "removed": 0 })
     );
-    assert_eq!(detail["options"], json!({ "deep": false, "rehash": false }));
+    assert_eq!(
+        detail["options"],
+        json!({ "deep": false, "rehash": false, "trigger": "manual" })
+    );
     assert!(detail["duration_ms"].as_i64().unwrap() >= 0);
 
     // La série est consultable aussitôt.

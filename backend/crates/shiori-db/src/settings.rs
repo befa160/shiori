@@ -42,6 +42,8 @@ pub struct Settings {
     /// Fiches pour adultes permises dans les recherches (exclues par défaut).
     pub metadata_adult: bool,
     pub theme: Theme,
+    /// Scan complet de toutes les bibliothèques toutes les N heures (0, 1, 6 ou 24) ; 0 = jamais.
+    pub full_scan_hours: u32,
 }
 
 impl Settings {
@@ -73,7 +75,8 @@ impl Settings {
 impl Db {
     pub async fn settings(&self) -> Result<Settings, Error> {
         let row = sqlx::query(
-            "SELECT language, page_turn, metadata_online, metadata_sources, metadata_adult, theme
+            "SELECT language, page_turn, metadata_online, metadata_sources, metadata_adult, theme,
+                    full_scan_hours
              FROM app_settings WHERE id = 1",
         )
         .fetch_one(&self.pool)
@@ -87,6 +90,7 @@ impl Db {
             metadata_online: row.get("metadata_online"),
             metadata_adult: row.get("metadata_adult"),
             theme: from_db(row.get("theme"))?,
+            full_scan_hours: row.get("full_scan_hours"),
             metadata_sources: row
                 .get::<Option<&str>, _>("metadata_sources")
                 .map(serde_json::from_str)
@@ -121,6 +125,16 @@ impl Db {
             .execute(&self.pool)
             .await?;
         self.refresh_metadata(None).await?;
+        self.settings().await
+    }
+
+    /// Intervalle du scan complet périodique ; la contrainte de la table refuse toute autre
+    /// valeur que 0, 1, 6 ou 24.
+    pub async fn set_full_scan_hours(&self, hours: u32) -> Result<Settings, Error> {
+        sqlx::query("UPDATE app_settings SET full_scan_hours = ? WHERE id = 1")
+            .bind(hours)
+            .execute(&self.pool)
+            .await?;
         self.settings().await
     }
 

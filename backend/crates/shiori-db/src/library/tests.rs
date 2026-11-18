@@ -602,3 +602,12 @@ async fn a_known_copy_keeps_its_identity_when_the_original_goes() {
         )]
     );
 }
+
+#[tokio::test]
+async fn watch_is_on_by_default_and_can_be_stopped() {
+    let (_dir, db, library) = setup().await;
+    assert!(library.watch);
+    assert!(db.set_library_watch(library.id, false).await.unwrap());
+    assert!(!db.libraries().await.unwrap()[0].watch);
+    assert!(!db.set_library_watch(library.id + 1, true).await.unwrap());
+}

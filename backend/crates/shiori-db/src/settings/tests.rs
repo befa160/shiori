@@ -13,6 +13,7 @@ async fn language_is_unset_then_chosen_then_reset() {
             metadata_sources: None,
             metadata_adult: false,
             theme: Theme::System,
+            full_scan_hours: 24,
         }
     );
     let en = db.set_language(Some(Language::En)).await.unwrap();
@@ -49,4 +50,13 @@ async fn theme_is_saved_without_touching_other_settings() {
         assert_eq!((saved.theme, saved.page_turn), (theme, PageTurn::Rtl));
         assert_eq!(db.settings().await.unwrap().theme, theme);
     }
+}
+
+#[tokio::test]
+async fn full_scan_interval_takes_only_the_offered_values() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = Db::open(&dir.path().join("t.db")).await.unwrap();
+    assert_eq!(db.set_full_scan_hours(0).await.unwrap().full_scan_hours, 0);
+    assert!(db.set_full_scan_hours(5).await.is_err());
+    assert_eq!(db.settings().await.unwrap().full_scan_hours, 0);
 }

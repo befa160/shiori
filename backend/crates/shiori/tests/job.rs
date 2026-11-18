@@ -40,6 +40,7 @@ impl Fixture {
             library_id: self.library.id,
             path,
             deep: false,
+            trigger: Default::default(),
             rehash: false,
         }
     }
@@ -232,6 +233,12 @@ async fn shutdown_closes_the_running_pass() {
     scanner.shutdown().await;
     assert_eq!(f.run(run).await.get::<String, _>("status"), "cancelled");
     scanner.shutdown().await; // rien à faire, sans erreur
+    // Plus rien ne démarre après l'arrêt (la surveillance des dossiers essaierait).
+    let refused = scanner.start(f.db.clone(), f.request(None)).await;
+    assert!(
+        matches!(refused, Err(StartError::ShuttingDown)),
+        "{refused:?}"
+    );
 }
 
 /// Erreur de base en cours de passe : la passe finit `failed` avec son erreur.
