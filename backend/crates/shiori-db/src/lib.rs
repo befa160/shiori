@@ -38,6 +38,7 @@ mod metadata;
 mod reading;
 mod runs;
 mod settings;
+mod totp;
 mod web;
 
 pub use accounts::{
@@ -56,6 +57,7 @@ pub use reading::{
 };
 pub use runs::{LogLine, RunCounts, RunFilter, RunOrigin, RunStatus, RunSummary};
 pub use settings::{Language, Settings, Theme};
+pub use totp::{Enrollment, TotpError};
 pub use web::{Cover, MatchedBy, Outcome, SourceIssue, SourceState, ToIdentify};
 
 pub struct Db {

@@ -357,6 +357,19 @@ export interface Preferences {
 export interface Me {
   user: User
   preferences: Preferences
+  /** Double authentification active, et codes de secours encore utilisables. */
+  totp: boolean
+  recovery_codes_left: number
+}
+
+/** Réponse de la connexion : la session, ou le défi du second facteur (5 minutes). */
+export type LoginResult = { user: User } | { totp_required: true; challenge: string }
+
+/** Activation de la double authentification : secret (saisie à la main), adresse et QR en SVG. */
+export interface Enrollment {
+  secret: string
+  uri: string
+  qr_svg: string
 }
 
 /** Appareil connecté (une session). */
@@ -372,6 +385,7 @@ export interface Device {
 /** Compte vu par l'administrateur ; `libraries` : bibliothèques ouvertes (vide pour un administrateur, qui les voit toutes). */
 export interface Account extends User {
   libraries: number[]
+  totp: boolean
 }
 
 export interface AccountPatch {

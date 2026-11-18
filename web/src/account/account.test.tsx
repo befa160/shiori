@@ -166,4 +166,113 @@ describe('page du compte', () => {
     await userEvent.click(dialog.getByRole('button', { name: 'Se déconnecter' }))
     expect(await screen.findByText('Déconnexion impossible')).toBeInTheDocument()
   })
+
+  it('active la double authentification : QR en image, premier code vérifié, codes de secours montrés une fois', async () => {
+    let enabled = false
+    let tries = 0
+    const fetch = mockApi({
+      '/api/libraries': empty,
+      '/api/me/sessions': () => json(devices),
+      '/api/me': () => json({ ...me(ADMIN), totp: enabled, recovery_codes_left: enabled ? 10 : 0 }),
+      '/api/me/totp': () => json({ secret: 'ABCDEFGHIJKLMNOP', uri: 'otpauth://totp/Shiori:admin?secret=ABCDEFGHIJKLMNOP', qr_svg: '<svg xmlns="http://www.w3.org/2000/svg"/>' }),
+      '/api/me/totp/confirm': () => {
+        if (tries++ === 0) return json({ code: 'invalid_code', message: 'x' }, 400)
+        enabled = true
+        return json({ recovery_codes: ['aaaa-bbbb-cccc', 'dddd-eeee-ffff'] })
+      },
+    })
+    const writeText = vi.fn(async () => {})
+    vi.stubGlobal('navigator', { ...navigator, onLine: true, languages: ['fr'], clipboard: { writeText } })
+    renderAt('/account')
+    const region = within(await screen.findByRole('region', { name: 'Double authentification' }))
+    expect(region.getByText(/Conseillé si Shiori est ouvert sur Internet/)).toBeInTheDocument()
+    await userEvent.click(region.getByRole('button', { name: 'Activer' }))
+    const dialog = within(await screen.findByRole('dialog'))
+    await userEvent.type(dialog.getByLabelText('Mot de passe actuel'), 'mot de passe')
+    await userEvent.click(dialog.getByRole('button', { name: 'Continuer' }))
+    expect(await dialog.findByRole('img', { name: /QR code/ })).toBeInTheDocument()
+    expect(dialog.getByRole('img', { name: /QR code/ }).getAttribute('src')).toMatch(/^data:image\/svg\+xml;charset=utf-8,%3Csvg/)
+    expect(dialog.getByText('ABCD EFGH IJKL MNOP')).toBeInTheDocument()
+    expect(dialog.getByRole('link', { name: /Ouvrir dans l'application/ })).toHaveAttribute('href', 'otpauth://totp/Shiori:admin?secret=ABCDEFGHIJKLMNOP')
+    await userEvent.type(dialog.getByLabelText('Code'), '000000')
+    await userEvent.click(dialog.getByRole('button', { name: 'Activer' }))
+    expect(await dialog.findByText('Code incorrect')).toBeInTheDocument()
+    await userEvent.click(dialog.getByRole('button', { name: 'Activer' }))
+    const codes = within(await screen.findByRole('list', { name: 'Codes de secours' }))
+    // Déjà active derrière la fenêtre : fermer par la croix laisserait la page juste.
+    expect(await region.findByText('Active. Il vous reste 10 codes de secours.')).toBeInTheDocument()
+    expect(codes.getAllByRole('listitem').map((li) => li.textContent)).toEqual(['aaaa-bbbb-cccc', 'dddd-eeee-ffff'])
+    await userEvent.click(screen.getByRole('button', { name: 'Copier les codes' }))
+    expect(writeText).toHaveBeenCalledWith('aaaa-bbbb-cccc\ndddd-eeee-ffff')
+    await userEvent.click(screen.getByRole('button', { name: "C'est noté" }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(body(fetch.mock.calls.find(([url]) => url === '/api/me/totp')?.[1])).toEqual({ password: 'mot de passe' })
+    expect(body(fetch.mock.calls.filter(([url]) => url === '/api/me/totp/confirm').at(-1)?.[1])).toEqual({ code: '000000' })
+  })
+
+  it('mot de passe faux à l’activation : le dit sous le champ ; copie des codes refusée : le dit', async () => {
+    let tries = 0
+    mockApi({
+      '/api/libraries': empty,
+      '/api/me/sessions': () => json(devices),
+      '/api/me/totp': () =>
+        tries++ === 0 ? json({ code: 'wrong_password', message: 'x' }, 403) : json({ secret: 'ABCD', uri: 'otpauth://x', qr_svg: '<svg/>' }),
+      '/api/me/totp/confirm': () => json({ recovery_codes: ['aaaa-bbbb-cccc'] }),
+    })
+    vi.stubGlobal('navigator', { ...navigator, onLine: true, languages: ['fr'], clipboard: { writeText: async () => Promise.reject(new Error('non')) } })
+    renderAt('/account')
+    const region = within(await screen.findByRole('region', { name: 'Double authentification' }))
+    await userEvent.click(region.getByRole('button', { name: 'Activer' }))
+    let dialog = within(await screen.findByRole('dialog'))
+    await userEvent.click(dialog.getByRole('button', { name: 'Continuer' }))
+    expect(await dialog.findByText('Mot de passe actuel incorrect')).toBeInTheDocument()
+    expect(dialog.getByLabelText('Mot de passe actuel')).toHaveAttribute('aria-invalid', 'true')
+    await userEvent.click(dialog.getByRole('button', { name: 'Annuler' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await userEvent.click(region.getByRole('button', { name: 'Activer' }))
+    dialog = within(await screen.findByRole('dialog'))
+    await userEvent.click(dialog.getByRole('button', { name: 'Continuer' }))
+    await userEvent.click(await dialog.findByRole('button', { name: 'Activer' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Copier les codes' }))
+    expect(await screen.findByText('Copie impossible : sélectionnez le mot de passe')).toBeInTheDocument()
+  })
+
+  it('désactive la double authentification avec le mot de passe et un code ; erreurs sous le champ', async () => {
+    let enabled = true
+    let tries = 0
+    const fetch = mockApi({
+      '/api/libraries': empty,
+      '/api/me/sessions': () => json(devices),
+      '/api/me': () => json({ ...me(ADMIN), totp: enabled, recovery_codes_left: 1 }),
+      '/api/me/totp': () => {
+        tries++
+        if (tries === 1) return json({ code: 'wrong_password', message: 'x' }, 403)
+        if (tries === 2) return json({ code: 'invalid_code', message: 'x' }, 403)
+        if (tries === 3) return json({ code: 'internal', message: 'x' }, 500)
+        enabled = false
+        return new Response(null, { status: 204 })
+      },
+    })
+    renderAt('/account')
+    const region = within(await screen.findByRole('region', { name: 'Double authentification' }))
+    expect(await region.findByText('Active. Il vous reste 1 code de secours.')).toBeInTheDocument()
+    await userEvent.click(region.getByRole('button', { name: 'Désactiver' }))
+    const dialog = within(await screen.findByRole('dialog'))
+    await userEvent.type(dialog.getByLabelText('Mot de passe actuel'), 'mot de passe')
+    await userEvent.type(dialog.getByLabelText('Code'), 'aaaa-bbbb-cccc')
+    const submit = dialog.getByRole('button', { name: 'Désactiver' })
+    await userEvent.click(submit)
+    expect(await dialog.findByText('Mot de passe actuel incorrect')).toBeInTheDocument()
+    expect(dialog.getByLabelText('Mot de passe actuel')).toHaveAttribute('aria-invalid', 'true')
+    await userEvent.click(submit)
+    expect(await dialog.findByText('Code incorrect')).toBeInTheDocument()
+    expect(dialog.getByLabelText('Code')).toHaveAttribute('aria-invalid', 'true')
+    await userEvent.click(submit)
+    expect(await dialog.findByRole('alert')).toHaveTextContent('Erreur interne du serveur')
+    await userEvent.click(submit)
+    expect(await screen.findByText('Double authentification désactivée')).toBeInTheDocument()
+    expect(await region.findByRole('button', { name: 'Activer' })).toBeInTheDocument()
+    const del = fetch.mock.calls.filter(([url, init]) => url === '/api/me/totp' && init?.method === 'DELETE').at(-1)
+    expect(body(del?.[1])).toEqual({ password: 'mot de passe', code: 'aaaa-bbbb-cccc' })
+  })
 })

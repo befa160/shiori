@@ -4,6 +4,8 @@ import type {
   AuthState,
   ContinueItem,
   Device,
+  Enrollment,
+  LoginResult,
   Me,
   Preferences,
   Role,
@@ -114,7 +116,15 @@ export const api = {
   setup: (body: { token: string; username: string; password: string }) =>
     must<{ user: User }>('/auth/setup', { method: 'POST', body: JSON.stringify(body) }),
   login: (body: { username: string; password: string }) =>
-    must<{ user: User }>('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
+    must<LoginResult>('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
+  secondFactor: (challenge: string, code: string) =>
+    must<{ user: User }>('/auth/totp', { method: 'POST', body: JSON.stringify({ challenge, code }) }),
+  startTotp: (password: string) => must<Enrollment>('/me/totp', { method: 'POST', body: JSON.stringify({ password }) }),
+  confirmTotp: (code: string) =>
+    must<{ recovery_codes: string[] }>('/me/totp/confirm', { method: 'POST', body: JSON.stringify({ code }) }),
+  disableTotp: (password: string, code: string) =>
+    request<null>('/me/totp', { method: 'DELETE', body: JSON.stringify({ password, code }) }),
+  resetTotp: (id: number) => request<null>(`/admin/users/${id}/totp`, { method: 'DELETE' }),
   logout: () => request<null>('/auth/logout', { method: 'POST' }),
   me: (init?: RequestInit) => must<Me>('/me', init),
   saveMe: (patch: Partial<Preferences>) => must<Me>('/me', { method: 'PUT', body: JSON.stringify(patch) }),

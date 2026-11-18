@@ -79,15 +79,25 @@ function LoginPage() {
   const queryClient = useQueryClient()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  // Mot de passe juste, compte à double authentification : le code est attendu.
+  const [challenge, setChallenge] = useState<string | null>(null)
   const login = useMutation({
     mutationFn: () => api.login({ username: username.trim(), password }),
-    onSuccess: ({ user }) => signedIn(queryClient, user),
+    onSuccess: (result) => ('user' in result ? signedIn(queryClient, result.user) : setChallenge(result.challenge)),
   })
   const submit = (e: FormEvent) => {
     e.preventDefault()
     login.mutate()
   }
   const error = login.error ? accountError(login.error, t) : null
+  if (challenge) {
+    const back = () => {
+      setChallenge(null)
+      setPassword('')
+      login.reset()
+    }
+    return <SecondFactor challenge={challenge} onBack={back} />
+  }
   return (
     <AuthScreen title={t('auth.loginTitle')}>
       <form onSubmit={submit} className="space-y-4" noValidate>
@@ -117,6 +127,56 @@ function LoginPage() {
         <Submit pending={login.isPending}>{t('auth.login')}</Submit>
       </form>
       <p className="text-sm text-muted-foreground">{t('auth.forgot')}</p>
+    </AuthScreen>
+  )
+}
+
+/** Second facteur de la connexion : code de l'application d'authentification ou code de secours. */
+function SecondFactor({ challenge, onBack }: { challenge: string; onBack: () => void }) {
+  const { t } = useTranslation()
+  const id = useId()
+  const queryClient = useQueryClient()
+  const [code, setCode] = useState('')
+  const check = useMutation({
+    mutationFn: () => api.secondFactor(challenge, code),
+    onSuccess: ({ user }) => signedIn(queryClient, user),
+  })
+  const expired = check.error instanceof ApiError && check.error.code === 'challenge_expired'
+  const error = check.error ? accountError(check.error, t) : null
+  const submit = (e: FormEvent) => {
+    e.preventDefault()
+    check.mutate()
+  }
+  return (
+    <AuthScreen title={t('auth.totpTitle')} intro={t('auth.totpIntro')}>
+      {expired ? (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      ) : (
+        <form onSubmit={submit} className="space-y-4" noValidate>
+          <Field id={`${id}-code`} label={t('auth.code')} help={t('auth.codeHelp')} error={error}>
+            {/* Pas de clavier numérique : un code de secours a des lettres. */}
+            <Input
+              id={`${id}-code`}
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              autoComplete="one-time-code"
+              autoCapitalize="none"
+              spellCheck={false}
+              autoFocus
+              required
+              className="font-mono tracking-widest"
+              aria-invalid={Boolean(error)}
+              aria-describedby={describedBy(`${id}-code`, true, Boolean(error))}
+            />
+          </Field>
+          <Submit pending={check.isPending}>{t('auth.verify')}</Submit>
+        </form>
+      )}
+      <Button variant="ghost" className="w-full" onClick={onBack}>
+        {t('auth.back')}
+      </Button>
     </AuthScreen>
   )
 }

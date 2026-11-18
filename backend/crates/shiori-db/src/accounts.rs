@@ -135,7 +135,7 @@ async fn active_admins(tx: &mut sqlx::SqliteConnection) -> Result<i64, Error> {
     )
 }
 
-fn random<const N: usize>() -> [u8; N] {
+pub(crate) fn random<const N: usize>() -> [u8; N] {
     let mut bytes = [0; N];
     getrandom::fill(&mut bytes).expect("hasard du système indisponible");
     bytes
@@ -145,15 +145,20 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-fn token_hash(token: &str) -> String {
+pub(crate) fn token_hash(token: &str) -> String {
     blake3::hash(token.as_bytes()).to_hex().to_string()
 }
 
 /// Mot de passe provisoire : 16 caractères parmi 32 (80 bits), sans `l`, `o`, `0` ni `1`
 /// qui se confondent à la lecture. 32 symboles : un octet modulo 32 reste uniforme.
 pub fn temporary_password() -> String {
+    readable::<16>()
+}
+
+/// `N` caractères tirés au hasard parmi 32 lisibles (5 bits chacun).
+pub(crate) fn readable<const N: usize>() -> String {
     const ALPHABET: &[u8; 32] = b"abcdefghijkmnpqrstuvwxyz23456789";
-    random::<16>()
+    random::<N>()
         .iter()
         .map(|b| ALPHABET[usize::from(b % 32)] as char)
         .collect()

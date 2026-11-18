@@ -21,16 +21,26 @@ pub(crate) struct MeView {
     user: User,
     /// `null` = défaut de l'instance.
     preferences: Preferences,
+    /// Double authentification active, et codes de secours restants.
+    totp: bool,
+    recovery_codes_left: i64,
+}
+
+async fn me_view(app: &App, user: User, preferences: Preferences) -> Result<MeView, ApiError> {
+    Ok(MeView {
+        totp: app.db.totp_enabled(user.id).await?,
+        recovery_codes_left: app.db.recovery_codes_left(user.id).await?,
+        preferences,
+        user,
+    })
 }
 
 pub(crate) async fn me(
     State(app): State<Arc<App>>,
     Extension(session): Extension<Session>,
 ) -> ApiResult<MeView> {
-    Ok(Json(MeView {
-        preferences: app.db.preferences(session.user.id).await?,
-        user: session.user,
-    }))
+    let preferences = app.db.preferences(session.user.id).await?;
+    Ok(Json(me_view(&app, session.user, preferences).await?))
 }
 
 /// Champ absent = inchangé, `null` = revenir au défaut de l'instance.
@@ -57,10 +67,8 @@ pub(crate) async fn save_me(
         theme: patch.theme.unwrap_or(current.theme),
         page_turn: patch.page_turn.unwrap_or(current.page_turn),
     };
-    Ok(Json(MeView {
-        preferences: app.db.set_preferences(session.user.id, preferences).await?,
-        user: session.user,
-    }))
+    let preferences = app.db.set_preferences(session.user.id, preferences).await?;
+    Ok(Json(me_view(&app, session.user, preferences).await?))
 }
 
 #[derive(Serialize)]
@@ -104,11 +112,14 @@ pub(crate) struct UserView {
     user: User,
     /// Bibliothèques ouvertes (un administrateur les voit toutes, sans ligne ici).
     libraries: Vec<i64>,
+    /// Double authentification active.
+    totp: bool,
 }
 
 async fn view(app: &App, user: User) -> Result<UserView, ApiError> {
     Ok(UserView {
         libraries: app.db.user_libraries(user.id).await?,
+        totp: app.db.totp_enabled(user.id).await?,
         user,
     })
 }

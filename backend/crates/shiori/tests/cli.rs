@@ -423,4 +423,34 @@ async fn user_add_and_password_work_on_the_local_database() {
     let alice = db.check_password("alice", &second).await.unwrap().unwrap();
     assert_eq!(alice.role, shiori_db::Role::Admin);
     assert!(alice.must_change_password);
+
+    // Double authentification retirée en ligne de commande (téléphone perdu).
+    let none = shiori(&["user", "totp-reset", "ALICE"], data.path());
+    assert_eq!(none.status.code(), Some(0), "{}", stderr(&none));
+    assert!(stdout(&none).contains("n'avait pas de double authentification"));
+    let secret = db.start_totp(alice.id, "Alice").await.unwrap().secret;
+    db.confirm_totp(alice.id, &current_code(&secret))
+        .await
+        .unwrap();
+    let reset = shiori(&["user", "totp-reset", "alice"], data.path());
+    assert!(
+        stdout(&reset).contains("Double authentification de « Alice » retirée."),
+        "{}",
+        stdout(&reset)
+    );
+    assert!(!db.totp_enabled(alice.id).await.unwrap());
+    let unknown = shiori(&["user", "totp-reset", "personne"], data.path());
+    assert_eq!(unknown.status.code(), Some(2));
+    assert!(stderr(&unknown).contains("aucun compte « personne »"));
+}
+
+/// Code TOTP juste maintenant pour ce secret (base32).
+fn current_code(secret: &str) -> String {
+    let secret = totp_rs::Secret::try_from_base32(secret).unwrap();
+    totp_rs::Builder::new()
+        .with_secret(secret)
+        .build()
+        .unwrap()
+        .generate_current()
+        .to_string()
 }

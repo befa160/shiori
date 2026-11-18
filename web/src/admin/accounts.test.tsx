@@ -9,10 +9,10 @@ const libraries: Library[] = [
   { id: 2, name: 'Webtoons', root: '/w', kind: 'webtoon', series_count: 0, volume_count: 0 },
 ]
 const accounts: Account[] = [
-  { ...ADMIN, libraries: [] },
-  { ...READER, libraries: [1] },
-  { ...READER, id: 3, username: 'tous', libraries: [1, 2], must_change_password: true },
-  { ...READER, id: 4, username: 'parti', libraries: [], disabled: true },
+  { ...ADMIN, libraries: [], totp: false },
+  { ...READER, libraries: [1], totp: true },
+  { ...READER, id: 3, username: 'tous', libraries: [1, 2], must_change_password: true, totp: false },
+  { ...READER, id: 4, username: 'parti', libraries: [], disabled: true, totp: false },
 ]
 const body = (init?: RequestInit) => JSON.parse(String(init?.body))
 const base = { '/api/libraries': () => json(libraries), '/api/admin/scans/current': () => new Response(null, { status: 204 }) }
@@ -27,7 +27,7 @@ describe('administration des comptes', () => {
     expect(router.state.location.pathname).toBe('/admin/users')
     const main = within(screen.getByRole('main'))
     expect(await main.findByText('Administrateur · toutes les bibliothèques')).toBeInTheDocument()
-    expect(main.getByText('Lecteur · 1 bibliothèque')).toBeInTheDocument()
+    expect(main.getByText('Lecteur · 1 bibliothèque · double authentification')).toBeInTheDocument()
     expect(main.getByText('Lecteur · toutes les bibliothèques · mot de passe provisoire')).toBeInTheDocument()
     expect(main.getByText('Lecteur · 0 bibliothèque · désactivé')).toBeInTheDocument()
   })
@@ -113,6 +113,7 @@ describe('administration des comptes', () => {
       '/api/admin/users': () => json(accounts),
       '/api/admin/users/2/password': () => (fail ? json({ code: 'internal', message: 'x' }, 500) : json({ password: 'NOUVEAU' })),
       '/api/admin/users/2/sessions': () => (fail ? json({ code: 'internal', message: 'x' }, 500) : new Response(null, { status: 204 })),
+      '/api/admin/users/2/totp': () => (fail ? json({ code: 'internal', message: 'x' }, 500) : new Response(null, { status: 204 })),
       '/api/admin/users/2': () => (fail ? json({ code: 'internal', message: 'x' }, 500) : new Response(null, { status: 204 })),
     })
     renderAt('/admin/users')
@@ -121,6 +122,9 @@ describe('administration des comptes', () => {
       return within(await screen.findByRole('dialog'))
     }
     let dialog = await open()
+    await userEvent.click(dialog.getByRole('button', { name: 'Retirer la double authentification' }))
+    expect(await screen.findByText('Double authentification de lecteur retirée')).toBeInTheDocument()
+    expect(dialog.queryByRole('button', { name: 'Retirer la double authentification' })).toBeNull()
     await userEvent.click(dialog.getByRole('button', { name: 'Déconnecter tous ses appareils' }))
     expect(await screen.findByText('Appareils de lecteur déconnectés')).toBeInTheDocument()
     await userEvent.click(dialog.getByRole('button', { name: 'Nouveau mot de passe provisoire' }))
@@ -134,6 +138,8 @@ describe('administration des comptes', () => {
 
     fail = true
     dialog = await open()
+    await userEvent.click(dialog.getByRole('button', { name: 'Retirer la double authentification' }))
+    expect(await screen.findByText('Double authentification non retirée')).toBeInTheDocument()
     await userEvent.click(dialog.getByRole('button', { name: 'Déconnecter tous ses appareils' }))
     expect(await screen.findByText('Appareils non déconnectés')).toBeInTheDocument()
     await userEvent.click(dialog.getByRole('button', { name: 'Nouveau mot de passe provisoire' }))

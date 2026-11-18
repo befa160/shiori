@@ -27,6 +27,8 @@ enum UserCommand {
     },
     /// Donne un nouveau mot de passe provisoire et ferme toutes les sessions du compte.
     Password { name: String },
+    /// Retire la double authentification d'un compte (téléphone perdu, plus de code de secours).
+    TotpReset { name: String },
 }
 
 pub async fn run(args: UserArgs) -> Result<()> {
@@ -43,7 +45,21 @@ pub async fn run(args: UserArgs) -> Result<()> {
             db.set_password(&name, &password, true, None).await?;
             println!("Mot de passe de « {name} » remplacé, sessions fermées.");
         }
-    }
+        UserCommand::TotpReset { name } => {
+            let user = db
+                .user_by_name(&name)
+                .await?
+                .ok_or_else(|| shiori_db::AccountError::UnknownUser(name.clone()))?;
+            match db.disable_totp(user.id).await? {
+                true => println!("Double authentification de « {} » retirée.", user.username),
+                false => println!(
+                    "« {} » n'avait pas de double authentification.",
+                    user.username
+                ),
+            }
+            return Ok(());
+        }
+    };
     println!("Mot de passe provisoire : {password}");
     println!("À changer à la première connexion.");
     Ok(())

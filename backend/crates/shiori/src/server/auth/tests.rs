@@ -106,3 +106,23 @@ fn secrets_are_compared_whole() {
     assert!(!same_secret("abc", "abd"));
     assert!(!same_secret("abc", "abcd"));
 }
+
+#[test]
+fn expired_challenges_are_dropped_when_a_new_one_comes() {
+    let guard = Guard::new();
+    let old = Instant::now().checked_sub(CHALLENGE + Duration::from_secs(1));
+    let Some(old) = old else { return }; // horloge trop jeune (démarrage de la machine) : rien à tester
+    let challenge = |at| Challenge {
+        user_id: 1,
+        client: Client::Browser,
+        keys: [("nom:a".into(), 5), ("adresse:b".into(), 20)],
+        at,
+    };
+    let stale = guard.challenge(challenge(old));
+    let fresh = guard.challenge(challenge(Instant::now()));
+    let challenges = guard.challenges.lock().unwrap();
+    // Le défi périmé est parti à l'arrivée du second : la table ne grossit pas.
+    assert!(challenges.contains_key(&fresh));
+    assert!(!challenges.contains_key(&stale));
+    assert_eq!(challenges.len(), 1);
+}

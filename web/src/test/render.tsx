@@ -53,7 +53,7 @@ export const ADMIN: User = {
 export const READER: User = { ...ADMIN, id: 2, username: 'lecteur', role: 'reader' }
 
 export function me(user: User, preferences: Partial<Me['preferences']> = {}): Me {
-  return { user, preferences: { language: null, theme: null, page_turn: null, ...preferences } }
+  return { user, preferences: { language: null, theme: null, page_turn: null, ...preferences }, totp: false, recovery_codes_left: 0 }
 }
 
 /** Métadonnées d'une série dont les fichiers ne disent rien. */

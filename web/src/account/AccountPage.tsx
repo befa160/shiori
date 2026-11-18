@@ -28,8 +28,9 @@ import { useOffline } from '@/offline/downloads'
 import { LanguageSelect } from '@/pages/LanguageSelect'
 import { deviceName } from './device'
 import { PasswordForm } from './PasswordForm'
+import { TotpSection } from './TotpSection'
 
-/** Mon compte : préférences, mot de passe, appareils connectés, déconnexion ; raccourcis vers
+/** Mon compte : préférences, mot de passe, double authentification, appareils connectés, déconnexion ; raccourcis vers
  * les tomes téléchargés et, pour l'administrateur, l'administration. */
 export function AccountPage() {
   const { t } = useTranslation()
@@ -89,6 +90,7 @@ export function AccountPage() {
           }}
         />
       </section>
+      <TotpSection />
       <Devices />
     </section>
   )
