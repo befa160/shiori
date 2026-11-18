@@ -554,6 +554,9 @@ async fn run_opens_the_database_and_reports_bind_errors() {
         jobs: None,
         scan_log_days: 30,
         allowed_hosts: Vec::new(),
+        backup_dir: Some(dir.path().join("sauvegardes")),
+        backup_every_hours: 1,
+        backup_keep: 7,
         open: false,
     };
     // Arrêt immédiat : la base est créée (avec son dossier) puis le serveur s'arrête.

@@ -48,6 +48,11 @@ export async function signOut(queryClient: QueryClient, downloads: string[] = []
   await api.logout()
   if ('caches' in window) await caches.delete(IMAGES_CACHE)
   for (const volumeId of downloads) await remove(volumeId)
+  signedOut(queryClient)
+}
+
+/** Session close (déconnexion, ou base restaurée par l'administrateur) : retour à la connexion. */
+export function signedOut(queryClient: QueryClient) {
   setProgressUser(null)
   // La garde passe d'abord à la connexion (l'écran se démonte), puis les réponses du compte partent.
   queryClient.setQueryData<AuthState>(['auth'], { setup_required: false, user: null })

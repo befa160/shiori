@@ -113,26 +113,39 @@ L'installation, la lecture hors ligne et les tomes téléchargés demandent une 
 
 ## Mettre à jour
 
-Sauvegardez d'abord la base (ci-dessous). La base se met à jour toute seule au lancement de la nouvelle version.
+La base se met à jour toute seule au lancement de la nouvelle version ; si son format change, Shiori la sauvegarde d'abord (voir ci-dessous).
 
 - **Docker** : `docker compose pull && docker compose up -d`.
 - **Programme seul** : arrêtez Shiori, remplacez le programme par celui de la nouvelle archive, relancez-le.
 
 ## Sauvegarder
 
-Tout ce qui compte (bibliothèques, progression, métadonnées, couvertures choisies) est dans **un seul fichier, `shiori.db`**. Le cache n'a pas besoin de sauvegarde. Arrêtez Shiori avant de copier la base, pour une copie cohérente :
+Tout ce qui compte (bibliothèques, progression, comptes, métadonnées, couvertures choisies) est dans la base `shiori.db`. Le cache n'a pas besoin de sauvegarde.
 
-- **Docker** :
+Shiori sauvegarde sa base **tout seul, une fois par jour**, dans le dossier `backups` à côté d'elle (`/data/backups` avec Docker), et garde les 7 plus récentes. Il en fait aussi une avant chaque mise à jour du schéma de la base et avant chaque restauration (`shiori-avant-…`, jamais effacées d'office). Le dossier, la fréquence et le nombre gardé sont affichés dans **Administration → Données**, où l'on peut aussi sauvegarder tout de suite, télécharger ou supprimer une sauvegarde.
 
-  ```bash
-  docker compose stop
-  docker compose cp shiori:/data/shiori.db ./shiori-sauvegarde.db
-  docker compose start
-  ```
+Options : `--backup-dir` / `SHIORI_BACKUP_DIR` (dossier), `--backup-every-hours` / `SHIORI_BACKUP_EVERY_HOURS` (24 par défaut, 0 pour aucune), `--backup-keep` / `SHIORI_BACKUP_KEEP` (7). `shiori backup` en fait une à la demande, Shiori allumé ou non (`docker compose exec shiori shiori backup`).
 
-- **Programme seul** : arrêtez Shiori et copiez `shiori.db` depuis le dossier de données (tableau plus haut).
+**Vers le cloud** : votre outil de sauvegarde (Backrest, restic, Duplicati…) n'a qu'à copier ce dossier ; chaque fichier y est complet (écrit sous un nom temporaire puis renommé). Exemple avec Backrest dans Docker : montez le volume de Shiori en lecture seule dans son conteneur, puis créez un plan sur `/userdata/shiori/backups`.
 
-Pour restaurer : arrêtez Shiori, remettez le fichier à sa place, relancez.
+```yaml
+services:
+  backrest:
+    volumes:
+      - shiori-data:/userdata/shiori:ro
+volumes:
+  shiori-data:
+    external: true
+    name: shiori_shiori-data # nom réel : docker volume ls
+```
+
+Les sauvegardes contiennent les empreintes des mots de passe et les secrets de double authentification : gardez-les chiffrées (Backrest et restic le font).
+
+### Restaurer
+
+Dans **Administration → Données** : le bouton de restauration d'une sauvegarde de la liste, ou **Restaurer depuis un fichier…** pour une sauvegarde récupérée ailleurs (depuis Backrest, par exemple). Shiori vérifie le fichier, le met au format de sa version, sauvegarde d'abord la base actuelle, puis la remplace sans redémarrer. Tout le monde doit ensuite se reconnecter, avec les comptes et mots de passe de la sauvegarde ; les jetons d'API reviennent eux aussi à leur état d'alors, supprimez de nouveau ceux révoqués depuis. Une sauvegarde d'une version plus récente de Shiori est refusée : mettez Shiori à jour d'abord.
+
+Si Shiori ne démarre plus : arrêtez-le, remplacez `shiori.db` par une sauvegarde, **supprimez `shiori.db-wal` et `shiori.db-shm`** s'ils existent, relancez.
 
 ## En cas de problème
 

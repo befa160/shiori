@@ -13,3 +13,9 @@ export function formatDuration(ms: number, language: string): string {
 export function formatDate(iso: string, language: string): string {
   return new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso))
 }
+
+/** Taille lisible : Ko sous 1 Mo, Mo au-delà, dans la langue de l'interface. */
+export function formatSize(bytes: number, language: string): string {
+  const [unit, value] = bytes < 1e6 ? (['kilobyte', bytes / 1e3] as const) : (['megabyte', bytes / 1e6] as const)
+  return new Intl.NumberFormat(language, { style: 'unit', unit, maximumFractionDigits: 0 }).format(value)
+}

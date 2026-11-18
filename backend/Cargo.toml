@@ -52,7 +52,7 @@ rust-embed = { version = "8.14", default-features = false, features = ["mime-gue
 zip = { version = "9.5", default-features = false, features = ["deflate-flate2-zlib-rs", "deflate64", "lzma", "xz", "ppmd"] }
 tempfile = "3.27"
 tower = { version = "0.5", features = ["util"] }
-tower-http = { version = "0.7", features = ["compression-br", "compression-gzip", "trace"] }
+tower-http = { version = "0.7", features = ["compression-br", "compression-gzip", "fs", "trace"] }
 http-body-util = "0.1"
 # Boucle de service avec délai de lecture des en-têtes (axum::serve n'en pose aucun).
 hyper = { version = "1.12", features = ["server", "http1"] }

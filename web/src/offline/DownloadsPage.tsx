@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { BookOpen, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
+import { formatSize } from '@/admin/format'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { cancel, remove, useOffline } from './downloads'
@@ -17,11 +18,7 @@ export function DownloadsPage() {
     queryKey: ['storage', downloads.length],
     queryFn: async () => (await navigator.storage?.estimate?.()) ?? null,
   })
-  // Mo pour les tomes, Ko pour ce qui ferait « 0 Mo ».
-  const size = (bytes: number) => {
-    const [unit, value] = bytes < 1e6 ? (['kilobyte', bytes / 1e3] as const) : (['megabyte', bytes / 1e6] as const)
-    return new Intl.NumberFormat(i18n.language, { style: 'unit', unit, maximumFractionDigits: 0 }).format(value)
-  }
+  const size = (bytes: number) => formatSize(bytes, i18n.language)
   return (
     <section className="max-w-3xl space-y-6">
       <title>{`${t('offline.title')} · Shiori`}</title>

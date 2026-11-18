@@ -16,7 +16,7 @@ services:
     volumes:
       # Volumes nommés : Docker les crée inscriptibles par Shiori. Un dossier de l'hôte
       # (`./data:/data`) que Docker crée lui-même appartient à root, et Shiori ne démarre pas.
-      - shiori-data:/data # base SQLite (progression, métadonnées, couvertures) : à sauvegarder
+      - shiori-data:/data # base SQLite (progression, comptes, métadonnées) ; sauvegardes quotidiennes dans /data/backups
       - shiori-cache:/cache # pages redimensionnées, se reconstruit tout seul
       # Vos fichiers, en lecture seule (jamais modifiés) ; dans Shiori, la bibliothèque se crée
       # avec le chemin de droite. Ils doivent être lisibles par tous (droits habituels).

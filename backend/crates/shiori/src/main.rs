@@ -3,7 +3,7 @@
 use std::process::ExitCode;
 
 use clap::{ArgAction, Parser, Subcommand};
-use shiori::{scan, server, user};
+use shiori::{backup, scan, server, user};
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
@@ -31,6 +31,8 @@ enum Command {
     Serve(server::ServeArgs),
     /// Comptes : création, mot de passe oublié (base locale, sans passer par le serveur).
     User(user::UserArgs),
+    /// Sauvegarde de la base, cohérente même Shiori allumé, dans le dossier des sauvegardes.
+    Backup(backup::BackupArgs),
 }
 
 fn main() -> ExitCode {
@@ -63,6 +65,10 @@ fn main() -> ExitCode {
                     }
                     Command::User(args) => {
                         user::run(args).await?;
+                        Ok(ExitCode::SUCCESS)
+                    }
+                    Command::Backup(args) => {
+                        backup::run(args).await?;
                         Ok(ExitCode::SUCCESS)
                     }
                 }

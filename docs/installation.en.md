@@ -113,26 +113,39 @@ Installing, offline reading and downloaded volumes need an **HTTPS** address (or
 
 ## Updating
 
-Back up the database first (below). The database updates itself when the new version starts.
+The database updates itself when the new version starts; if its format changes, Shiori backs it up first (see below).
 
 - **Docker**: `docker compose pull && docker compose up -d`.
 - **Standalone program**: stop Shiori, replace the program with the one from the new archive, start it again.
 
 ## Backing up
 
-Everything that matters (libraries, reading progress, metadata, chosen covers) is in **a single file, `shiori.db`**. The cache needs no backup. Stop Shiori before copying the database, for a consistent copy:
+Everything that matters (libraries, reading progress, accounts, metadata, chosen covers) is in the `shiori.db` database. The cache needs no backup.
 
-- **Docker**:
+Shiori backs up its database **by itself, once a day**, in the `backups` folder next to it (`/data/backups` with Docker), and keeps the 7 most recent. It also makes one before each database schema update and before each restore (`shiori-avant-…`, never deleted automatically). The folder, frequency and number kept are shown in **Administration → Data**, where you can also back up right away, download or delete a backup.
 
-  ```bash
-  docker compose stop
-  docker compose cp shiori:/data/shiori.db ./shiori-backup.db
-  docker compose start
-  ```
+Options: `--backup-dir` / `SHIORI_BACKUP_DIR` (folder), `--backup-every-hours` / `SHIORI_BACKUP_EVERY_HOURS` (24 by default, 0 for none), `--backup-keep` / `SHIORI_BACKUP_KEEP` (7). `shiori backup` makes one on demand, whether Shiori is running or not (`docker compose exec shiori shiori backup`).
 
-- **Standalone program**: stop Shiori and copy `shiori.db` from the data folder (table above).
+**To the cloud**: your backup tool (Backrest, restic, Duplicati…) only has to copy that folder; every file in it is complete (written under a temporary name, then renamed). Example with Backrest in Docker: mount Shiori's volume read-only in its container, then create a plan on `/userdata/shiori/backups`.
 
-To restore: stop Shiori, put the file back, start it again.
+```yaml
+services:
+  backrest:
+    volumes:
+      - shiori-data:/userdata/shiori:ro
+volumes:
+  shiori-data:
+    external: true
+    name: shiori_shiori-data # actual name: docker volume ls
+```
+
+Backups contain password hashes and two-factor secrets: keep them encrypted (Backrest and restic do).
+
+### Restoring
+
+In **Administration → Data**: the restore button of a backup in the list, or **Restore from a file…** for a backup fetched elsewhere (from Backrest, for example). Shiori checks the file, brings it to its version's format, backs up the current database first, then replaces it without restarting. Everyone then has to sign in again, with the accounts and passwords of the backup; API tokens also return to their state at that time, so revoke again those revoked since. A backup from a newer Shiori version is refused: update Shiori first.
+
+If Shiori no longer starts: stop it, replace `shiori.db` with a backup, **delete `shiori.db-wal` and `shiori.db-shm`** if they exist, start it again.
 
 ## Troubleshooting
 

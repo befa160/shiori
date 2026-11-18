@@ -8,6 +8,7 @@ use anyhow::{Context, Result};
 use directories::ProjectDirs;
 use shiori_db::Db;
 
+pub mod backup;
 pub mod cache;
 pub mod job;
 pub mod meta;
@@ -49,8 +50,20 @@ fn user_dir(
         .with_context(|| format!("dossier de l'utilisateur introuvable : définir {var}"))
 }
 
-/// Ouvre la base `path`, ou `<dossier de données>/shiori.db`, en créant son dossier.
-async fn open_db(path: Option<PathBuf>) -> Result<Db> {
+/// Sauvegardes : `dir`, sinon `$SHIORI_BACKUP_DIR`, sinon `backups` à côté de la base.
+fn backup_dir(db: &Path, dir: Option<PathBuf>) -> PathBuf {
+    dir.or_else(|| {
+        std::env::var_os("SHIORI_BACKUP_DIR")
+            .filter(|d| !d.is_empty())
+            .map(PathBuf::from)
+    })
+    .unwrap_or_else(|| db.parent().unwrap_or(Path::new("")).join("backups"))
+}
+
+/// Ouvre la base `path`, ou `<dossier de données>/shiori.db`, en créant son dossier ; une base
+/// à migrer est d'abord sauvegardée dans le dossier des sauvegardes (`backups`, voir
+/// [`backup_dir`]), renvoyé avec elle.
+async fn open_db(path: Option<PathBuf>, backups: Option<PathBuf>) -> Result<(Db, PathBuf)> {
     let path = match path {
         Some(path) => path,
         None => data_dir()?.join("shiori.db"),
@@ -58,9 +71,11 @@ async fn open_db(path: Option<PathBuf>) -> Result<Db> {
     if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
         fs::create_dir_all(parent).with_context(|| format!("création de {}", parent.display()))?;
     }
-    Db::open(&path)
+    let backups = backup_dir(&path, backups);
+    let db = Db::open_backing_up(&path, Some(&backups))
         .await
-        .with_context(|| format!("ouverture de la base {}", path.display()))
+        .with_context(|| format!("ouverture de la base {}", path.display()))?;
+    Ok((db, backups))
 }
 
 #[cfg(test)]
