@@ -101,7 +101,7 @@ const MAX_PASSWORD: usize = 1024;
 /// Préfixe des jetons de session ; les jetons d'API auront le leur (`shiori_t_`).
 const SESSION_PREFIX: &str = "shiori_s_";
 
-fn user(row: &SqliteRow) -> Result<User, Error> {
+pub(crate) fn user(row: &SqliteRow) -> Result<User, Error> {
     Ok(User {
         id: row.get("id"),
         username: row.get("username"),
@@ -141,7 +141,7 @@ pub(crate) fn random<const N: usize>() -> [u8; N] {
     bytes
 }
 
-fn hex(bytes: &[u8]) -> String {
+pub(crate) fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
@@ -510,12 +510,17 @@ impl Db {
         Ok(done.rows_affected() > 0)
     }
 
-    /// Déconnecte tous les appareils du compte.
+    /// Coupe tout accès du compte (appareil perdu ou volé) : ses sessions et ses jetons d'API,
+    /// une liseuse réglée avec un jeton étant aussi un appareil.
     pub async fn revoke_devices(&self, user_id: i64) -> Result<(), Error> {
-        sqlx::query("DELETE FROM sessions WHERE user_id = ?")
-            .bind(user_id)
-            .execute(&self.pool)
-            .await?;
+        let mut tx = self.pool.begin().await?;
+        for sql in [
+            "DELETE FROM sessions WHERE user_id = ?",
+            "DELETE FROM api_tokens WHERE user_id = ?",
+        ] {
+            sqlx::query(sql).bind(user_id).execute(&mut *tx).await?;
+        }
+        tx.commit().await?;
         Ok(())
     }
 

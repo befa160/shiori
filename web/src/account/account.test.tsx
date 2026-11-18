@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Device } from '@/api/types'
+import type { ApiToken, Device } from '@/api/types'
 import { fakeCaches } from '@/test/caches'
 import { ADMIN, READER, json, me, mockApi, renderAt } from '@/test/render'
 import { resetForTests } from '@/offline/downloads'
@@ -274,5 +274,80 @@ describe('page du compte', () => {
     expect(await region.findByRole('button', { name: 'Activer' })).toBeInTheDocument()
     const del = fetch.mock.calls.filter(([url, init]) => url === '/api/me/totp' && init?.method === 'DELETE').at(-1)
     expect(body(del?.[1])).toEqual({ password: 'mot de passe', code: 'aaaa-bbbb-cccc' })
+  })
+
+  it('jetons d’API : création (montré une fois), liste, suppression après confirmation', async () => {
+    const created = { id: 7, name: 'Liseuse', prefix: 'shiori_t_ab12cd34', created_at: '2026-11-18T10:00:00Z', last_used_at: null, expires_at: '2027-11-18T10:00:00Z' }
+    const old = { ...created, id: 3, name: 'Vieux', prefix: 'shiori_t_ffff0000', last_used_at: '2026-11-01T10:00:00Z', expires_at: '2020-01-01T00:00:00Z' }
+    let list: ApiToken[] = [old]
+    let tries = 0
+    const fetch = mockApi({
+      '/api/libraries': empty,
+      '/api/me/sessions': () => json(devices),
+      '/api/me/tokens': (init) => {
+        if (init?.method !== 'POST') return json(list)
+        if (tries++ === 0) return json({ code: 'invalid_token_name', message: 'x' }, 400)
+        list = [created, old]
+        return json({ ...created, token: 'shiori_t_ab12cd34secret' }, 201)
+      },
+      '/api/me/tokens/3': () => {
+        list = [created]
+        return new Response(null, { status: 204 })
+      },
+    })
+    const writeText = vi.fn(async () => {})
+    vi.stubGlobal('navigator', { ...navigator, onLine: true, languages: ['fr'], clipboard: { writeText } })
+    renderAt('/account')
+    const region = within(await screen.findByRole('region', { name: "Jetons d'API" }))
+    expect(await region.findByText('Vieux')).toBeInTheDocument()
+    expect(region.getByText('shiori_t_ffff0000…')).toBeInTheDocument()
+    expect(region.getByText(/Expiré le/)).toHaveClass('text-destructive')
+    await userEvent.click(region.getByRole('button', { name: 'Nouveau jeton' }))
+    const dialog = within(await screen.findByRole('dialog'))
+    await userEvent.type(dialog.getByLabelText('Nom'), ' Liseuse ')
+    await userEvent.click(dialog.getByRole('combobox', { name: 'Valable' }))
+    await userEvent.click(await screen.findByRole('option', { name: '1 an' }))
+    await userEvent.click(dialog.getByRole('button', { name: 'Créer le jeton' }))
+    expect(await dialog.findByText('Nom du jeton : 1 à 64 caractères')).toBeInTheDocument()
+    await userEvent.click(dialog.getByRole('button', { name: 'Créer le jeton' }))
+    expect(await dialog.findByText('shiori_t_ab12cd34secret')).toBeInTheDocument()
+    const post = fetch.mock.calls.filter(([url, init]) => url === '/api/me/tokens' && init?.method === 'POST').at(-1)
+    expect(body(post?.[1])).toEqual({ name: 'Liseuse', expires_in_days: 365 })
+    await userEvent.click(dialog.getByRole('button', { name: 'Copier le jeton' }))
+    expect(writeText).toHaveBeenCalledWith('shiori_t_ab12cd34secret')
+    await userEvent.click(dialog.getByRole('button', { name: "C'est noté" }))
+    expect(await region.findByText(/^Jamais utilisé · Expire le 18 nov\. 2027/)).toBeInTheDocument()
+    await userEvent.click(region.getByRole('button', { name: 'Supprimer le jeton Vieux' }))
+    await userEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Supprimer' }))
+    await waitFor(() => expect(region.queryByText('Vieux')).toBeNull())
+  })
+
+  it('jeton sans expiration ; échecs de copie et de suppression dits', async () => {
+    const token = { id: 4, name: 'OPDS', prefix: 'shiori_t_00000000', created_at: '2026-11-18T10:00:00Z', last_used_at: null, expires_at: null }
+    const fetch = mockApi({
+      '/api/libraries': empty,
+      '/api/me/sessions': () => json(devices),
+      '/api/me/tokens': (init) => (init?.method === 'POST' ? json({ ...token, token: 'shiori_t_x' }, 201) : json([token])),
+      '/api/me/tokens/4': () => json({ code: 'internal', message: 'x' }, 500),
+    })
+    vi.stubGlobal('navigator', { ...navigator, onLine: true, languages: ['fr'], clipboard: { writeText: async () => Promise.reject(new Error('non')) } })
+    renderAt('/account')
+    const region = within(await screen.findByRole('region', { name: "Jetons d'API" }))
+    expect(await region.findByText('Jamais utilisé · Sans expiration')).toBeInTheDocument()
+    await userEvent.click(region.getByRole('button', { name: 'Nouveau jeton' }))
+    const dialog = within(await screen.findByRole('dialog'))
+    await userEvent.type(dialog.getByLabelText('Nom'), 'OPDS')
+    await userEvent.click(dialog.getByRole('button', { name: 'Créer le jeton' }))
+    await userEvent.click(await dialog.findByRole('button', { name: 'Copier le jeton' }))
+    expect(await screen.findByText('Copie impossible : sélectionnez le jeton')).toBeInTheDocument()
+    expect(body(fetch.mock.calls.find(([, init]) => init?.method === 'POST')?.[1])).toEqual({ name: 'OPDS' })
+    await userEvent.click(dialog.getByRole('button', { name: "C'est noté" }))
+    await userEvent.click(region.getByRole('button', { name: 'Supprimer le jeton OPDS' }))
+    await userEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Supprimer' }))
+    expect(await screen.findByText('Jeton non supprimé')).toBeInTheDocument()
+    // Annuler le formulaire ferme sans rien créer.
+    await userEvent.click(region.getByRole('button', { name: 'Nouveau jeton' }))
+    await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Annuler' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   })
 })

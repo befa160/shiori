@@ -1,7 +1,7 @@
-// Comptes par l'interface (lots 7.7 et 7.5) : connexion, création d'un lecteur par
+// Comptes par l'interface (lots 7.7, 7.5, 7.6) : connexion, création d'un lecteur par
 // l'administrateur, mot de passe provisoire changé à la première connexion, déconnexion, double
-// authentification. Sans la session partagée des autres tests (elle resterait ouverte) : chaque
-// connexion ici a la sienne.
+// authentification, jeton d'API. Sans la session partagée des autres tests (elle resterait
+// ouverte) : chaque connexion ici a la sienne.
 import { createHmac } from 'node:crypto'
 import { expect, test } from '@playwright/test'
 
@@ -92,4 +92,17 @@ test('connexion, création d’un lecteur, première connexion du lecteur, déco
   await page.getByRole('button', { name: 'Vérifier' }).click()
   await page.goto('/account')
   await expect(page.getByText('Active. Il vous reste 9 codes de secours.')).toBeVisible()
+
+  // Un jeton d'API pour une liseuse : il lit, il ne touche pas au compte.
+  const tokens = page.getByRole('region', { name: "Jetons d'API" })
+  await tokens.getByRole('button', { name: 'Nouveau jeton' }).click()
+  const create = page.getByRole('dialog', { name: 'Nouveau jeton' })
+  await create.getByLabel('Nom').fill('Liseuse')
+  await create.getByRole('button', { name: 'Créer le jeton' }).click()
+  const token = (await page.getByRole('dialog').locator('code').textContent()) ?? ''
+  await page.getByRole('button', { name: "C'est noté" }).click()
+  await expect(tokens.getByText('Liseuse', { exact: true })).toBeVisible()
+  const bearer = { authorization: `Bearer ${token}` }
+  expect((await fetch('http://127.0.0.1:7879/api/series', { headers: bearer })).status).toBe(200)
+  expect((await fetch('http://127.0.0.1:7879/api/me', { headers: bearer })).status).toBe(403)
 })

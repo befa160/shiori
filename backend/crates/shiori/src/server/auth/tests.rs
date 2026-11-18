@@ -126,3 +126,30 @@ fn expired_challenges_are_dropped_when_a_new_one_comes() {
     assert!(!challenges.contains_key(&stale));
     assert_eq!(challenges.len(), 1);
 }
+
+#[test]
+fn an_api_token_reads_and_saves_progress_nothing_else() {
+    let allowed = [
+        (Method::GET, "/api/series"),
+        (Method::GET, "/api/pages/abc/image"),
+        (Method::HEAD, "/api/covers/x"),
+        (Method::PUT, "/api/volumes/abc/progress"),
+    ];
+    for (method, path) in allowed {
+        assert!(token_allows(&method, path), "{method} {path}");
+    }
+    let refused = [
+        (Method::GET, "/api/me"),
+        (Method::GET, "/api/me/tokens"),
+        (Method::GET, "/api/admin/users"),
+        (Method::DELETE, "/api/volumes/abc/progress"),
+        (Method::PUT, "/api/volumes//progress"),
+        (Method::PUT, "/api/volumes/a/b/progress"),
+        (Method::PUT, "/api/settings"),
+        (Method::PATCH, "/api/series/1"),
+        (Method::POST, "/api/libraries"),
+    ];
+    for (method, path) in refused {
+        assert!(!token_allows(&method, path), "{method} {path}");
+    }
+}

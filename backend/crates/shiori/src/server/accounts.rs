@@ -243,7 +243,7 @@ pub(crate) async fn reset_password(
     Ok(Json(NewPassword { password }))
 }
 
-/// Déconnecte tous les appareils d'un compte (appareil perdu).
+/// Déconnecte tous les appareils d'un compte et supprime ses jetons d'API (appareil perdu).
 pub(crate) async fn revoke_sessions(
     _: Admin,
     State(app): State<Arc<App>>,
