@@ -11,7 +11,7 @@
 
 Lecteur de mangas, BD et webtoons auto-hébergé. Un seul binaire Rust sert la bibliothèque et une application web installable (PWA), pensée d'abord pour la lecture sur tablette.
 
-> **État : version 0.2.0 (phase 7 terminée).** Bibliothèque en couvertures avec « Continuer la lecture », recherche, filtres et tags ; lecteur manga, BD et webtoon (double page, zoom, reprise) ; administration des bibliothèques et des scans ; métadonnées des fichiers (ComicInfo.xml, `index.json`) et, si vous l'autorisez, d'AniList et de MangaDex, modifiables champ par champ ; application installable (PWA) avec lecture hors ligne des tomes téléchargés ; thèmes sombre, clair, noir OLED et sépia ; français et anglais. Image Docker et binaires Linux, Windows et macOS (un double-clic ouvre l'interface). Comptes (administrateur, lecteurs, bibliothèques ouvertes par compte, progression et préférences de chacun), double authentification, jetons d'API, sauvegarde quotidienne et restauration depuis l'interface. L'avancement détaillé est dans [ROADMAP.md](ROADMAP.md).
+> **État : version 0.2.0 publiée ; phase 8 (lecture des PDF sans marges) terminée sur `main`, pour la prochaine version.** Bibliothèque en couvertures avec « Continuer la lecture », recherche, filtres et tags ; lecteur manga, BD et webtoon (double page, zoom, reprise) ; administration des bibliothèques et des scans ; métadonnées des fichiers (ComicInfo.xml, `index.json`) et, si vous l'autorisez, d'AniList et de MangaDex, modifiables champ par champ ; application installable (PWA) avec lecture hors ligne des tomes téléchargés ; thèmes sombre, clair, noir OLED et sépia ; français et anglais. Image Docker et binaires Linux, Windows et macOS (un double-clic ouvre l'interface). Comptes (administrateur, lecteurs, bibliothèques ouvertes par compte, progression et préférences de chacun), double authentification, jetons d'API, sauvegarde quotidienne et restauration depuis l'interface. L'avancement détaillé est dans [ROADMAP.md](ROADMAP.md).
 
 ## Documentation
 
@@ -46,8 +46,8 @@ Shiori est conçu pour que ces défauts soient impossibles :
 | **Lecteur** | Gauche→droite, droite→gauche (manga), vertical continu (webtoon) ; page simple ou double ; découpage des doubles pages ; reprise exacte de la lecture |
 | **Webtoons** | Défilement vertical continu, chargement paresseux, aucun saut de mise en page (place de chaque page réservée d'après le scan) |
 | **Bibliothèque** | Grille d'affiches, séries, « Continuer la lecture », recherche, filtres par statut de publication et de lecture |
-| **Métadonnées** | ComicInfo.xml, `index.json`, AniList et MangaDex ; édition manuelle avec verrouillage par champ ; MangaUpdates et Comic Vine plus tard |
-| **Formats** | CBZ (zip, zip64) et CBR (RAR 4 et 5, solid compris, en Rust pur). Images jpg, png, webp, avif, servies redimensionnées en AVIF (pages) et JPEG (miniatures) |
+| **Métadonnées** | ComicInfo.xml, `index.json`, propriétés des PDF, AniList et MangaDex ; édition manuelle avec verrouillage par champ ; MangaUpdates et Comic Vine plus tard |
+| **Formats** | CBZ (zip, zip64), CBR (RAR 4 et 5, solid compris) et PDF (images incluses servies sans les marges de la page, pages en bandes réassemblées), tout en Rust pur. Images jpg, png, webp, avif, servies redimensionnées en AVIF (pages) et JPEG (miniatures) |
 | **Comptes** | Administrateur et lecteurs, bibliothèques ouvertes par compte, progression et préférences de chacun, double authentification (TOTP), jetons d'API en lecture seule |
 | **Sauvegarde** | Sauvegarde quotidienne de la base dans un dossier à confier à Backrest ou restic, restauration depuis l'interface |
 | **Application** | PWA installable, lecture hors ligne des tomes téléchargés (page par page), thèmes, français et anglais |
