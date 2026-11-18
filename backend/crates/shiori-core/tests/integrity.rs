@@ -31,6 +31,34 @@ fn issue_entry(report: &FileReport, code: IssueCode) -> Option<&str> {
 // --- Fixtures saines -------------------------------------------------------------
 
 #[test]
+fn pdf_pages_are_its_images_and_skipped_pages_are_reported() {
+    let dir = tempfile::tempdir().unwrap();
+    let r = scan_file(&fixtures::pdf(dir.path()), ScanOptions { deep: true });
+    assert_eq!(r.format, "pdf");
+    assert_eq!(r.status, Status::Warning);
+    assert_eq!(codes(&r), [IssueCode::PdfPageWithoutImage]);
+    assert_eq!(
+        issue_entry(&r, IssueCode::PdfPageWithoutImage),
+        Some("page 2")
+    );
+    assert_eq!(names(&r), ["0001.jpg", "0003.jpg", "0004.png"]);
+    for p in &r.pages {
+        assert_eq!(p.status, PageStatus::Ok);
+        assert_eq!((p.width, p.height), (Some(60), Some(90)));
+    }
+    assert_eq!(r.pages[2].media_type, Some("image/png"));
+}
+
+#[test]
+fn an_encrypted_pdf_is_an_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let r = scan(&shiori_testkit::pdf::encrypted_pdf(dir.path()));
+    assert_eq!(r.format, "pdf");
+    assert_eq!(codes(&r), [IssueCode::EncryptedEntry]);
+    assert_eq!(r.status, Status::Error);
+}
+
+#[test]
 fn webtoon_is_clean_and_fully_described() {
     let dir = tempfile::tempdir().unwrap();
     let r = scan(&fixtures::webtoon(dir.path()));

@@ -48,6 +48,13 @@ thiserror = "2.0"
 totp-rs = { version = "6.0", default-features = false, features = ["std", "otpauth"] }
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 rars = { version = "0.12", default-features = false }
+# PDF (phase 8) : analyse paresseuse et interprétation des pages, pur Rust. Les 14 polices
+# standard embarquées (300 Kio) font produire des glyphes au texte en Helvetica non inclus :
+# sans elles, ce texte visible échapperait au diagnostic `pdf_text_ignored`.
+hayro-interpret = { version = "0.9.0", default-features = false, features = ["embed-fonts"] }
+crc32fast = "1.5"
+# Fixtures PDF du testkit.
+pdf-writer = "0.15"
 rust-embed = { version = "8.14", default-features = false, features = ["mime-guess"] }
 zip = { version = "9.5", default-features = false, features = ["deflate-flate2-zlib-rs", "deflate64", "lzma", "xz", "ppmd"] }
 tempfile = "3.27"
