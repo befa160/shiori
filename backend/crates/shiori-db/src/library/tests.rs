@@ -299,6 +299,47 @@ async fn parallel_attaches_share_one_series() {
     );
 }
 
+/// La migration 18 recrée `volume_metadata` (source `pdf` permise) sans perdre ses lignes.
+#[tokio::test]
+async fn metadata_rows_survive_the_pdf_source_migration() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("t.db");
+    let options = sqlx::sqlite::SqliteConnectOptions::new()
+        .filename(&path)
+        .create_if_missing(true);
+    let pool = sqlx::SqlitePool::connect_with(options).await.unwrap();
+    sqlx::migrate!().run_to(17, &pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO volumes VALUES ('v', 1, 'cbz', 'ok', 0, 1, '2026-11-11T00:00:00.000Z');
+         INSERT INTO volume_metadata VALUES ('v', 'comicinfo', '{}');",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    pool.close().await;
+
+    let db = Db::open(&path).await.unwrap();
+    let kept: (String, String) = sqlx::query_as("SELECT volume_id, source FROM volume_metadata")
+        .fetch_one(db.pool())
+        .await
+        .unwrap();
+    assert_eq!(kept, ("v".into(), "comicinfo".into()));
+    sqlx::query("INSERT INTO volume_metadata VALUES ('v', 'pdf', '{}')")
+        .execute(db.pool())
+        .await
+        .unwrap();
+    // La clé étrangère tient toujours : supprimer le tome supprime ses métadonnées.
+    sqlx::query("DELETE FROM volumes")
+        .execute(db.pool())
+        .await
+        .unwrap();
+    let left: i64 = sqlx::query_scalar("SELECT count(*) FROM volume_metadata")
+        .fetch_one(db.pool())
+        .await
+        .unwrap();
+    assert_eq!(left, 0);
+}
+
 /// Une base de la phase 1 garde ses données : les nouvelles colonnes sont vides.
 #[tokio::test]
 async fn phase_one_database_is_migrated() {

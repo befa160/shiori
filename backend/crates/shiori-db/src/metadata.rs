@@ -81,12 +81,13 @@ pub enum EditError {
 
 /// Vue des fichiers locaux d'une série nommée `name` (`locals` dans l'ordre de ses tomes).
 /// Pour chaque champ : le premier `index.json` qui l'a (il décrit la série), sinon le premier
-/// `ComicInfo.xml`. Titre : celui des fichiers, sinon (plus tard le web, puis) le nom du
+/// `ComicInfo.xml`, sinon le premier PDF. Titre : celui des fichiers, sinon (plus tard le web, puis) le nom du
 /// dossier ; les autres titres, nom du dossier compris, restent cherchables en alternatifs.
 fn from_locals(name: &str, locals: &[(MetadataSource, LocalMetadata)]) -> SeriesMetadata {
     let of = |source| locals.iter().filter(move |(s, _)| *s == source);
     let ordered: Vec<&LocalMetadata> = of(MetadataSource::IndexJson)
         .chain(of(MetadataSource::Comicinfo))
+        .chain(of(MetadataSource::Pdf))
         .map(|(_, m)| m)
         .collect();
     let text = |f: fn(&LocalMetadata) -> &Option<String>| ordered.iter().find_map(|m| f(m).clone());
@@ -208,9 +209,13 @@ fn with_web(
     meta
 }
 
-/// Vue d'un tome : son `ComicInfo.xml` (l'`index.json` décrit la série, pas le tome).
+/// Vue d'un tome : son `ComicInfo.xml` ou, pour un PDF, son dictionnaire `Info` (l'`index.json`
+/// décrit la série, pas le tome).
 fn volume_from_locals(locals: &[(MetadataSource, LocalMetadata)]) -> VolumeMetadata {
-    let Some((_, m)) = locals.iter().find(|(s, _)| *s == MetadataSource::Comicinfo) else {
+    let own = |(s, _): &&(MetadataSource, LocalMetadata)| {
+        matches!(s, MetadataSource::Comicinfo | MetadataSource::Pdf)
+    };
+    let Some((_, m)) = locals.iter().find(own) else {
         return VolumeMetadata::default();
     };
     VolumeMetadata {

@@ -160,6 +160,11 @@ pub trait Archive {
         &[]
     }
 
+    /// Métadonnées de l'archive elle-même, hors fichiers (dictionnaire `Info` d'un PDF).
+    fn metadata(&self) -> Option<crate::metadata::LocalMetadata> {
+        None
+    }
+
     /// Archive découpée en plusieurs fichiers (`.part2.rar`…), non gérée.
     fn is_multivolume(&self) -> bool {
         false

@@ -4,7 +4,7 @@
 use std::path::{Path, PathBuf};
 
 use pdf_writer::types::TextRenderingMode;
-use pdf_writer::{Content, Filter, Finish, Name, Pdf, Rect, Ref, Str};
+use pdf_writer::{Content, Filter, Finish, Name, Pdf, Rect, Ref, Str, TextStr};
 
 use crate::jpeg;
 
@@ -75,6 +75,16 @@ impl PdfPage {
 
 /// Écrit un PDF dans `dir`.
 pub fn write_pdf(dir: &Path, name: &str, pages: &[PdfPage]) -> PathBuf {
+    write_pdf_with_info(dir, name, pages, &[])
+}
+
+/// Écrit un PDF avec un dictionnaire `Info` : (`Title`, `Author`, `Subject` ou `Keywords`, valeur).
+pub fn write_pdf_with_info(
+    dir: &Path,
+    name: &str,
+    pages: &[PdfPage],
+    info: &[(&str, &str)],
+) -> PathBuf {
     let mut pdf = Pdf::new();
     let mut next = 1;
     let mut id = || {
@@ -175,6 +185,18 @@ pub fn write_pdf(dir: &Path, name: &str, pages: &[PdfPage]) -> PathBuf {
         xobjects.finish();
         resources.finish();
         p.finish();
+    }
+    if !info.is_empty() {
+        let mut dict = pdf.document_info(id());
+        for &(key, value) in info {
+            match key {
+                "Title" => dict.title(TextStr(value)),
+                "Author" => dict.author(TextStr(value)),
+                "Subject" => dict.subject(TextStr(value)),
+                "Keywords" => dict.keywords(TextStr(value)),
+                other => panic!("clé Info inconnue : {other}"),
+            };
+        }
     }
     let path = dir.join(name);
     std::fs::write(&path, pdf.finish()).unwrap();

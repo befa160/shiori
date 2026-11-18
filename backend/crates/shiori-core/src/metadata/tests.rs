@@ -180,3 +180,47 @@ fn a_title_written_in_web_is_not_a_link() {
     .unwrap();
     assert!(meta.links.is_empty());
 }
+
+#[test]
+fn pdf_info_gives_authors_summary_and_tags_only() {
+    // « Yûji Kaku ; Yuji Kaku » en UTF-16BE avec BOM, comme l'écrit Calibre hors ASCII.
+    let mut author = vec![0xFE, 0xFF];
+    for unit in "Yûji Kaku ; yûji kaku; ".encode_utf16() {
+        author.extend(unit.to_be_bytes());
+    }
+    let meta = pdf_info(
+        Some(&author),
+        Some(b"  R\xe9sum\xe9 du tome  "),
+        Some(b"shonen, Ninja; ninja ,"),
+    )
+    .unwrap();
+    assert_eq!(
+        meta,
+        LocalMetadata {
+            authors: vec![Author {
+                name: "Yûji Kaku".into(),
+                story: true,
+                art: true,
+            }],
+            // PDFDocEncoding (ici Latin-1), pas de l'UTF-8.
+            summary: Some("Résumé du tome".into()),
+            tags: vec!["shonen".into(), "Ninja".into()],
+            ..LocalMetadata::default()
+        }
+    );
+    assert_eq!(pdf_info(None, Some(b"   "), Some(b" ; ,")), None);
+    // Calibre joint les auteurs par « & » ; un « & » collé reste dans le nom.
+    let two = pdf_info(
+        Some(b"Tsugumi Ohba & Takeshi Obata;Studio&Co"),
+        None,
+        Some(b"Sword & Sorcery"),
+    )
+    .unwrap();
+    let names: Vec<_> = two.authors.iter().map(|a| a.name.as_str()).collect();
+    assert_eq!(names, ["Tsugumi Ohba", "Takeshi Obata", "Studio&Co"]);
+    assert_eq!(two.tags, ["Sword & Sorcery"]);
+    // Un champ démesuré est ignoré.
+    let huge = vec![b'a'; MAX_METADATA_SIZE as usize + 1];
+    assert_eq!(pdf_info(None, Some(&huge), None), None);
+    assert!(parse(MetadataSource::Pdf, b"").is_err());
+}
