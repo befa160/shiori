@@ -1280,7 +1280,7 @@ Audit complet après la phase 6 (couverture backend 96,85 % lignes / 91,64 % bra
 - Aucun délai de connexion ni limite de débit dans `serve` : vérifier les défauts d'axum avant une exposition sans reverse proxy ; limiter les essais de connexion.
 - Non vérifié pendant l'audit : `cargo audit`, clippy, `cargo fmt`, tests Playwright ; `sw.js` n'est couvert que par eux.
 
-## Phase 8 : lecture des PDF sans marges (demandée le 2026-11-17, plan validé le 2026-11-18)
+## Phase 8 : lecture des PDF sans marges (terminée le 2026-11-18)
 
 ### Objectif
 
@@ -1336,9 +1336,26 @@ Lire les BD et mangas en PDF **sans les marges** qui rendent la page minuscule s
 - [x] **8.3 `feat/pdf-metadata`** : dictionnaire `Info` (Q54) comme source locale `pdf`, au même rang que `ComicInfo.xml` (`MetadataSource::Pdf`) ; règles de fusion inchangées.
   - Fait (2026-11-18) : `metadata::pdf_info` (chaînes UTF-16 avec BOM ou PDFDocEncoding lu comme du Latin-1 ; auteurs séparés par `;`, scénario et dessin ; mots-clés par `,` ou `;`, doublons sans casse retirés), lu à l'ouverture du PDF (`Archive::metadata`). Rien d'utile (titre seul) : pas de source. Migration 0018 : `volume_metadata` recréée pour permettre la source `pdf`. Un tome PDF prend ses champs de son `Info` ; dans une série, un `ComicInfo.xml` passe avant un PDF. Pas de nouvelle version des règles de scan : aucun PDF n'a été scanné par une version publiée.
   - Sur l'exemple : auteur « Yûji Kaku » ; ni titre (« … (French Edition) ») ni date de conversion.
-- [ ] **8.4 `docs/phase8`** : docs technique, fonctionnelle (codes de diagnostic, ce qu'un PDF donne) et installation (formats lus) ; bilan de la phase ; version 0.3.0.
+- [x] **8.4 `docs/phase8`** : docs technique, fonctionnelle (codes de diagnostic, ce qu'un PDF donne) et installation (formats lus) ; bilan de la phase ; version 0.3.0.
+  - Fait (2026-11-18) : `docs/technique.md` (PDF dans les archives, métadonnées, fusion, choix de hayro), `docs/fonctionnel.md` (ce qu'un PDF donne, codes `pdf_page_without_image` et `pdf_text_ignored`, `encrypted_entry` et `image_undecodable` élargis), README. Le guide d'installation ne liste pas les formats : rien à y changer. Version 0.3.0 dans une PR à part, avant le tag.
 
-## Phase 9 : maintenance de la bibliothèque (à planifier après la phase 8)
+### Bilan de la phase 8
+
+- Livré :
+  - **Lecture des PDF sans marges** : les images incluses servies comme les pages d'un CBZ, pas la page PDF ; un JPEG droit servi tel quel, à l'octet près ; toute autre image (Flate, JPEG 2000, JBIG2, CCITT, masque 1 bit, ICC) décodée en PNG, redressée, transparence aplatie sur blanc.
+  - **Pages recomposées** : bandes, tuiles et calques réassemblés à la densité de l'image la plus fine, sans filet entre deux bandes, rognés à l'union des images.
+  - **Diagnostics** : `pdf_page_without_image` (avertissement, seuil de 50 % de surface), `pdf_text_ignored` (info, la couche OCR invisible jamais signalée), PDF chiffré, coupé (`%%EOF` absent), image ou page de plus de 128 Mpx refusée sans rien allouer.
+  - **Métadonnées** : auteurs, sujet et mots-clés du dictionnaire `Info` (titre et date ignorés, Q54 et Q57) ; migration 0018.
+  - **Documentation** technique et fonctionnelle à jour.
+- Validé sur l'exemple réel (`Hell's Paradise T04.pdf`, Calibre, 104 Mo) : 211 pages, `--deep` sain, JPEG identiques à `pdfimages -j`, auteur lu, ni titre ni date ; e2e : planche affichée au rapport de l'image, sans les marges, chaque page à sa couleur.
+- Qualité : 341 tests Rust, 326 tests Vitest, 13 tests de bout en bout ; couverture backend 96,9 % des lignes et 90,3 % des branches ; 5 PR (#95 à #98 et celle-ci), chaque lot passé en review Ponytail (6, 3 et 2 corrections).
+- Défauts trouvés et corrigés en route : scan qui relisait tout le PDF pour chaque page à décoder ; PDF coupé rouvert avec des pages en moins ; images d'une page plafonnées une à une mais pas ensemble ; filet blanc entre deux bandes arrondies séparément ; auteurs joints par « & » par Calibre lus comme un seul nom ; test de sauvegarde avant migration lié à la dernière migration en dur (à recaler à chaque nouvelle migration). La review du lot 8.2 avait d'abord été sautée, faite après coup.
+- Reste ouvert pour la suite :
+  - à vérifier sur de vrais fichiers : un PDF en bandes ou en tuiles, un scan noir et blanc (JBIG2, CCITT), un PDF chiffré sans mot de passe d'ouverture ;
+  - limites connues : rotation d'un angle quelconque arrondie au quart de tour, masque 1 bit toujours peint en noir, PDFDocEncoding lu comme du Latin-1, PDF lu en entier en mémoire à l'ouverture ;
+  - seuil de 50 % : l'exemple réel est à 55 %, un PDF aux marges plus larges perdrait ses pages (avertissement visible) ; à revoir si un vrai fichier le montre.
+
+## Phase 9 : maintenance de la bibliothèque (à planifier)
 
 Idées retenues le 2026-11-16 (audit fonctionnel externe, comparé à l'existant) : Shiori « prend soin de la bibliothèque autant que de la lecture ».
 

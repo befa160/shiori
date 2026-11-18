@@ -12,7 +12,7 @@ Une **bibliothèque** est un dossier de votre disque, avec un type qui donne le 
 | BD | de gauche à droite, page par page |
 | Webtoon | défilement vertical continu |
 
-Chaque **sous-dossier** de la bibliothèque est une **série**, et chaque fichier `.cbz` ou `.cbr` qu'il contient est un **tome** (ou un chapitre). Les bibliothèques se créent dans **Administration → Ajouter une bibliothèque** ; deux bibliothèques ne peuvent pas se chevaucher.
+Chaque **sous-dossier** de la bibliothèque est une **série**, et chaque fichier `.cbz`, `.cbr` ou `.pdf` qu'il contient est un **tome** (ou un chapitre). Les bibliothèques se créent dans **Administration → Ajouter une bibliothèque** ; deux bibliothèques ne peuvent pas se chevaucher.
 
 Un tome est reconnu par son contenu, pas par son nom : renommer ou déplacer un fichier, ou renommer le dossier d'une série, ne perd ni la progression ni les métadonnées.
 
@@ -61,7 +61,9 @@ Shiori lit le **numéro** dans le nom du fichier. Il reconnaît, sans tenir comp
 
 Ce qui est entre crochets ou parenthèses est ignoré (`[Team]`, `(2019)`, `(Digital)`), et une année seule n'est jamais prise pour un numéro. Dans une série, l'ordre est : tomes, puis chapitres hors tome, puis spéciaux, puis les fichiers sans numéro reconnu, chacun par numéro puis par nom.
 
-Formats lus : **CBZ** (zip, y compris les très gros fichiers) et **CBR** (RAR 4 et 5, y compris « solide », dont la première page s'ouvre un peu plus lentement). Images : JPEG, PNG, WebP, AVIF. Les pages sont triées dans l'ordre naturel de leurs noms (`2` avant `10`), quel que soit leur ordre dans l'archive. Shiori ne modifie jamais vos fichiers.
+Formats lus : **CBZ** (zip, y compris les très gros fichiers), **CBR** (RAR 4 et 5, y compris « solide », dont la première page s'ouvre un peu plus lentement) et **PDF**.
+
+Pour un **PDF**, Shiori affiche les images incluses dans le fichier, **sans les marges** de la page PDF : sur une tablette, la planche occupe tout l'écran. Une page faite de plusieurs morceaux (bandes, tuiles) est réassemblée. Une page de texte seul, ou dont l'image couvre moins de la moitié, est sautée et signalée (`pdf_page_without_image`) ; le texte posé sur une planche (crédits, préface) n'est pas affiché et est signalé (`pdf_text_ignored`), sauf la couche de texte invisible d'un scan (OCR). Un PDF protégé par un mot de passe n'est pas lu. Images : JPEG, PNG, WebP, AVIF. Les pages sont triées dans l'ordre naturel de leurs noms (`2` avant `10`), quel que soit leur ordre dans l'archive. Shiori ne modifie jamais vos fichiers.
 
 Les liens symboliques ne sont pas suivis. Les tomes d'un sous-dossier illisible sont gardés tels quels, avec un avertissement au journal du scan. Un dossier de bibliothèque absent, illisible ou soudain vide (disque réseau non monté) fait échouer le scan : rien n'est retiré, les séries et leurs réglages sont gardés jusqu'au retour des fichiers.
 
@@ -109,7 +111,7 @@ Hors téléchargements, l'application garde aussi les pages déjà vues : reveni
 Les informations d'une série (titre, titres alternatifs, résumé, auteurs, genres, année, éditeur, statut de publication, couverture, liens) viennent de trois sources, la première qui répond l'emporte, **champ par champ** :
 
 1. **vos modifications** (bouton **Modifier** de la page série) : un champ modifié est verrouillé, et ni un rescan ni une source web ne le remplacent ; « Rétablir » le rend aux sources ;
-2. **vos fichiers** : `ComicInfo.xml` et `index.json` dans les archives, lus au scan ;
+2. **vos fichiers** : `ComicInfo.xml` et `index.json` dans les archives, et pour un PDF ses propriétés (auteur, sujet, mots-clés ; son titre et sa date sont ignorés, ce sont souvent ceux de l'outil de conversion), lus au scan ;
 3. **les sources web**, si vous les autorisez : AniList et MangaDex.
 
 Le **titre affiché** est le titre modifié, sinon celui des fichiers, sinon celui des sources web (dans la langue de l'interface, ou en romaji), sinon le nom du dossier. Les autres titres restent cherchables.
@@ -142,15 +144,15 @@ Chaque problème trouvé par un scan a un code stable et une gravité. Un tome a
 
 | Code | Ce que ça veut dire | Que faire |
 |---|---|---|
-| `archive_unreadable` | Le fichier n'est pas un CBZ ou un CBR valide. | Retélécharger ou recréer l'archive. |
+| `archive_unreadable` | Le fichier n'est pas un CBZ, un CBR ou un PDF valide. | Retélécharger ou recréer l'archive. |
 | `archive_truncated` | Le fichier est coupé (téléchargement ou copie incomplète). | Retélécharger ou recopier le fichier. |
 | `multivolume_archive` | Archive en plusieurs volumes (`.part1.rar`…). | La réunir en une seule archive. |
-| `encrypted_entry` | Une page est protégée par un mot de passe. | Recréer l'archive sans mot de passe. |
+| `encrypted_entry` | Une page, ou tout le PDF, est protégée par un mot de passe. | Recréer l'archive ou le PDF sans mot de passe. |
 | `unsupported_compression` | Méthode de compression inconnue. | Recréer l'archive (zip standard). |
 | `crc_mismatch` | Le contenu d'une page ne correspond pas à l'archive : page abîmée. | Retélécharger le fichier. |
 | `size_mismatch` | La taille d'une page ne correspond pas à l'archive : page abîmée. | Retélécharger le fichier. |
 | `entry_too_large` | Une page est trop grande pour être lue sans risque. | Réduire l'image et recréer l'archive. |
-| `image_undecodable` | Une image ne peut pas être décodée. | Remplacer l'image abîmée. |
+| `image_undecodable` | Une image ne peut pas être décodée (ou, dans un PDF, annonce trop de pixels). | Remplacer l'image abîmée. |
 | `duplicate_entry_conflict` | Deux pages portent le même nom avec des contenus différents. | Renommer l'une des deux dans l'archive. |
 | `no_pages` | Aucune page lisible dans le fichier. | Vérifier le contenu de l'archive. |
 | `file_changed_during_scan` | Le fichier a changé pendant sa lecture (copie en cours). | Relancer le scan une fois la copie finie. |
@@ -166,6 +168,7 @@ Chaque problème trouvé par un scan a un code stable et une gravité. Un tome a
 | `subdirectories` | Les pages sont rangées dans des sous-dossiers de l'archive ; elles sont lues quand même. |
 | `archive_order_differs` | L'ordre des pages dans l'archive diffère de l'ordre de lecture ; Shiori suit l'ordre des noms. |
 | `metadata_invalid` | Un `ComicInfo.xml` ou un `index.json` illisible : ignoré, le tome reste lisible. |
+| `pdf_page_without_image` | Une page du PDF sans image (texte seul), ou dont l'image couvre moins de la moitié : sautée. |
 
 ### Informations
 
@@ -173,6 +176,7 @@ Chaque problème trouvé par un scan a un code stable et une gravité. Un tome a
 |---|---|
 | `ignored_entry` | Un fichier annexe connu (`ComicInfo.xml`, `Thumbs.db`, `.DS_Store`, dossier `__MACOSX`) a été ignoré. |
 | `solid_archive` | Archive RAR solide : la première page met un peu plus de temps à s'ouvrir. |
+| `pdf_text_ignored` | Le texte visible d'une page du PDF n'est pas affiché : seule l'image l'est. |
 
 ## Apparence et langue
 

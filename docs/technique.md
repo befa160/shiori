@@ -10,7 +10,7 @@ Un seul binaire Rust, `shiori`, avec deux commandes :
 - `shiori serve` (ou `shiori` sans argument) : serveur HTTP qui sert l'API JSON sous `/api` et l'application web (React) intégrée au binaire.
 
 ```
-fichiers CBZ / CBR ──scan──▶ SQLite ──API JSON / images──▶ application web (PWA)
+fichiers CBZ / CBR / PDF ──scan──▶ SQLite ──API JSON / images──▶ application web (PWA)
    (jamais modifiés)          (vérité)    (axum)                (React, service worker)
 ```
 
@@ -32,7 +32,8 @@ Les règles non négociables sont dans [CLAUDE.md](../CLAUDE.md) (« Principes d
 
 ```
 backend/                   workspace cargo (toolchain stable, rust-toolchain.toml)
-  crates/shiori-core/      archives, identités, parseur de noms, scan d'intégrité, ComicInfo / index.json
+  crates/shiori-core/      archives (CBZ, CBR, PDF), identités, parseur de noms, scan d'intégrité,
+                           ComicInfo / index.json / Info des PDF
                            (sans base ni async)
   crates/shiori-db/        base SQLite (sqlx) : scans, bibliothèques, séries, progression, réglages,
                            métadonnées et leur fusion ; migrations dans migrations/
@@ -56,8 +57,9 @@ docs/                      cette documentation et la note CBR
 
 - **CBZ** (`zip`) : lecture d'une entrée par l'annuaire central, sans extraction complète ; zip64 et gros fichiers gérés.
 - **CBR** (`rars`, Rust pur, jamais `unrar`) : RAR 4 et 5. Non solide : lecture directe par index. Solide (pas d'accès aléatoire) : extraction une fois dans le cache disque (`extract/<tome>/<index>`), sous le même plafond que les rendus. Détail dans [cbr.md](cbr.md).
+- **PDF** (`hayro-interpret`, Rust pur), lu comme une archive, sans conversion : Shiori sert les **images incluses**, pas la page PDF avec ses marges. Un `Device` qui ne dessine rien interprète chaque page (matrices, formulaires, `/Rotate`, couleurs, transparences) et relève ses images et son texte. Une page dont les images couvrent au moins la moitié de la surface donne une entrée `NNNN.jpg` ou `NNNN.png` (numéro de la page PDF) ; les autres sont écartées avec `pdf_page_without_image`. Un JPEG droit, gris ou RVB, sans masque, est servi **tel quel** : sa position dans le fichier est relevée à l'ouverture, puis lue directement (CRC revérifié) ; l'archive ouverte ne garde pas le contenu du PDF. Toute autre page est décodée puis encodée en PNG : image redressée, transparence gardée jusqu'à la superposition, page faite de plusieurs images (bandes, tuiles, calques) **recomposée** à la densité de l'image la plus fine et rognée à l'union des images. Garde-fous : `%%EOF` exigé (sinon `archive_truncated`, hayro rouvrirait un fichier coupé avec des pages en moins), 128 Mpx au plus par page, morceaux de moins d'un millième de la page écartés. Le scan charge le PDF une fois pour toutes ses pages.
 - **Scan d'intégrité** (`shiori-core::integrity`) : CRC et taille de chaque entrée, en-têtes et dimensions des images, doublons, fichiers parasites, sous-dossiers, ordre, archives tronquées ou chiffrées ; `--deep` décode chaque image. Chaque problème a un code stable et une gravité (liste et explications : [codes de diagnostic](fonctionnel.md#codes-de-diagnostic)). Une page illisible est marquée `broken`, le tome reste lisible pour le reste.
-- **Métadonnées des fichiers** : `ComicInfo.xml` et `index.json` lus pendant le scan (RAR solide compris), normalisés, gardés par tome ; un fichier illisible est un avertissement, jamais une erreur de tome.
+- **Métadonnées des fichiers** : `ComicInfo.xml` et `index.json` lus pendant le scan (RAR solide compris), et le dictionnaire `Info` d'un PDF (auteurs, sujet → résumé, mots-clés → tags ; ni titre ni date, souvent ceux de l'outil de conversion), normalisés, gardés par tome ; un fichier illisible est un avertissement, jamais une erreur de tome.
 
 ## Parseur de noms
 
@@ -136,7 +138,7 @@ Tout le reste est l'application web : un fichier de `web/dist`, ou `index.html` 
 
 ## Métadonnées
 
-Fusion **champ par champ** (`shiori-db::metadata`) : champ édité (verrouillé) > fichiers (`index.json`, puis `ComicInfo.xml`) > sources web dans l'ordre choisi. La vue fusionnée d'une série est recalculée et stockée à chaque changement, une fois par langue de l'interface (`merged`, `merged_en`), chaque compte lisant celle de sa langue ; celle d'un tome est calculée à la lecture (pour toute une série en deux requêtes).
+Fusion **champ par champ** (`shiori-db::metadata`) : champ édité (verrouillé) > fichiers (`index.json`, puis `ComicInfo.xml`, puis `Info` d'un PDF) > sources web dans l'ordre choisi. La vue fusionnée d'une série est recalculée et stockée à chaque changement, une fois par langue de l'interface (`merged`, `merged_en`), chaque compte lisant celle de sa langue ; celle d'un tome est calculée à la lecture (pour toute une série en deux requêtes).
 
 Sources web (`shiori-meta`, désactivées par défaut) : AniList (GraphQL) et MangaDex (REST), appelées hors du runtime async, débit sous les limites publiées, `Retry-After` respecté, nom de client générique, seul le titre de la série envoyé. Identification automatique après chaque scan : un lien seulement si un seul candidat a exactement le même titre normalisé. Couvertures téléchargées depuis les seuls hôtes connus de chaque source, sans suivre de redirection (parade SSRF), 4 096 px de côté au plus.
 
@@ -180,6 +182,7 @@ Sources web (`shiori-meta`, désactivées par défaut) : AniList (GraphQL) et Ma
 | Base | SQLite via sqlx (`sqlite-bundled`) | un fichier, rien à installer, requêtes vérifiées, migrations |
 | ZIP | zip | zip64, accès direct par l'annuaire central |
 | RAR | rars | Rust pur, RAR 4 et 5, solide compris (jamais `unrar`, non libre) |
+| PDF | hayro-interpret (`embed-fonts`) | Rust pur, analyse paresseuse (1 ms pour un PDF de 104 Mo une fois lu, contre 200 ms et tout en mémoire pour lopdf), décodeurs JPEG 2000, JBIG2, CCITT inclus ; les 14 polices standard (300 Kio) pour voir le texte en Helvetica non inclus |
 | Hash | blake3 (`pure`) | rapide, sans code C |
 | Images | image, ravif, imagesize | décodage et encodage AVIF / JPEG en Rust pur, dimensions sans décoder |
 | HTTP sortant | ureq + rustls (`ring`) | client synchrone simple, TLS sans OpenSSL |
