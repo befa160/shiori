@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { HardDriveDownload, Loader2, LogOut, Settings } from 'lucide-react'
-import { useId, useState } from 'react'
+import { HardDriveDownload, Settings } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { toast } from 'sonner'
@@ -9,25 +8,13 @@ import type { Device } from '@/api/types'
 import { formatDate } from '@/admin/format'
 import { PageTurnSetting } from '@/admin/PageTurnSetting'
 import { ThemeSetting } from '@/admin/ThemeSetting'
-import { accountError, signOut, useUser } from '@/auth/session'
+import { accountError, useUser } from '@/auth/session'
 import { QueryState } from '@/browse/parts'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import { useOnline } from '@/lib/online'
-import { useOffline } from '@/offline/downloads'
 import { LanguageSelect } from '@/pages/LanguageSelect'
 import { deviceName } from './device'
 import { PasswordForm } from './PasswordForm'
+import { SignOut } from './SignOut'
 import { TokensSection } from './TokensSection'
 import { TotpSection } from './TotpSection'
 
@@ -145,46 +132,5 @@ function DeviceRow({ device }: { device: Device }) {
         </Button>
       )}
     </li>
-  )
-}
-
-/** Déconnexion ; propose d'effacer aussi les tomes téléchargés sur cet appareil. */
-function SignOut() {
-  const { t } = useTranslation()
-  const id = useId()
-  const queryClient = useQueryClient()
-  const online = useOnline()
-  const { downloads } = useOffline()
-  const [erase, setErase] = useState(false)
-  const out = useMutation({
-    mutationFn: () => signOut(queryClient, erase ? downloads.map((d) => d.volumeId) : []),
-    onError: (error) => toast.error(t('account.signOutFailed'), { description: accountError(error, t) }),
-  })
-  return (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
-        {/* Sans réseau, la session ne peut pas être fermée sur le serveur. */}
-        <Button variant="secondary" disabled={!online || out.isPending}>
-          {out.isPending ? <Loader2 aria-hidden className="animate-spin" /> : <LogOut aria-hidden />}
-          {t('account.signOut')}
-        </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogTitle>{t('account.signOutTitle')}</AlertDialogTitle>
-        <AlertDialogDescription>{t('account.signOutDescription')}</AlertDialogDescription>
-        {downloads.length > 0 && (
-          <div className="flex items-center gap-3">
-            <Checkbox id={`${id}-erase`} checked={erase} onCheckedChange={(v) => setErase(v === true)} />
-            <label htmlFor={`${id}-erase`} className="flex min-h-11 items-center text-sm">
-              {t('account.eraseDownloads', { count: downloads.length })}
-            </label>
-          </div>
-        )}
-        <AlertDialogFooter>
-          <AlertDialogCancel>{t('admin.cancel')}</AlertDialogCancel>
-          <AlertDialogAction onClick={() => out.mutate()}>{t('account.signOut')}</AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
   )
 }

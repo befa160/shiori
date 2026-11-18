@@ -1233,11 +1233,10 @@ Accès d'une nouvelle bibliothèque (Q49) : `user_libraries` est une liste expli
 - Validé : e2e connectés (compte créé par `shiori user add`, session partagée) ; captures aux quatre tailles à chaque lot d'interface ; restauration réelle depuis l'interface (compte créé après la sauvegarde disparu, reconnexion demandée) et sauvegarde périodique au démarrage.
 - Qualité : 320 tests Rust, 325 tests Vitest, 12 tests de bout en bout ; couverture backend 96,9 % des lignes et 90,7 % des branches, front 98,9 % et 94,7 % ; 11 PR (#80, #81, #83 à #85, #87 à #91 et celle-ci), chaque lot de fonctionnalité passé en review Ponytail.
 - Défauts trouvés et corrigés en route : test d'annulation de scan en course sous Windows, rouge sur `main` depuis #88 (#90) ; deux fichiers téléversés dans la même seconde qui portaient le même nom (vu par le test, avant fusion) ; fichiers temporaires partagés par deux sauvegardes ou restaurations simultanées (review Ponytail).
+- Ajouté après le bilan (`feat/share-and-sign-out`, 2026-11-18) : case **Donner accès à tous les lecteurs** à la création d'une bibliothèque (prévue au plan, l'API l'acceptait déjà, fermée par défaut), **Se déconnecter** en bas de la barre latérale desktop (même confirmation que la page Compte, infobulle une fois la barre réduite).
 - Reste ouvert pour la suite :
-  - case « Donner accès à tous les lecteurs » à la création d'une bibliothèque : prévue au plan, acceptée par l'API (`share`), absente de l'interface ; aujourd'hui on ouvre la bibliothèque compte par compte dans Administration → Comptes ;
   - liens d'invitation, en-tête `Remote-User` d'un proxy d'authentification (Q42), OPDS sur les jetons d'API ;
   - à vérifier sur du vrai matériel : connexion et session longue de la PWA installée sur la Tab A9 et le A55, cookie `Secure` derrière un vrai reverse proxy HTTPS, Backrest réel sur le dossier des sauvegardes ;
-  - bouton « Se déconnecter » dans la barre latérale desktop (question posée au lot 7.7, sans réponse).
 
 ### Décisions (Q42 à Q52, tranchées les 2026-11-17 et 18)
 

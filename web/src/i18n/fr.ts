@@ -91,6 +91,8 @@ export const fr = {
     rootHelp: 'Chemin complet du dossier sur le serveur, par exemple /srv/manga ou D:\\Mangas.',
     kind: 'Type',
     kindHelp: 'Il donne le sens de lecture par défaut de ses séries.',
+    share: 'Donner accès à tous les lecteurs',
+    shareHelp: 'Sinon, seuls les administrateurs la voient ; on l’ouvre ensuite compte par compte dans Administration → Comptes.',
     cancel: 'Annuler',
     create: 'Créer et scanner',
     created: 'Bibliothèque « {{name}} » créée',

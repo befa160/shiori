@@ -25,6 +25,7 @@ import {
 import { ScanWatcher } from '@/admin/scans'
 import { useOnline } from '@/lib/online'
 import { useTheme } from '@/lib/theme'
+import { SignOut } from '@/account/SignOut'
 import { LanguageSelect } from './LanguageSelect'
 
 // Destinations principales : sidebar à partir de `lg`, barre d'onglets en dessous (4 au plus).
@@ -125,6 +126,9 @@ function AppSidebar() {
               {admin && <NavItem {...ADMIN} />}
               {/* Le nom du compte plutôt que « Compte » : on voit qui est connecté. */}
               <NavItem {...NAV[3]} name={user?.username} />
+              <SidebarMenuItem>
+                <SignOut sidebar />
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroup>
         </SidebarContent>
