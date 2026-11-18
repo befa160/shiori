@@ -197,6 +197,12 @@ async fn scan_then_read_history_detail_and_logs() {
 async fn follow_and_cancel_a_running_scan() {
     let f = Fixture::new().await;
     many(&f.root, 12);
+    // Premier fichier du tri : 1 Gio creux à hacher avant toute écriture, le test a le temps de
+    // prendre le verrou (12 petits tomes se scannaient parfois avant, sous Windows).
+    std::fs::File::create(f.root.join("0 gros.cbz"))
+        .unwrap()
+        .set_len(1 << 30)
+        .unwrap();
     let (status, started) = f
         .start(json!({ "library_id": f.library, "rehash": true }))
         .await;
