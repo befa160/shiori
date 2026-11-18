@@ -101,16 +101,26 @@ async fn run(app: Arc<App>, timing: Timing) {
     // Sans ça, chaque scan (qui écrit la base) en relancerait un autre.
     let db_file = app.db.pool().connect_options().get_filename().to_path_buf();
     let db_file = std::path::absolute(&db_file).unwrap_or(db_file);
-    let own = [app.images.dir().to_path_buf(), app.backups.dir.clone()];
+    // Chaque dossier sous ses deux formes : macOS signale le chemin réel (`/private/var/…`).
+    let both = |dir: &Path| {
+        let real = std::fs::canonicalize(dir).unwrap_or_else(|_| dir.to_path_buf());
+        [dir.to_path_buf(), real]
+    };
+    let own: Vec<PathBuf> = [app.images.dir(), &app.backups.dir]
+        .into_iter()
+        .flat_map(both)
+        .collect();
+    let db_dirs = db_file.parent().map(both).unwrap_or_default();
+    let db_name = db_file.file_name().unwrap_or_default().to_owned();
     let ours = move |path: &Path| {
         own.iter().any(|dir| path.starts_with(dir))
-            || path.parent() == db_file.parent()
-                && path
-                    .file_name()
-                    .zip(db_file.file_name())
-                    .is_some_and(|(name, db)| {
-                        name.as_encoded_bytes().starts_with(db.as_encoded_bytes())
-                    })
+            || path
+                .parent()
+                .is_some_and(|dir| db_dirs.iter().any(|d| d == dir))
+                && path.file_name().is_some_and(|name| {
+                    name.as_encoded_bytes()
+                        .starts_with(db_name.as_encoded_bytes())
+                })
     };
     let mut tick = tokio::time::interval(timing.tick);
     loop {

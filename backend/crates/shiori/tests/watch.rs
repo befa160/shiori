@@ -57,7 +57,7 @@ async fn fixture(watch: bool) -> Fixture {
 
 impl Fixture {
     /// `(dossier, déclencheur)` des passes terminées, dans l'ordre.
-    async fn runs(&self) -> Vec<(String, String)> {
+    async fn runs(&self) -> Vec<(std::path::PathBuf, String)> {
         sqlx::query(
             "SELECT root, options ->> 'trigger' AS t FROM scan_runs
              WHERE status = 'completed' ORDER BY id",
@@ -66,7 +66,7 @@ impl Fixture {
         .await
         .unwrap()
         .iter()
-        .map(|r| (r.get("root"), r.get("t")))
+        .map(|r| (r.get::<String, _>("root").into(), r.get("t")))
         .collect()
     }
 
@@ -79,7 +79,7 @@ impl Fixture {
     }
 
     /// Attend (20 s au plus) qu'une passe terminée vérifie `done`.
-    async fn until(&self, what: &str, done: impl Fn(&[(String, String)]) -> bool) {
+    async fn until(&self, what: &str, done: impl Fn(&[(std::path::PathBuf, String)]) -> bool) {
         for _ in 0..400 {
             if done(&self.runs().await) && self.app.scanner.progress().await.is_none() {
                 return;
@@ -90,8 +90,9 @@ impl Fixture {
     }
 }
 
-fn shown(path: &Path) -> String {
-    path.display().to_string()
+/// Comparé en `Path` : sous Windows, `/` et `\` séparent pareil.
+fn shown(path: &Path) -> std::path::PathBuf {
+    path.to_path_buf()
 }
 
 #[tokio::test]
