@@ -394,6 +394,8 @@ pub fn router(app: Arc<App>, hosts: Option<Vec<String>>) -> Router {
         )
         .route("/api/volumes/{id}/pages", get(pages))
         .route("/api/pages/{id}/image", get(page_image))
+        .route("/api/admin/health", get(health_summary))
+        .route("/api/admin/health/files", get(files_to_repair))
         .route("/api/admin/scans", get(scans).post(start_scan))
         .route("/api/admin/scans/current", get(current_scan))
         .route("/api/admin/scans/current/cancel", post(cancel_scan))
@@ -1245,6 +1247,35 @@ async fn cancel_scan(
             "aucun scan en cours",
         )),
     }
+}
+
+/// Santé des bibliothèques : états des tomes, fichiers illisibles, codes présents.
+async fn health_summary(_: Admin, State(app): State<Arc<App>>) -> ApiResult<shiori_db::Health> {
+    Ok(Json(app.db.health().await?))
+}
+
+#[derive(Deserialize)]
+struct RepairQuery {
+    library_id: Option<i64>,
+    code: Option<shiori_core::IssueCode>,
+    /// Chemins après celui-ci (pagination).
+    after: Option<String>,
+    limit: Option<u32>,
+}
+
+async fn files_to_repair(
+    _: Admin,
+    State(app): State<Arc<App>>,
+    query: Result<Query<RepairQuery>, QueryRejection>,
+) -> ApiResult<Vec<shiori_db::FileHealth>> {
+    let Query(q) = query.map_err(invalid_query)?;
+    let filter = shiori_db::HealthFilter {
+        library_id: q.library_id,
+        code: q.code,
+        after: q.after,
+        limit: limit(q.limit),
+    };
+    Ok(Json(app.db.files_to_repair(&filter).await?))
 }
 
 #[derive(Deserialize)]

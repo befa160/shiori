@@ -342,6 +342,9 @@ impl Pass {
                 .log(self.run, Severity::Warning, None, None, &message);
             logged.await?;
         }
+        let folder_is_root = folder
+            .as_ref()
+            .is_some_and(|d| *d == Path::new(&self.library.root));
         if let Some(dir) = folder {
             let removed = self
                 .db
@@ -350,6 +353,9 @@ impl Pass {
             self.progress.write().await.counts.removed = removed;
         }
         self.db.refresh_series(&self.library).await?;
+        if self.options.deep && folder_is_root {
+            self.db.set_deep_checked(self.library.id).await?;
+        }
         Ok(true)
     }
 

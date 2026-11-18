@@ -13,7 +13,9 @@ import type {
   Preferences,
   Role,
   User,
+  FileHealth,
   Health,
+  LibrariesHealth,
   Library,
   LibraryKind,
   LogLine,
@@ -96,6 +98,8 @@ export const api = {
     must<{ run: number }>('/admin/scans', { method: 'POST', body: JSON.stringify({ library_id: libraryId, ...options }) }),
   currentScan: (init?: RequestInit) => request<ScanProgress>('/admin/scans/current', init),
   cancelScan: () => request<null>('/admin/scans/current/cancel', { method: 'POST' }),
+  librariesHealth: (init?: RequestInit) => must<LibrariesHealth>('/admin/health', init),
+  filesToRepair: (query: URLSearchParams, init?: RequestInit) => must<FileHealth[]>(`/admin/health/files?${query}`, init),
   scans: (query: URLSearchParams, init?: RequestInit) => must<RunSummary[]>(`/admin/scans?${query}`, init),
   scan: (id: number, init?: RequestInit) => must<RunSummary>(`/admin/scans/${id}`, init),
   scanLogs: (id: number, query: URLSearchParams, init?: RequestInit) =>

@@ -6,6 +6,7 @@ import { AdminOnly } from '@/auth/AdminOnly'
 import { LibraryPage } from '@/browse/LibraryPage'
 import { SeriesPage } from '@/browse/SeriesPage'
 import { WithId } from '@/browse/parts'
+import { HealthPage } from '@/admin/Health'
 import { ScanPage, ScansPage } from '@/admin/scans'
 import { HomePage } from '@/library/HomePage'
 import { DownloadsPage } from '@/offline/DownloadsPage'
@@ -47,6 +48,7 @@ export const routes: RouteObject[] = [
               { path: 'admin', element: <AdminPage /> },
               { path: 'admin/users', element: <AccountsPage /> },
               { path: 'admin/scans', element: <ScansPage /> },
+              { path: 'admin/health', element: <HealthPage /> },
               { path: 'admin/scans/:id', element: <WithId>{(id) => <ScanPage id={id} />}</WithId> },
             ],
           },

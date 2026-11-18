@@ -43,7 +43,7 @@ export function ScanWatcher() {
     const run = running.current ?? started ?? null
     if (run === null) return
     running.current = null
-    for (const queryKey of [['libraries'], ['series'], ['continue'], ['volumes'], ['scans', 'history'], ['scans', 'run', run], ['scans', 'logs', run]]) {
+    for (const queryKey of [['libraries'], ['series'], ['continue'], ['volumes'], ['health'], ['scans', 'history'], ['scans', 'run', run], ['scans', 'logs', run]]) {
       void queryClient.invalidateQueries({ queryKey })
     }
     api

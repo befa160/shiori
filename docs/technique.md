@@ -74,7 +74,7 @@ SQLite (`sqlx`, `sqlite-bundled`), un fichier `shiori.db`, migrations appliquée
 | `volumes` | un tome par contenu : hash, taille, format, statut, nombre de pages, date du scan |
 | `pages` | une ligne par page : `page_id`, tome, nom d'entrée, `ordinal`, index dans l'archive, largeur, hauteur, type, statut |
 | `file_locations` | où se trouve chaque tome : chemin, taille, date, série, résultat du parseur de noms |
-| `libraries`, `series` | bibliothèques (racine, type) et séries (dossier, nom, statut) |
+| `libraries`, `series` | bibliothèques (racine, type, surveillance, date de la dernière vérification complète) et séries (dossier, nom, statut) |
 | `scan_runs`, `scan_issues`, `scan_run_logs` | passes de scan, problèmes par tome, journal de chaque passe (conservé `--scan-log-days`) |
 | `users`, `sessions`, `user_libraries` | comptes (Argon2id, rôle), sessions (hash BLAKE3 du jeton, 90 jours glissants), bibliothèques ouvertes à un lecteur |
 | `user_totp`, `user_recovery_codes` | secret TOTP d'un compte (dernier pas accepté, pour qu'un code ne resserve pas), codes de secours (hash BLAKE3, usage unique) |
@@ -122,6 +122,7 @@ JSON sous `/api`, erreurs `{ "code", "message" }` avec un code stable que l'inte
 | `GET /api/pages/{id}/image` | une page : originale, ou `?w=<largeur>&f=avif\|jpeg` |
 | `GET, POST /api/admin/scans`, `GET /api/admin/scans/{id}`, `.../logs` | historique, lancer un scan, une passe, son journal |
 | `GET /api/admin/scans/current`, `POST .../current/cancel` | scan en cours, annulation |
+| `GET /api/admin/health`, `GET /api/admin/health/files` | santé : tomes par état, fichiers illisibles, dernière vérification complète, codes présents ; fichiers à réparer triés par chemin (`library_id`, `code`, `after`, `limit`) |
 | `GET /api/admin/metadata`, `POST /api/admin/metadata/identify` | état des sources, identification de toutes les séries |
 | `GET /api/admin/storage` | chemins complets de la base et du cache |
 | `GET, POST /api/admin/backups`, `GET, DELETE .../{nom}` | sauvegardes : liste (dossier, fréquence), en faire une, la télécharger, la supprimer |

@@ -429,3 +429,33 @@ export interface AccountPatch {
   disabled?: boolean
   libraries?: number[]
 }
+
+/** Santé d'une bibliothèque (`GET /api/admin/health`) : tomes par état de leur dernier scan. */
+export interface LibraryHealth {
+  id: number
+  name: string
+  ok: number
+  warning: number
+  error: number
+  /** Fichiers sans tome fiable (illisibles) : rien à afficher. */
+  unreadable: number
+  /** Fin de la dernière vérification complète (`deep`) ; `null` : jamais. */
+  deep_checked_at: string | null
+}
+
+export interface LibrariesHealth {
+  libraries: LibraryHealth[]
+  /** Avertissements et erreurs présents, des plus graves aux plus fréquents. */
+  codes: { code: string; severity: Severity; files: number }[]
+}
+
+/** Un fichier à réparer (`GET /api/admin/health/files`), trié par chemin. */
+export interface FileHealth {
+  path: string
+  library_id: number
+  /** `null` pour un fichier illisible. */
+  volume_id: string | null
+  series_id: number | null
+  status: Severity
+  issues: { severity: Severity; code: string; entry_name: string | null; message: string }[]
+}

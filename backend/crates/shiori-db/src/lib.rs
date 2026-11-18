@@ -34,6 +34,7 @@ macro_rules! now {
 mod accounts;
 mod backup;
 mod browse;
+mod health;
 mod library;
 mod metadata;
 mod reading;
@@ -52,6 +53,7 @@ pub use browse::{
     ContinueItem, LibrarySummary, PageFile, PageInfo, PageSource, PublicationStatus, ReadingStatus,
     SeriesDetail, SeriesSummary, SeriesVolume, VolumeDetail, VolumeLocation,
 };
+pub use health::{CodeCount, FileHealth, FileIssue, Health, HealthFilter, LibraryHealth};
 pub use library::{Library, LibraryError};
 pub use metadata::{EditError, Edited, SeriesMetadata, VolumeMetadata};
 pub use reading::{
