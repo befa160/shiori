@@ -1280,7 +1280,7 @@ Audit complet après la phase 6 (couverture backend 96,85 % lignes / 91,64 % bra
 - Aucun délai de connexion ni limite de débit dans `serve` : vérifier les défauts d'axum avant une exposition sans reverse proxy ; limiter les essais de connexion.
 - Non vérifié pendant l'audit : `cargo audit`, clippy, `cargo fmt`, tests Playwright ; `sw.js` n'est couvert que par eux.
 
-## Phase 8 : lecture des PDF sans marges (demandée le 2026-11-17, à planifier après la phase 7)
+## Phase 8 : lecture des PDF sans marges (demandée le 2026-11-17, plan validé le 2026-11-18)
 
 ### Objectif
 
@@ -1300,13 +1300,35 @@ Lire les BD et mangas en PDF **sans les marges** qui rendent la page minuscule s
 - **Bordures blanches à l'intérieur d'une image scannée** : pas de rognage pour l'instant (risque de couper une case au fond blanc) ; à revoir si un vrai PDF le demande.
 - **Métadonnées du PDF** (titre, auteur, sujet, mots-clés, date) : lues au scan comme source locale, au même rang que `ComicInfo.xml` ; sources web et édition manuelle gardent les règles de fusion actuelles.
 
-### Plan technique (à détailler avant de coder)
+### Essai des crates (2026-11-18, sur `Hell's Paradise T04.pdf`)
 
-- **Lecture** en Rust pur : `lopdf` 0.47 ou `hayro-syntax` 0.9 (MIT ou Apache-2.0), à comparer sur l'exemple (vitesse d'ouverture d'un PDF de 100 Mo, robustesse aux PDF abîmés). Chaque page du PDF qui a au moins une image donne une page du tome. ID de page = hash(hash du fichier, identifiant de l'entrée), comme pour un CBZ (principe 1) ; ordre = ordre des pages du PDF.
-- **Images** : un JPEG (`DCTDecode`, cas de l'exemple) est servi tel quel, sans réencodage ; une image `FlateDecode` (pixels bruts) est réencodée ; JPEG 2000, JBIG2 et CCITT (scans noir et blanc) passent par `hayro-jpeg2000`, `hayro-jbig2` et `hayro-ccitt`, purs Rust. Rotation de la page (`/Rotate`) et retournement par la matrice de dessin appliqués. Couche de texte OCR invisible ignorée.
-- **Service** : lecture d'une image à la demande par sa référence dans le PDF (table des objets, accès direct) ; une page recomposée, ou trop lente à décoder, passe par le cache d'extraction déjà utilisé pour les RAR solid. Redimensionnement, AVIF, cache et URLs immuables inchangés (principes 2 et 7).
-- **Scan** : nouveaux codes de diagnostic (page sans image, image illisible, PDF chiffré ou abîmé), traduits dans l'interface ; `--deep` décode chaque image.
-- **Tests** : fixtures PDF générées dans `shiori-testkit` (une image par page, page sans image, page en bandes, page tournée, JPEG et Flate), et vérification sur l'exemple réel.
+- **hayro-syntax 0.9** (MIT ou Apache-2.0) : analyse paresseuse ; une fois le fichier lu (330 ms à chaud pour 104 Mo, lecture disque), ouverture **1 ms**, parcours des 211 pages et de leurs images **3 ms** ; 211 images `DCTDecode`, octets bruts = JPEG complet (`FF D8 FF E0`). La feature `images` décode Flate, JPEG 2000, JBIG2 et CCITT (`hayro-jpeg2000`, `hayro-jbig2`, `hayro-ccitt`, `zune-jpeg`), purs Rust.
+- **lopdf 0.47** (MIT) : charge et analyse tout le document d'un coup (200 ms, tous les flux copiés en mémoire), sans décodeur d'image.
+- **Choix : hayro-syntax.** `unsafe_code = "forbid"` exclut le fichier projeté en mémoire (`memmap2`) : le fichier est lu en entier, à l'ouverture seulement (voir « Service »).
+
+### Décisions du plan (2026-11-18)
+
+- **Q53 Lots** : quatre (8.1 à 8.4 ci-dessous).
+- **Q54 Titre du PDF ignoré** : les outils de conversion y mettent n'importe quoi (Calibre : « Hell's Paradise T04 (French Edition) »). On lit auteur (`Author` → auteur, rôle scénario et dessin), sujet (`Subject` → résumé), mots-clés (`Keywords` → tags, séparés par `,` ou `;`) et date de création (→ date de sortie, `AAAA-MM-JJ`) ; série et numéro viennent du nom du fichier comme aujourd'hui.
+- **Q55 Texte visible perdu** : une page qui a une image et du texte visible ne sert que l'image ; diagnostic **info** `pdf_text_ignored` par page, le tome reste sain. La couche OCR invisible (mode de rendu 3) n'est jamais signalée.
+- **Q56 Seuil de 50 %** : une page dont les images couvrent moins de la moitié de la surface (boîte de rognage) est traitée comme une page sans image : ignorée, avertissement `pdf_page_without_image` (« page N sans image, ignorée »). Un PDF sans aucune page retenue : erreur `no_pages` existante.
+- **Format des pages réencodées** : PNG (sans perte) ; le redimensionnement en AVIF et le cache restent ceux d'aujourd'hui (principe 7).
+
+### Plan technique
+
+- **`shiori-core::archive::pdf::PdfArchive`**, derrière le trait `Archive` existant (comme `RarArchive`) ; `archive::open` reconnaît un PDF à son contenu (`%PDF-` dans le premier Kio), pas à son extension. Une entrée par page retenue : `index` = position dans la liste, nom = numéro de la page PDF sur quatre chiffres et extension du format servi (`0007.jpg`, `0012.png`), donc tri naturel = ordre du PDF ; ID de page = hash(hash du fichier, nom) comme pour un CBZ (principe 1) ; `crc32` = CRC des octets bruts de l'image, revérifié à chaque lecture.
+- **Pages à une image** : JPEG seul (`DCTDecode`, sans autre filtre, page non tournée, dessinée sans retournement) servi **tel quel** ; toute autre image décodée par hayro puis encodée en PNG.
+- **Service** : `PdfArchive::open` lit le fichier, relève pour chaque page la position et la longueur de ses octets bruts dans le fichier, puis **libère** le contenu : l'archive gardée dans la liste des archives ouvertes (`OPEN_ARCHIVES`, 4 au plus) ne pèse que quelques Kio, pas 100 Mo. Lire une page JPEG = lire sa tranche du fichier ; une page à décoder (PNG, recomposée) relit le PDF. Pas de cache d'extraction : le cache disque des images rendues (principe 7) absorbe déjà le coût.
+- **Diagnostics** (codes stables, traduits fr/en dans l'interface) : `pdf_page_without_image` (avertissement), `pdf_text_ignored` (info) ; PDF chiffré → `encrypted_entry` sur le fichier ; PDF abîmé → `archive_unreadable` / `archive_truncated` ; image illisible → `image_undecodable` existant, la page reste listée en `broken` (principe 4). `--deep` décode chaque image comme aujourd'hui.
+- **Scan** : `.pdf` ajouté aux extensions recherchées (`scan.rs`, message « aucun fichier .cbz, .cbr ou .pdf ») ; `format = 'pdf'` en base (colonne `TEXT` sans contrainte : aucune migration) et lu par `shiori-db`.
+- **Tests** : fixtures PDF générées dans `shiori-testkit` avec `pdf-writer` (typst, MIT ou Apache-2.0 ; dépendance de test seulement) ; vérification sur l'exemple réel (211 pages, JPEG servis à l'octet près).
+
+### Lots
+
+- [ ] **8.1 `feat/pdf`** : `PdfArchive`, pages à une image (JPEG tel quel ; Flate, JPEG 2000, JBIG2, CCITT → PNG), seuil de 50 %, `pdf_page_without_image`, `pdf_text_ignored`, PDF chiffré ou abîmé, scan des `.pdf`, `format = 'pdf'`, codes traduits, fixtures (JPEG, Flate, page sans image, petite image, texte visible, texte OCR invisible, chiffré, tronqué), e2e : lire un PDF dans le lecteur.
+- [ ] **8.2 `feat/pdf-compose`** : pages recomposées : plusieurs images (bandes, tuiles) placées d'après leur matrice de dessin (`cm`, pile `q`/`Q`) sur la taille de l'image la plus fine, transparence `SMask` aplatie sur blanc, rotation de la page (`/Rotate`) et retournement appliqués ; fixtures pour chaque cas.
+- [ ] **8.3 `feat/pdf-metadata`** : dictionnaire `Info` (Q54) comme source locale `pdf`, au même rang que `ComicInfo.xml` (`MetadataSource::Pdf`) ; règles de fusion inchangées.
+- [ ] **8.4 `docs/phase8`** : docs technique, fonctionnelle (codes de diagnostic, ce qu'un PDF donne) et installation (formats lus) ; bilan de la phase ; version 0.3.0.
 
 ## Phase 9 : maintenance de la bibliothèque (à planifier après la phase 8)
 
