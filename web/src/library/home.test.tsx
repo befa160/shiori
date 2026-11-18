@@ -8,8 +8,8 @@ import { titleHue } from './titleHue'
 afterEach(() => vi.unstubAllGlobals())
 
 const libraries: Library[] = [
-  { id: 1, name: 'Mangas', root: '/m', kind: 'manga', series_count: 2, volume_count: 3 },
-  { id: 2, name: 'Vide', root: '/v', kind: 'comics', series_count: 0, volume_count: 0 },
+  { id: 1, name: 'Mangas', root: '/m', kind: 'manga', watch: true, series_count: 2, volume_count: 3 },
+  { id: 2, name: 'Vide', root: '/v', kind: 'comics', watch: true, series_count: 0, volume_count: 0 },
 ]
 const summary = {
   library_id: 1,

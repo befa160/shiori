@@ -5,8 +5,8 @@ import type { Library } from '@/api/types'
 import { json, mockApi, renderAt } from '@/test/render'
 
 const libraries: Library[] = [
-  { id: 1, name: 'Mangas', root: '/m', kind: 'manga', series_count: 0, volume_count: 0 },
-  { id: 2, name: 'Webtoons', root: '/w', kind: 'webtoon', series_count: 0, volume_count: 0 },
+  { id: 1, name: 'Mangas', root: '/m', kind: 'manga', watch: true, series_count: 0, volume_count: 0 },
+  { id: 2, name: 'Webtoons', root: '/w', kind: 'webtoon', watch: true, series_count: 0, volume_count: 0 },
 ]
 
 afterEach(() => {

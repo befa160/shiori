@@ -6,7 +6,7 @@ import { json, mockApi, renderAt } from '@/test/render'
 
 afterEach(() => vi.unstubAllGlobals())
 
-const mangas: Library = { id: 1, name: 'Mangas', root: '/srv/manga', kind: 'manga', series_count: 2, volume_count: 5 }
+const mangas: Library = { id: 1, name: 'Mangas', root: '/srv/manga', kind: 'manga', watch: true, series_count: 2, volume_count: 5 }
 const main = () => within(screen.getByRole('main'))
 const region = () => within(main().getByRole('region', { name: 'Bibliothèques' }))
 const sent = (fetch: ReturnType<typeof mockApi>, method: string) =>
@@ -128,5 +128,49 @@ describe('administration des bibliothèques', () => {
     await userEvent.click(await main().findByRole('link', { name: 'Ajouter une bibliothèque' }))
     expect(router.state.location.pathname).toBe('/admin')
     expect(await region().findByText(/Aucune bibliothèque. Ajoutez le dossier/)).toBeInTheDocument()
+  })
+})
+
+describe('surveillance des dossiers', () => {
+  it('arrête la surveillance d’une bibliothèque, et la remet si le serveur refuse', async () => {
+    const answers = [new Response(null, { status: 204 }), json({ code: 'internal', message: 'erreur interne' }, 500)]
+    let watching = true
+    const fetch = mockApi({
+      '/api/libraries': () => json([{ ...mangas, watch: watching }]),
+      '/api/libraries/1': (init) => {
+        const answer = answers.shift() as Response
+        if (answer.ok) watching = JSON.parse(String(init?.body)).watch
+        return answer
+      },
+    })
+    renderAt('/admin')
+    const toggle = await region().findByRole('switch', { name: 'Surveiller les dossiers de Mangas' })
+    expect(toggle).toBeChecked()
+    expect(toggle).toHaveAccessibleDescription('Surveillance des dossiers : un fichier ajouté, remplacé ou retiré est scanné 30 secondes plus tard.')
+    await userEvent.click(toggle)
+    await waitFor(() => expect(toggle).not.toBeChecked())
+    expect(sent(fetch, 'PATCH')).toEqual([['/api/libraries/1', { watch: false }]])
+    // Refus : l'interrupteur revient à l'état du serveur, l'erreur est dite.
+    await userEvent.click(toggle)
+    expect(await screen.findByText('Surveillance non modifiée')).toBeInTheDocument()
+    await waitFor(() => expect(toggle).not.toBeChecked())
+  })
+
+  it('règle l’intervalle du scan complet', async () => {
+    let current = { language: 'fr', full_scan_hours: 24 }
+    const fetch = mockApi({
+      '/api/libraries': () => json([mangas]),
+      '/api/settings': (init) => {
+        if (init?.method === 'PUT') current = { ...current, ...JSON.parse(String(init.body)) }
+        return json(current)
+      },
+    })
+    renderAt('/admin')
+    const interval = await region().findByRole('combobox', { name: 'Scan complet' })
+    expect(interval).toHaveTextContent('Une fois par jour')
+    await userEvent.click(interval)
+    await userEvent.click(await screen.findByRole('option', { name: 'Jamais' }))
+    await waitFor(() => expect(interval).toHaveTextContent('Jamais'))
+    expect(sent(fetch, 'PUT')).toEqual([['/api/settings', { full_scan_hours: 0 }]])
   })
 })

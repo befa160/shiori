@@ -107,6 +107,15 @@ export const en: Translations = {
       'Shiori forgets this library and its series. Your files are not touched, and reading progress is kept: it comes back if the files are added again.',
     deleted: 'Library “{{name}}” deleted',
     deleteFailed: 'Library not deleted',
+    watch: 'Watch folders',
+    watchNamed: 'Watch the folders of {{name}}',
+    watchHelp: 'Folder watching: a file added, replaced or removed is scanned 30 seconds later.',
+    watchNotSaved: 'Watching not changed',
+    fullScan: 'Full scan',
+    fullScanHelp:
+      'Rescans every library to catch what watching cannot see: a network share changed from another machine, Docker Desktop.',
+    fullScanEvery: { h0: 'Never', h1: 'Every hour', h6: 'Every 6 hours', h24: 'Once a day' },
+    fullScanNotSaved: 'Interval not saved',
   },
   loadFailed: {
     title: 'This screen could not be displayed',
@@ -348,6 +357,7 @@ export const en: Translations = {
     target: 'Target',
     origin: 'Started from',
     origins: { cli: 'The command line', api: 'The interface' },
+    triggers: { watch: 'Folder watching', schedule: 'Periodic full scan' },
     started: 'Started',
     duration: 'Duration',
     files: 'Files',

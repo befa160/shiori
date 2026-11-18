@@ -59,7 +59,11 @@ export interface Settings {
   metadata_adult: boolean
   /** Thème de l'interface ; `system` suit l'appareil (sombre ou clair). Le lecteur reste sombre. */
   theme: Theme
+  /** Scan complet de toutes les bibliothèques toutes les N heures ; 0 : jamais. */
+  full_scan_hours: FullScanHours
 }
+
+export type FullScanHours = 0 | 1 | 6 | 24
 
 /** Sources de métadonnées web. */
 export type SourceId = 'anilist' | 'mangadex'
@@ -146,6 +150,8 @@ export interface Library {
   name: string
   root: string
   kind: LibraryKind
+  /** Dossiers surveillés : un changement lance un scan ciblé. */
+  watch: boolean
   series_count: number
   volume_count: number
 }
@@ -313,6 +319,8 @@ export interface ScanProgress {
   cancelling: boolean
 }
 
+export type RunTrigger = 'manual' | 'watch' | 'schedule'
+
 /** Une passe de l'historique (`GET /api/admin/scans`, du plus récent au plus ancien). */
 export interface RunSummary {
   id: number
@@ -320,7 +328,8 @@ export interface RunSummary {
   origin: 'cli' | 'api'
   status: RunStatus
   root: string
-  options: { deep?: boolean; rehash?: boolean }
+  /** `trigger` : qui a demandé la passe (absent avant la surveillance des dossiers). */
+  options: { deep?: boolean; rehash?: boolean; trigger?: RunTrigger }
   started_at: string
   finished_at: string | null
   duration_ms: number | null

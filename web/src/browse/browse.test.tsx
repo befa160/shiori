@@ -6,7 +6,7 @@ import { json, mockApi, renderAt, NO_METADATA } from '@/test/render'
 
 afterEach(() => vi.unstubAllGlobals())
 
-const library: Library = { id: 1, name: 'Mangas', root: '/m', kind: 'manga', series_count: 2, volume_count: 1 }
+const library: Library = { id: 1, name: 'Mangas', root: '/m', kind: 'manga', watch: true, series_count: 2, volume_count: 1 }
 const longName =
   'Une série au titre extrêmement long, choisi pour vérifier que la troncature sur deux lignes tient sur tous les écrans'
 const summary = {

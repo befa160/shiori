@@ -7,8 +7,8 @@ import { json, mockApi, renderAt } from '@/test/render'
 afterEach(() => vi.unstubAllGlobals())
 
 const libraries: Library[] = [
-  { id: 1, name: 'Mangas', root: '/m', kind: 'manga', series_count: 2, volume_count: 2 },
-  { id: 2, name: 'Comics', root: '/c', kind: 'comics', series_count: 1, volume_count: 1 },
+  { id: 1, name: 'Mangas', root: '/m', kind: 'manga', watch: true, series_count: 2, volume_count: 2 },
+  { id: 2, name: 'Comics', root: '/c', kind: 'comics', watch: true, series_count: 1, volume_count: 1 },
 ]
 const base = {
   library_id: 1,
