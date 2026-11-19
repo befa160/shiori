@@ -12,7 +12,10 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 | 4 | Bibliothèque façon Plex + statuts/filtres + menu d'administration (scans, journaux) + DESIGN_SYSTEM.md | ✅ |
 | 5 | Métadonnées web + édition manuelle | ✅ |
 | 6 | Distribution : image Docker, PWA finalisée, binaires Linux/Windows en release, Dependabot, documentation (technique, installation, fonctionnelle), thèmes de l'interface (sombre, clair, OLED, sépia) | ✅ |
-| 7 | Authentification et comptes : comptes locaux, rôles, progression et réglages par compte, accès depuis l'extérieur sans dépendre du reverse proxy | ⏳ |
+| 7 | Authentification et comptes : comptes locaux, rôles, progression et réglages par compte, double authentification, jetons d'API, sauvegarde et restauration | ✅ |
+| 8 | Lecture des PDF sans marges | ✅ |
+| 9 | Maintenance de la bibliothèque (surveillance des dossiers, scan complet périodique, santé) + documentation VitePress bilingue + bilan V1 | ✅ |
+| V1 | Vérifications sur vrai matériel, audit, captures de la documentation, attestations, promesse de compatibilité (voir « Maturité pour une V1 ») | ❓ |
 
 ## Méthode de travail
 
@@ -1266,7 +1269,7 @@ Audit complet après la phase 6 (couverture backend 96,85 % lignes / 91,64 % bra
 2. ✅ **CSRF sur les POST sans corps** (annuler le scan, identifier, relire les métadonnées) : middleware `same_site_writes_only`, actif même sans `--allowed-host`, qui refuse (403 `cross_site`) toute requête autre que GET/HEAD dont `Sec-Fetch-Site` vaut `cross-site`.
 3. ✅ **Images en `Cache-Control: private`** au lieu de `public` (`IMMUTABLE` dans `server.rs`, pages et `assets/` du front) ; reste, en phase 7, à vider les caches du service worker (`shiori-images-v1`, `shiori-shell-v1`, `shiori-offline-v1`) et la liste des téléchargements à la déconnexion.
 4. ✅ **En-têtes de l'interface** (`web.rs` `serve`) : `X-Frame-Options: DENY` et CSP `default-src 'self'` avec `frame-ancestors 'none'`, validés avec Playwright (e2e verts, console sans violation) ; `style-src 'unsafe-inline'` reste nécessaire pour les balises `<style>` de Radix.
-5. ✅ **Failles connues des crates** : job CI `advisories` (`cargo deny check advisories`), relancé chaque semaine par les PR Dependabot. Deux exceptions dans `backend/deny.toml`, chacune avec sa raison : RUSTSEC-2026-0459 (SQLite embarqué < 3.54 ; correctif bloqué par sqlx 0.9.0, sans risque pour une base locale de confiance) et RUSTSEC-2024-0436 (`paste` non maintenu, via rav1e).
+5. ✅ **Failles connues des crates** : job CI `advisories` (`cargo deny check advisories`), relancé chaque semaine par les PR Dependabot. Deux exceptions dans `backend/deny.toml`, chacune avec sa raison : RUSTSEC-2026-0459 (SQLite embarqué < 3.54 ; correctif bloqué par sqlx 0.9.0, sans risque pour une base locale de confiance) et RUSTSEC-2024-0436 (`paste` non maintenu, via rav1e). RUSTSEC-2026-0459 levée le 2026-11-19 (sqlx 0.9.1 embarque un SQLite corrigé).
 6. ✅ **Actions GitHub épinglées par SHA** (`ci.yml`, `release.yml`), version en commentaire.
 7. ✅ `npm update` (6 paquets en retard le 2026-11-16) et `cargo update`.
 8. ✅ `resized` (`server.rs`) : prendre le jeton de rendu avant de lire l'originale (mémoire bornée à 4 originales).
@@ -1355,7 +1358,7 @@ Lire les BD et mangas en PDF **sans les marges** qui rendent la page minuscule s
   - limites connues : rotation d'un angle quelconque arrondie au quart de tour, masque 1 bit toujours peint en noir, PDFDocEncoding lu comme du Latin-1, PDF lu en entier en mémoire à l'ouverture ;
   - seuil de 50 % : l'exemple réel est à 55 %, un PDF aux marges plus larges perdrait ses pages (avertissement visible) ; à revoir si un vrai fichier le montre.
 
-## Phase 9 : maintenance de la bibliothèque, documentation
+## Phase 9 : maintenance de la bibliothèque, documentation (plan validé le 2026-11-18, terminée le 2026-11-19)
 
 Idées retenues le 2026-11-16 (audit fonctionnel externe, comparé à l'existant) : Shiori « prend soin de la bibliothèque autant que de la lecture ». Plan validé le 2026-11-18.
 
@@ -1387,7 +1390,56 @@ Décisions (2026-11-18) : surveillance active par défaut, 30 s de calme, scan c
   - ✅ README refait (ce que fait Shiori, pourquoi, démarrage rapide, liens vers le site), description et topics du dépôt.
   - Captures d'écran : repères `[ecran_…]` posés dans les pages, en attente des images.
   - ✅ Lien vers la documentation dans l'application, dans la langue de l'interface, nouvel onglet annoncé : barre latérale, page Compte (mobile), et « Que veulent dire ces problèmes ? » de la page Santé vers les codes de diagnostic.
-- **9.5 Bilan** : maturité pour une V1, fonctionnalités restantes.
+- ✅ **9.5 Bilan** : maturité pour une V1, fonctionnalités restantes (ci-dessous) ; exception RUSTSEC-2026-0459 de `deny.toml` levée (plus nécessaire depuis sqlx 0.9.1).
+
+### Bilan de la phase 9
+
+- Livré :
+  - **Surveillance des dossiers** (`notify`) active par défaut : 30 s de calme par dossier de série puis scan ciblé, rattrapage au démarrage et au retour d'une racine, racine disparue jamais vidée, base et cache rangés dans une bibliothèque ignorés.
+  - **Scan complet périodique** (jamais, 1 h, 6 h, 24 h ; 24 h par défaut), filet des partages réseau et de Docker Desktop ; origine de chaque passe dans l'historique.
+  - **Santé des bibliothèques** : compteurs par état, date de la dernière vérification profonde, codes présents, liste « À réparer » filtrable et paginée, bouton « Vérifier en profondeur ».
+  - **Documentation VitePress** bilingue publiée sur GitHub Pages (guide, installation, technique, référence API, contribuer ; schémas Mermaid), README refait, lien vers la documentation dans l'application.
+- Qualité : 356 tests Rust, 332 tests Vitest, 13 tests de bout en bout ; couverture backend 96,9 % des lignes et 90,1 % des branches, front 98,9 % et 94,5 % ; 5 PR (#101 à #105) et celle-ci, chaque lot passé en review Ponytail (4, 0, 0, 1 et 0 corrections).
+- Défauts trouvés et corrigés en route : base ou cache rangé dans une bibliothèque qui relançait un scan toutes les 30 s ; rattrapage d'une bibliothèque tout juste créée qui faisait échouer le scan de l'interface (409) ; problèmes d'un fichier illisible disparu gardés en base ; `target/` de 71 Go qui a rempli le disque (`debug = "line-tables-only"`) ; aide répétée sous chaque bibliothèque sur mobile ; bouton « Voir le tome » sous la cible tactile de 44 px ; repères de captures qui auraient été publiés en clair ; Vite 5 vulnérable sous VitePress (`overrides` en 6.4.6) ; test de rattrapage instable sous macOS.
+- Reste ouvert pour la suite :
+  - captures d'écran de la documentation (repères `ecran_…` posés) ;
+  - un renommage de série n'est reconnu que si une même passe voit les deux noms ; pendant une passe où un sous-dossier est momentanément illisible, ses fichiers illisibles sortent du compteur de santé jusqu'à la passe suivante ;
+  - partages réseau : seul le scan périodique voit les changements faits ailleurs (limite du système, pas de Shiori).
+
+## Maturité pour une V1 (bilan du 2026-11-19)
+
+Usage visé (rappel) : une bibliothèque manga, BD et webtoon chez soi, lue en streaming sur la Galaxy Tab A9 et le Galaxy A55, à la maison et ailleurs (reverse proxy, comptes). Dernière version publiée : `v0.3.0` ; la phase 9 est sur `main`, pas encore publiée.
+
+### Ce qui est prêt
+
+- **Fichiers** : CBZ (zip64, accès direct), CBR non solid et solid, PDF sans marges ; scan d'intégrité avec codes stables, IDs de tomes et de pages figés par des tests d'instantané, aucun fichier source modifié, aucune page erronée affichée en silence.
+- **Lecture** : paginé (droite à gauche, gauche à droite), vertical, doubles pages, zoom, progression par compte, PWA installable, tomes téléchargés pour le hors-ligne.
+- **Bibliothèque** : séries façon Plex, filtres, recherche et tags, « Continuer la lecture », métadonnées locales et web (AniList, MangaDex) avec verrouillage par champ, couvertures au choix.
+- **Maintenance** : scans pilotés depuis l'interface et leurs journaux, surveillance des dossiers, scan complet périodique, page Santé.
+- **Comptes et sécurité** : comptes locaux et rôles, accès par bibliothèque, TOTP et codes de secours, jetons d'API, sessions révocables, parade au DNS rebinding, CSRF, CSP, limite des essais de connexion.
+- **Données** : sauvegarde quotidienne (7 gardées), sauvegarde avant migration, restauration dans l'interface.
+- **Distribution** : image Docker amd64 + arm64, binaires Linux, Windows et macOS avec `SHA256SUMS`, double-clic qui ouvre l'interface, documentation bilingue en ligne.
+- **Qualité** : CI Linux, Windows et macOS, couverture imposée (≥ 80 %, mesurée autour de 97 / 90 % backend et 99 / 95 % front), `cargo deny` sans exception de faille, Dependabot, actions épinglées par SHA.
+
+Fonctionnellement, Shiori couvre l'usage visé. Ce qui manque pour une V1 n'est pas du code : c'est de la preuve sur le vrai terrain et un engagement de compatibilité.
+
+### Proposition : à faire avant la V1 (❓ à valider)
+
+1. **Vérifications sur vrai matériel** (par toi ; jamais faites, c'est pourtant l'usage principal) : PWA installée, session longue et hors-ligne sur la Tab A9 et le A55 ; derrière le vrai reverse proxy HTTPS (cookie `Secure`, split DNS, `--allowed-host`) ; image arm64 si un NAS ou un Pi est prévu ; Backrest réel sur le dossier des sauvegardes, avec une restauration d'essai. Chaque défaut trouvé devient un correctif avant la V1.
+2. **Audit complet** (`ponytail-audit`) : le dernier date d'avant la phase 7, et les phases 7 à 9 ont ajouté l'authentification, la restauration et la surveillance.
+3. **Captures d'écran** de la documentation (repères `ecran_…`), aux couleurs du thème sombre.
+4. **Attestations de provenance** (`actions/attest-build-provenance`) sur les archives et l'image : gratuites, sans secret (voir « Signature des binaires »).
+5. **Promesse de compatibilité**, écrite dans la documentation : à partir de 1.0, une mise à jour garde la base (migrations sans perte, sauvegarde avant migration déjà faite), les IDs de tomes et de pages ne changent pas, l'API `/api` n'évolue que par ajouts dans une même version majeure, toute rupture passe par une version majeure.
+6. **Versions** : `v0.4.0` dès maintenant (phase 9), puis `v1.0.0-rc.1` après les points 1 à 5, essayée quelques jours sur les appareils, puis `v1.0.0`.
+
+### Après la V1 (fonctionnalités restantes, sans ordre)
+
+- **Lecture et bibliothèque** : collections et listes de lecture, relations entre séries (suites, éditions), statistiques de lecture, édition d'un tome dans l'interface (l'API existe).
+- **Sources de métadonnées** : MangaUpdates, Comic Vine, actualisation périodique des fiches liées.
+- **Accès** : OPDS (sur les jetons d'API), liens d'invitation (conception notée en phase 7), en-tête `Remote-User` d'un proxy d'authentification (Q42).
+- **Distribution** : signature Windows (Authenticode) et macOS (Developer ID, notarisation), payantes ; application native (bascule d'adresse locale / publique), icône dans la zone de notification.
+- **Limites connues** (17 `shortcut:` dans le code, aucune bloquante pour l'usage visé) : liste des séries sans pagination (quelques milliers de séries), PDF lu en entier en mémoire, CRC zip64 au-delà de 4 Gio, 4 rendus d'image en parallèle, chiffres pleine chasse et majuscules accentuées (`NOCASE`) non repliés, noms de compte sans normalisation Unicode, couvertures rendues sans cache disque, caches du service worker bornés en nombre d'entrées ; et, des phases précédentes : pas de redimensionnement des pages AVIF d'origine, CBR multivolume refusé, décalage des doubles pages non retenu, « Tome suivant » qui peut mener à un tome en erreur.
+- **À surveiller** : test e2e « tome suivant » instable vu une fois en CI (phase 4), `:root:has()` sur un vrai Safari iOS.
 
 Plus tard, sans ordre : collections et listes de lecture, relations entre séries (suites, éditions), OPDS (avec les jetons d'API), statistiques de lecture, Comic Vine et MangaUpdates. EPUB : non. PDF : phase 8.
 
@@ -1484,3 +1536,4 @@ L'ordre de lecture ne dépend jamais de l'ordre dans l'archive : le lecteur reç
 - 2026-11-17 : lecture des PDF sans marges ajoutée en phase 8 (images incluses servies comme des pages, pas de conversion en CBZ, page sans image ignorée avec un avertissement, pages en plusieurs morceaux recomposées, métadonnées du PDF lues) ; la maintenance devient la phase 9.
 - 2026-11-18 : phase 7 terminée (comptes et rôles, progression par compte, double authentification, jetons d'API, sauvegarde quotidienne et restauration dans l'interface) ; version `v0.2.0`.
 - 2026-11-18 : phase 8 terminée (lecture des PDF sans marges : images incluses servies comme des pages, pages en plusieurs images recomposées, diagnostics et métadonnées du PDF) ; version `v0.3.0`.
+- 2026-11-19 : phase 9 terminée (surveillance des dossiers, scan complet périodique, santé des bibliothèques, documentation VitePress bilingue) ; bilan de maturité pour une V1 proposé.
