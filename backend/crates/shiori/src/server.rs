@@ -87,6 +87,16 @@ pub struct ServeArgs {
         value_delimiter = ','
     )]
     pub allowed_hosts: Vec<String>,
+    /// Adresse d'un reverse proxy dont l'en-tête `X-Forwarded-For` est cru, répétable ; sans
+    /// elle, toute adresse locale ou privée l'est (un client du réseau local peut alors fausser
+    /// le compte des essais de connexion par adresse).
+    #[arg(
+        long = "trusted-proxy",
+        value_name = "IP",
+        env = "SHIORI_TRUSTED_PROXIES",
+        value_delimiter = ','
+    )]
+    pub trusted_proxies: Vec<std::net::IpAddr>,
     /// Dossier des sauvegardes de la base (défaut : `backups` à côté d'elle) ; un outil de
     /// sauvegarde (Backrest, restic) n'a qu'à copier ce dossier.
     #[arg(long, value_name = "DOSSIER", env = "SHIORI_BACKUP_DIR")]
@@ -161,6 +171,12 @@ impl App {
         }
     }
 
+    /// Reverse proxies dont l'en-tête `X-Forwarded-For` est cru (`--trusted-proxy`) ; sans eux,
+    /// toute adresse locale ou privée.
+    pub fn trust_proxies(&mut self, proxies: Vec<std::net::IpAddr>) {
+        self.auth.trusted_proxies = proxies.into_iter().map(|ip| ip.to_canonical()).collect();
+    }
+
     /// Jeton exigé pour créer le premier compte, tiré au hasard à chaque démarrage.
     pub fn setup_token(&self) -> &str {
         self.auth.setup_token()
@@ -225,6 +241,7 @@ pub async fn run(
             .then(|| std::time::Duration::from_secs(args.backup_every_hours * 3600)),
         keep: args.backup_keep,
     };
+    app.trust_proxies(args.trusted_proxies);
     app.backups.clone().spawn(app.db.clone());
     // Toujours affiché, même avec `--quiet` : sans lui, personne ne peut créer le premier compte.
     if app.db.users().await?.is_empty() {
@@ -1082,6 +1099,8 @@ async fn progress(
 #[derive(Deserialize)]
 struct NewProgress {
     page_id: String,
+    /// Heure de lecture (ISO 8601), pour une page lue hors ligne et envoyée plus tard.
+    read_at: Option<String>,
 }
 
 async fn save_progress(
@@ -1096,8 +1115,16 @@ async fn save_progress(
         .page_id
         .parse()
         .map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, "invalid_body", format!("{e}")))?;
-    match app.db.save_progress(&me, &volume, &page).await? {
+    let saved = app
+        .db
+        .save_progress_at(&me, &volume, &page, new.read_at.as_deref());
+    match saved.await? {
         SaveProgress::Saved(progress) => Ok(Json(progress)),
+        SaveProgress::InvalidTime => Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "invalid_body",
+            "read_at : date ISO 8601 attendue",
+        )),
         SaveProgress::UnknownVolume => Err(ApiError::not_found("tome")),
         SaveProgress::PageNotInVolume => Err(ApiError::new(
             StatusCode::UNPROCESSABLE_ENTITY,

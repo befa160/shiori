@@ -307,6 +307,7 @@ describe('page du compte', () => {
       '/api/me/tokens': (init) => {
         if (init?.method !== 'POST') return json(list)
         if (tries++ === 0) return json({ code: 'invalid_token_name', message: 'x' }, 400)
+        if (tries === 2) return json({ code: 'wrong_password', message: 'x' }, 403)
         list = [created, old]
         return json({ ...created, token: 'shiori_t_ab12cd34secret' }, 201)
       },
@@ -327,12 +328,18 @@ describe('page du compte', () => {
     await userEvent.type(dialog.getByLabelText('Nom'), ' Liseuse ')
     await userEvent.click(dialog.getByRole('combobox', { name: 'Valable' }))
     await userEvent.click(await screen.findByRole('option', { name: '1 an' }))
+    await userEvent.type(dialog.getByLabelText('Mot de passe actuel'), 'mot de passe')
     await userEvent.click(dialog.getByRole('button', { name: 'Créer le jeton' }))
     expect(await dialog.findByText('Nom du jeton : 1 à 64 caractères')).toBeInTheDocument()
+    expect(dialog.getByLabelText('Nom')).toHaveAttribute('aria-invalid', 'true')
+    await userEvent.click(dialog.getByRole('button', { name: 'Créer le jeton' }))
+    // Mot de passe faux : l'erreur est sous le mot de passe, plus sous le nom.
+    await waitFor(() => expect(dialog.getByLabelText('Mot de passe actuel')).toHaveAttribute('aria-invalid', 'true'))
+    expect(dialog.getByLabelText('Nom')).toHaveAttribute('aria-invalid', 'false')
     await userEvent.click(dialog.getByRole('button', { name: 'Créer le jeton' }))
     expect(await dialog.findByText('shiori_t_ab12cd34secret')).toBeInTheDocument()
     const post = fetch.mock.calls.filter(([url, init]) => url === '/api/me/tokens' && init?.method === 'POST').at(-1)
-    expect(body(post?.[1])).toEqual({ name: 'Liseuse', expires_in_days: 365 })
+    expect(body(post?.[1])).toEqual({ name: 'Liseuse', expires_in_days: 365, password: 'mot de passe' })
     await userEvent.click(dialog.getByRole('button', { name: 'Copier le jeton' }))
     expect(writeText).toHaveBeenCalledWith('shiori_t_ab12cd34secret')
     await userEvent.click(dialog.getByRole('button', { name: "C'est noté" }))
@@ -360,7 +367,7 @@ describe('page du compte', () => {
     await userEvent.click(dialog.getByRole('button', { name: 'Créer le jeton' }))
     await userEvent.click(await dialog.findByRole('button', { name: 'Copier le jeton' }))
     expect(await screen.findByText('Copie impossible : sélectionnez le jeton')).toBeInTheDocument()
-    expect(body(fetch.mock.calls.find(([, init]) => init?.method === 'POST')?.[1])).toEqual({ name: 'OPDS' })
+    expect(body(fetch.mock.calls.find(([, init]) => init?.method === 'POST')?.[1])).toEqual({ name: 'OPDS', password: '' })
     await userEvent.click(dialog.getByRole('button', { name: "C'est noté" }))
     await userEvent.click(region.getByRole('button', { name: 'Supprimer le jeton OPDS' }))
     await userEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Supprimer' }))

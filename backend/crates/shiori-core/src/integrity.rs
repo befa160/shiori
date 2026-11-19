@@ -537,7 +537,7 @@ fn check(
 
     if options.deep
         && media != "image/avif"
-        && let Err(e) = image::load_from_memory(&bytes)
+        && let Err(e) = decode_image(&bytes)
     {
         let msg = format!("décodage : {e}");
         return broken(report, IssueCode::ImageUndecodable, msg, page);
@@ -554,6 +554,23 @@ fn check(
     }
     page.status = PageStatus::Ok;
     Some(page)
+}
+
+/// Mémoire maximale d'un décodage : une bande de webtoon 800×16 000 en RGBA pèse 51 Mio. La même
+/// pour le scan profond et pour le rendu : une page jugée saine se redimensionne toujours.
+pub const MAX_DECODE_BYTES: u64 = 256 * 1024 * 1024;
+
+/// Décode une image entière, sans dépasser [`MAX_DECODE_BYTES`] (rien n'est alloué au-delà).
+pub fn decode_image(bytes: &[u8]) -> image::ImageResult<image::DynamicImage> {
+    decode_within(bytes, MAX_DECODE_BYTES)
+}
+
+fn decode_within(bytes: &[u8], max: u64) -> image::ImageResult<image::DynamicImage> {
+    let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format()?;
+    let mut limits = image::Limits::default();
+    limits.max_alloc = Some(max);
+    reader.limits(limits);
+    reader.decode()
 }
 
 /// Ordre de lecture, ordinaux et diagnostics qui portent sur l'ensemble des pages.

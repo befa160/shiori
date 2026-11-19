@@ -200,7 +200,14 @@ async fn one_pass_at_a_time_and_cancellation() {
     let f = Fixture::new().await;
     many(&f.root(), 12);
     let scanner = Scanner::new(1, 30);
+    // Garde de la restauration : aucune passe ne démarre tant qu'elle vit.
+    let idle = scanner.idle().await.expect("rien ne tourne");
+    let blocked = scanner.start(f.db.clone(), f.request(None));
+    let waited = tokio::time::timeout(std::time::Duration::from_millis(200), blocked).await;
+    assert!(waited.is_err(), "la passe a démarré malgré la garde");
+    drop(idle);
     let run = scanner.start(f.db.clone(), f.request(None)).await.unwrap();
+    assert!(scanner.idle().await.is_none(), "une passe tourne");
     let again = scanner.start(f.db.clone(), f.request(None)).await;
     assert!(matches!(again, Err(StartError::AlreadyRunning)));
     let progress = scanner.progress().await.unwrap();

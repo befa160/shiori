@@ -3,11 +3,12 @@ import { Copy, Loader2, Plus, Trash2 } from 'lucide-react'
 import { type FormEvent, useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { api } from '@/api/client'
+import { ApiError, api } from '@/api/client'
 import type { ApiToken } from '@/api/types'
 import { formatDate } from '@/admin/format'
 import { describedBy } from '@/auth/describedBy'
 import { Field } from '@/auth/Field'
+import { PasswordInput } from '@/auth/PasswordInput'
 import { accountError } from '@/auth/session'
 import { QueryState } from '@/browse/parts'
 import {
@@ -28,6 +29,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 const KEY = ['tokens']
 /** Durées proposées, en jours ; `never` : sans expiration. */
 const DURATIONS = ['never', '30', '90', '365'] as const
+/** Erreurs qui portent sur le mot de passe ; les autres, sur le nom. */
+const PASSWORD_ERRORS = ['wrong_password', 'rate_limited']
 
 /** Jetons d'API du compte : pour un autre logiciel (liseuse, OPDS), lecture et progression seulement. */
 export function TokensSection() {
@@ -110,8 +113,9 @@ function NewToken({ onDone }: { onDone: () => void }) {
   const queryClient = useQueryClient()
   const [name, setName] = useState('')
   const [duration, setDuration] = useState<(typeof DURATIONS)[number]>('never')
+  const [password, setPassword] = useState('')
   const create = useMutation({
-    mutationFn: () => api.createToken({ name: name.trim(), ...(duration === 'never' ? {} : { expires_in_days: Number(duration) }) }),
+    mutationFn: () => api.createToken({ name: name.trim(), ...(duration === 'never' ? {} : { expires_in_days: Number(duration) }), password }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: KEY }),
   })
   const submit = (e: FormEvent) => {
@@ -119,6 +123,9 @@ function NewToken({ onDone }: { onDone: () => void }) {
     create.mutate()
   }
   const error = create.error ? accountError(create.error, t) : null
+  const onPassword = create.error instanceof ApiError && PASSWORD_ERRORS.includes(create.error.code)
+  const nameError = onPassword ? null : error
+  const passwordError = onPassword ? error : null
   if (create.data) {
     const token = create.data.token
     const copy = async () => {
@@ -154,15 +161,15 @@ function NewToken({ onDone }: { onDone: () => void }) {
         <DialogDescription>{t('tokens.newHelp')}</DialogDescription>
       </DialogHeader>
       <form onSubmit={submit} className="space-y-4" noValidate>
-        <Field id={`${id}-name`} label={t('tokens.name')} help={t('tokens.nameHelp')} error={error}>
+        <Field id={`${id}-name`} label={t('tokens.name')} help={t('tokens.nameHelp')} error={nameError}>
           <Input
             id={`${id}-name`}
             value={name}
             onChange={(e) => setName(e.target.value)}
             maxLength={64}
             autoComplete="off"
-            aria-invalid={Boolean(error)}
-            aria-describedby={describedBy(`${id}-name`, true, Boolean(error))}
+            aria-invalid={Boolean(nameError)}
+            aria-describedby={describedBy(`${id}-name`, true, Boolean(nameError))}
           />
         </Field>
         <div className="space-y-1">
@@ -182,6 +189,16 @@ function NewToken({ onDone }: { onDone: () => void }) {
             </SelectContent>
           </Select>
         </div>
+        <Field id={`${id}-password`} label={t('auth.current')} error={passwordError}>
+          <PasswordInput
+            id={`${id}-password`}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+            aria-invalid={Boolean(passwordError)}
+            aria-describedby={describedBy(`${id}-password`, false, Boolean(passwordError))}
+          />
+        </Field>
         <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
           <Button type="button" variant="secondary" onClick={onDone}>
             {t('admin.cancel')}

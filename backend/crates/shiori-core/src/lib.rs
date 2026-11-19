@@ -16,8 +16,8 @@ pub use archive::{
 };
 pub use id::{PageId, ParseIdError, VolumeId};
 pub use integrity::{
-    FileReport, Issue, IssueCode, Page, PageStatus, SCANNER_VERSION, ScanOptions, Severity, Status,
-    scan_file,
+    FileReport, Issue, IssueCode, MAX_DECODE_BYTES, Page, PageStatus, SCANNER_VERSION, ScanOptions,
+    Severity, Status, decode_image, scan_file,
 };
 pub use metadata::{Author, LocalMetadata, MAX_METADATA_SIZE, MetadataSource};
 pub use name::{NameKind, PARSER_VERSION, ParsedName, compare_in_series, parse as parse_name};

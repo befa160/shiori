@@ -35,7 +35,7 @@ A volume can be **kept on the device** to read without a network. From a series 
 
 - Pages are downloaded one by one, at the screen size of this device: a volume weighs much less than its archive.
 - **Downloaded volumes** (sidebar, administration, or the link in the "Offline" notice) lists the kept volumes, their size and the space available; that is where you open them without a network.
-- The page read offline is sent to the server as soon as the network is back.
+- The page read offline is sent to the server as soon as the network is back, with its time: it does not replace a page read since on another device.
 - An interrupted download (app closed) resumes at the next launch; a network outage stops it, to be restarted.
 
 <!-- [ecran_telecharges] -->

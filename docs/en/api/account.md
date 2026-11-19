@@ -94,16 +94,16 @@ A token lets another program read the account's libraries and save its progress,
 ### `POST /api/me/tokens`
 
 ```json
-{ "name": "E-reader", "expires_in_days": 90 }
+{ "name": "E-reader", "expires_in_days": 90, "password": "…" }
 ```
 
-`expires_in_days`: optional (no expiry if missing). **Response 201**: the token, with its secret in clear, returned **only once**.
+`expires_in_days`: optional (no expiry if missing). `password`: the account password, required (a token outlives a password change: a stolen session must not be able to create one). **Response 201**: the token, with its secret in clear, returned **only once**.
 
 ```json
 { "id": 3, "name": "E-reader", "prefix": "shiori_t_8f2a1c3d", "created_at": "…", "last_used_at": null, "expires_at": "…", "token": "shiori_t_8f2a1c3d…" }
 ```
 
-**Errors**: 400 `invalid_token_name` (1 to 64 characters).
+**Errors**: 400 `invalid_token_name` (1 to 64 characters), 403 `wrong_password`, 429 `rate_limited`.
 
 ### `DELETE /api/me/tokens/{id}`
 

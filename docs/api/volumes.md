@@ -78,10 +78,12 @@ Couverture d'une source web gardée par le serveur (`cover_image_id`), originale
 Enregistre la page lue. Permis aux jetons d'API.
 
 ```json
-{ "page_id": "3f9c…" }
+{ "page_id": "3f9c…", "read_at": "2026-11-19T08:12:00.000Z" }
 ```
 
-**Réponse 200** : la progression. `finished` devient vrai dès que la dernière page est atteinte. **Erreurs** : 400 `invalid_body`, 404 `not_found`, 422 `page_not_in_volume`.
+`read_at` : facultatif, heure de lecture (ISO 8601) d'une page lue hors ligne et envoyée plus tard ; absent : maintenant, et une heure future compte comme maintenant. La page la plus récente l'emporte : une page lue hors ligne ne remplace pas celle lue depuis sur un autre appareil.
+
+**Réponse 200** : la progression gardée. `finished` devient vrai dès que la dernière page est atteinte, même par une page plus ancienne. **Erreurs** : 400 `invalid_body` (dont `read_at` qui n'est pas une date), 404 `not_found`, 422 `page_not_in_volume`.
 
 ### `DELETE /api/volumes/{id}/progress`
 

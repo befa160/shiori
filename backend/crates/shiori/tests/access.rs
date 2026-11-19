@@ -408,7 +408,15 @@ async fn an_api_token_reads_and_saves_progress_within_the_account_only() {
     let (bob_id, bob) = reader(&f, "bob").await;
 
     // Création par la session : jeton montré une fois, liste sans le secret.
-    let new = json!({ "name": "  Liseuse  ", "expires_in_days": 30 });
+    let new = json!({ "name": "  Liseuse  ", "expires_in_days": 30, "password": "mot de passe" });
+    // Une session seule ne suffit pas : le mot de passe est exigé.
+    let mut stolen = new.clone();
+    stolen["password"] = json!("deviné");
+    let (status, body) = call(&f, Some(&bob), "POST", "/api/me/tokens", Some(stolen)).await;
+    assert_eq!(
+        (status, body["code"].as_str()),
+        (StatusCode::FORBIDDEN, Some("wrong_password"))
+    );
     let (status, created) = call(&f, Some(&bob), "POST", "/api/me/tokens", Some(new)).await;
     assert_eq!(status, StatusCode::CREATED, "{created}");
     assert_eq!(created["name"], "Liseuse");
@@ -418,8 +426,9 @@ async fn an_api_token_reads_and_saves_progress_within_the_account_only() {
     assert_eq!(listed.as_array().unwrap().len(), 1);
     assert!(listed[0].get("token").is_none());
     for bad in [
-        json!({ "name": " " }),
-        json!({ "name": "x", "expires_in_days": 0 }),
+        json!({ "name": " ", "password": "mot de passe" }),
+        json!({ "name": "x", "expires_in_days": 0, "password": "mot de passe" }),
+        json!({ "name": "x" }),
         json!({}),
     ] {
         let (status, _) = call(&f, Some(&bob), "POST", "/api/me/tokens", Some(bad.clone())).await;
@@ -446,6 +455,9 @@ async fn an_api_token_reads_and_saves_progress_within_the_account_only() {
     let page = json!({ "page_id": f.page });
     let (status, body) = call(&f, Some(&bearer), "PUT", &progress, Some(page)).await;
     assert_eq!(status, StatusCode::OK, "{body}");
+    let late = json!({ "page_id": f.page, "read_at": "hier" });
+    let (status, body) = call(&f, Some(&bearer), "PUT", &progress, Some(late)).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
 
     // Rien d'autre : ni le compte, ni ses jetons, ni d'autre écriture.
     for (method, uri) in [

@@ -10,6 +10,7 @@ use axum::response::{IntoResponse, Response};
 use serde::{Deserialize, Serialize};
 use shiori_db::{ApiToken, Session};
 
+use super::auth::check_own_password;
 use super::{ApiError, ApiResult, App, int_id, invalid_body};
 
 pub(crate) async fn list(
@@ -25,6 +26,9 @@ pub(crate) struct NewToken {
     name: String,
     /// Durée de validité en jours ; absente : sans expiration.
     expires_in_days: Option<u16>,
+    /// Exigé : un jeton survit au changement de mot de passe, une session volée ne doit donc pas
+    /// pouvoir en créer un.
+    password: String,
 }
 
 #[derive(Serialize)]
@@ -56,6 +60,7 @@ pub(crate) async fn create(
             "expires_in_days : un jour au moins",
         ));
     }
+    check_own_password(&app, &session.user, &new.password).await?;
     let created = app
         .db
         .create_token(session.user.id, name, new.expires_in_days)

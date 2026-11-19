@@ -1,10 +1,8 @@
 //! Redimensionnement des pages (principe 7) : décodage plafonné, Lanczos3, puis AVIF
 //! (pages) ou JPEG (miniatures, couvertures). Tout en Rust pur.
 
-use std::io::Cursor;
-
+use image::DynamicImage;
 use image::imageops::FilterType;
-use image::{DynamicImage, ImageReader, Limits};
 use serde::Deserialize;
 
 /// Largeurs servies : une liste fermée borne le cache et empêche de faire calculer des
@@ -13,9 +11,6 @@ pub const WIDTHS: [u32; 9] = [160, 320, 480, 640, 800, 1080, 1280, 1600, 2048];
 
 /// Change dès que le rendu change (filtre, qualité) : nouvelles URL de cache, pas de vieux fichiers servis.
 pub const RENDER_VERSION: u32 = 1;
-
-/// Mémoire maximale d'un décodage : une bande de webtoon 800×16 000 en RGBA pèse 51 Mio.
-const MAX_DECODE_BYTES: u64 = 256 * 1024 * 1024;
 
 const JPEG_QUALITY: u8 = 85;
 const AVIF_QUALITY: f32 = 70.0;
@@ -47,13 +42,7 @@ impl Format {
 
 /// Décode `bytes`, ramène l'image à `width` pixels de large (proportions gardées) et l'encode.
 pub fn render(bytes: &[u8], width: u32, format: Format) -> Result<Vec<u8>, String> {
-    let mut reader = ImageReader::new(Cursor::new(bytes))
-        .with_guessed_format()
-        .map_err(|e| e.to_string())?;
-    let mut limits = Limits::default();
-    limits.max_alloc = Some(MAX_DECODE_BYTES);
-    reader.limits(limits);
-    let image = reader.decode().map_err(|e| e.to_string())?;
+    let image = shiori_core::decode_image(bytes).map_err(|e| e.to_string())?;
     let image = image.resize(width, u32::MAX, FilterType::Lanczos3);
     match format {
         Format::Jpeg => jpeg(&image),

@@ -8,6 +8,7 @@ Shiori is configured with command-line options or environment variables; interfa
 |---|---|---|---|
 | `--listen <address:port>` | | `127.0.0.1:7878` | listen address; `0.0.0.0:7878` opens it to the network (sign-in required) |
 | `--allowed-host <name>` | `SHIORI_ALLOWED_HOSTS` | | name or address you open Shiori with, repeatable (variable: comma-separated); DNS rebinding protection |
+| `--trusted-proxy <IP>` | `SHIORI_TRUSTED_PROXIES` | any local address | address of the reverse proxy whose `X-Forwarded-For` header is trusted, repeatable; give it when Shiori can be reached directly from the local network |
 | `--db <file>` | `SHIORI_DATA_DIR` (folder) | OS data folder | SQLite database |
 | `--cache-dir <folder>` | `SHIORI_CACHE_DIR` | OS cache folder | resized pages, extracted solid RARs |
 | `--cache-max-mib <MiB>` | | `2048` | maximum cache size; beyond it, what was read least recently goes |

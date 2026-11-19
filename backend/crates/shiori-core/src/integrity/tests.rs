@@ -81,3 +81,13 @@ fn a_panic_becomes_an_issue_of_that_file() {
     });
     assert!(owned.issues[0].message.contains("message dynamique"));
 }
+
+#[test]
+fn decoding_stops_at_the_memory_limit() {
+    let page = shiori_testkit::png(64, 64, [10, 20, 30]);
+    assert!(decode_image(&page).is_ok());
+    // 64×64 en RGB : 12 Kio, au-delà d'un plafond de 1 Kio.
+    let err = decode_within(&page, 1024).unwrap_err();
+    assert!(matches!(err, image::ImageError::Limits(_)), "{err}");
+    assert!(decode_image(b"pas une image").is_err());
+}

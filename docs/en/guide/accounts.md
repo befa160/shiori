@@ -26,7 +26,7 @@ Name and password (8 characters at least), then the two-factor code if it is on.
 - **Password**: changing it signs out its other devices.
 - **Signed-in devices**: each session with its last use; sign out a lost device.
 - **Two-factor authentication**: on top of the password, a 6-digit code from an authenticator app (Aegis, Google Authenticator, 2FAS…). Turning it on asks for the password, shows a QR code (or a key to type), checks a first code and gives **10 recovery codes**, shown only once, each replacing the phone's code once. Recommended if Shiori is open to the Internet.
-- **API tokens**: so that another program reads the account's libraries and saves its progress without the password. A token is shown only once, can expire (30 days, 90 days, 1 year or never) and only allows reading and progress. See [the API](/en/api/).
+- **API tokens**: so that another program reads the account's libraries and saves its progress without the password. Your password is asked to create one. A token is shown only once, outlives a password change (delete it, or "sign out all devices"), can expire (30 days, 90 days, 1 year or never) and only allows reading and progress. See [the API](/en/api/).
 - **Sign out**: closes this device's session and clears the cached pages; also offers to delete downloaded volumes.
 
 ## Forgotten and lost

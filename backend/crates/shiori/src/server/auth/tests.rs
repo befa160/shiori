@@ -1,5 +1,14 @@
 use super::*;
 
+fn limit(key: &str, free: u32) -> [Limit; 1] {
+    [Limit {
+        key: key.to_owned(),
+        free,
+        max: MAX_PAUSE,
+        reset: true,
+    }]
+}
+
 fn headers(pairs: &[(&'static str, &str)]) -> HeaderMap {
     let mut map = HeaderMap::new();
     for (name, value) in pairs {
@@ -16,14 +25,34 @@ fn the_client_address_trusts_a_forwarded_header_only_from_a_local_proxy() {
     let ula: SocketAddr = "[fd00::1]:5000".parse().unwrap();
     let public: SocketAddr = "198.51.100.1:5000".parse().unwrap();
     // Le proxy ajoute l'adresse qu'il voit à la fin : la première a pu être inventée.
-    assert_eq!(client_address(Some(local), &forwarded), "203.0.113.7");
-    assert_eq!(client_address(Some(lan), &forwarded), "203.0.113.7");
-    assert_eq!(client_address(Some(ula), &forwarded), "203.0.113.7");
-    assert_eq!(client_address(Some(public), &forwarded), "198.51.100.1");
-    assert_eq!(client_address(Some(local), &HeaderMap::new()), "127.0.0.1");
+    assert_eq!(client_address(Some(local), &forwarded, &[]), "203.0.113.7");
+    assert_eq!(client_address(Some(lan), &forwarded, &[]), "203.0.113.7");
+    assert_eq!(client_address(Some(ula), &forwarded, &[]), "203.0.113.7");
+    assert_eq!(
+        client_address(Some(public), &forwarded, &[]),
+        "198.51.100.1"
+    );
+    assert_eq!(
+        client_address(Some(local), &HeaderMap::new(), &[]),
+        "127.0.0.1"
+    );
     let junk = headers(&[("x-forwarded-for", "pas une adresse")]);
-    assert_eq!(client_address(Some(local), &junk), "127.0.0.1");
-    assert_eq!(client_address(None, &forwarded), "inconnue");
+    assert_eq!(client_address(Some(local), &junk, &[]), "127.0.0.1");
+    assert_eq!(client_address(None, &forwarded, &[]), "inconnue");
+    // Proxies donnés (`--trusted-proxy`) : seuls eux sont crus, même sur le réseau local.
+    let proxy = ["192.168.1.2".parse().unwrap()];
+    let other: SocketAddr = "192.168.1.3:5000".parse().unwrap();
+    assert_eq!(client_address(Some(lan), &forwarded, &proxy), "203.0.113.7");
+    assert_eq!(
+        client_address(Some(other), &forwarded, &proxy),
+        "192.168.1.3"
+    );
+    assert_eq!(client_address(Some(local), &forwarded, &proxy), "127.0.0.1");
+    let mapped: SocketAddr = "[::ffff:192.168.1.2]:5000".parse().unwrap();
+    assert_eq!(
+        client_address(Some(mapped), &forwarded, &proxy),
+        "203.0.113.7"
+    );
 }
 
 #[test]
@@ -62,7 +91,7 @@ fn the_cookie_is_secure_behind_an_https_proxy() {
 #[test]
 fn failures_pause_after_the_free_attempts_then_double() {
     let guard = Guard::new();
-    let keys = [("nom:bob".to_owned(), 2)];
+    let keys = limit("nom:bob", 2);
     for _ in 0..2 {
         assert_eq!(guard.paused(&keys), None);
         guard.failed(&keys);
@@ -81,8 +110,8 @@ fn failures_pause_after_the_free_attempts_then_double() {
     }
     assert!(guard.paused(&keys).unwrap() <= MAX_PAUSE);
     // Une autre clé n'est pas touchée ; une connexion réussie efface le compteur du nom.
-    assert_eq!(guard.paused(&[("nom:alice".to_owned(), 2)]), None);
-    guard.succeeded("nom:bob");
+    assert_eq!(guard.paused(&limit("nom:alice", 2)), None);
+    guard.succeeded(&keys);
     assert_eq!(guard.paused(&keys), None);
 }
 
@@ -96,7 +125,7 @@ fn old_failures_are_forgotten_when_the_table_grows() {
             failures.insert(format!("nom:{i}"), (1, old));
         }
     }
-    guard.failed(&[("nom:récent".to_owned(), 5)]);
+    guard.failed(&limit("nom:récent", 5));
     assert_eq!(guard.failures.lock().unwrap().len(), 1);
 }
 
@@ -115,7 +144,7 @@ fn expired_challenges_are_dropped_when_a_new_one_comes() {
     let challenge = |at| Challenge {
         user_id: 1,
         client: Client::Browser,
-        keys: [("nom:a".into(), 5), ("adresse:b".into(), 20)],
+        limits: login_limits("a", "b"),
         at,
     };
     let stale = guard.challenge(challenge(old));
@@ -152,4 +181,34 @@ fn an_api_token_reads_and_saves_progress_nothing_else() {
     for (method, path) in refused {
         assert!(!token_allows(&method, path), "{method} {path}");
     }
+}
+
+#[test]
+fn wrong_passwords_pause_the_name_from_that_address_only() {
+    let guard = Guard::new();
+    let here = login_limits("Bob", "203.0.113.7");
+    for _ in 0..6 {
+        guard.failed(&here);
+    }
+    assert!(guard.paused(&here).is_some());
+    // Bob, depuis chez lui : pas bloqué par celui qui se trompe sur son nom ailleurs.
+    assert_eq!(guard.paused(&login_limits("bob", "198.51.100.1")), None);
+    // Essais répartis sur beaucoup d'adresses : le nom finit par attendre, une minute au plus.
+    for n in 0..50 {
+        guard.failed(&login_limits("bob", &format!("10.0.0.{n}")));
+    }
+    let wait = guard.paused(&login_limits("bob", "198.51.100.1")).unwrap();
+    assert!(wait <= MAX_PAUSE_ANYWHERE, "{wait:?}");
+    // Une connexion réussie remet le nom à zéro, pas l'adresse (partagée, derrière une box).
+    guard.succeeded(&here);
+    assert_eq!(guard.paused(&login_limits("bob", "198.51.100.1")), None);
+    for _ in 0..20 {
+        guard.failed(&login_limits("alice", "203.0.113.7"));
+    }
+    guard.succeeded(&login_limits("alice", "203.0.113.7"));
+    assert!(
+        guard
+            .paused(&login_limits("carol", "203.0.113.7"))
+            .is_some()
+    );
 }

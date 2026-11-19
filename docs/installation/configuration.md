@@ -8,6 +8,7 @@ Shiori se règle par options de la ligne de commande ou variables d'environnemen
 |---|---|---|---|
 | `--listen <adresse:port>` | | `127.0.0.1:7878` | adresse d'écoute ; `0.0.0.0:7878` ouvre au réseau (connexion exigée) |
 | `--allowed-host <nom>` | `SHIORI_ALLOWED_HOSTS` | | nom ou adresse par lequel vous ouvrez Shiori, répétable (variable : séparés par des virgules) ; parade au DNS rebinding |
+| `--trusted-proxy <IP>` | `SHIORI_TRUSTED_PROXIES` | toute adresse locale | adresse du reverse proxy dont l'en-tête `X-Forwarded-For` est cru, répétable ; à donner quand Shiori est joignable directement depuis le réseau local |
 | `--db <fichier>` | `SHIORI_DATA_DIR` (dossier) | dossier de données de l'OS | base SQLite |
 | `--cache-dir <dossier>` | `SHIORI_CACHE_DIR` | dossier de cache de l'OS | pages redimensionnées, RAR solides extraits |
 | `--cache-max-mib <Mio>` | | `2048` | taille maximale du cache ; au-delà, ce qui a été le moins récemment lu part |

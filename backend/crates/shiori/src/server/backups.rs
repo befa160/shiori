@@ -139,13 +139,14 @@ pub(crate) async fn restore(
 ) -> Result<StatusCode, ApiError> {
     let path = named(&app, &name)?;
     // Un scan écrit pendant toute sa passe : il écrirait dans une base qui n'est plus la sienne.
-    if app.scanner.progress().await.is_some() {
+    // La garde tient jusqu'à la fin : ni la surveillance ni le scan périodique ne démarrent.
+    let Some(_idle) = app.scanner.idle().await else {
         return Err(ApiError::new(
             StatusCode::CONFLICT,
             "scan_already_running",
             "un scan est en cours : attendez sa fin ou annulez-le",
         ));
-    }
+    };
     let dir = &app.backups.dir;
     app.db.backup(dir, "shiori-avant-restauration").await?;
     app.db.restore(&path, dir).await.map_err(invalid)?;

@@ -32,7 +32,10 @@ describe('progression lue hors ligne', () => {
     const fetch = vi.fn(async (url: string) => (url.includes('/a/') ? json({}) : json({ code: 'not_found', message: 'x' }, 404)))
     vi.stubGlobal('fetch', fetch)
     await flushProgress()
-    expect(fetch).toHaveBeenCalledWith('/api/volumes/a/progress', expect.objectContaining({ method: 'PUT', body: JSON.stringify({ page_id: 'p2' }) }))
+    // Avec l'heure de lecture : le serveur ne remplace pas une page lue depuis ailleurs.
+    const sent = fetch.mock.calls.find(([url]) => url === '/api/volumes/a/progress') as unknown as [string, RequestInit]
+    expect(sent[1].method).toBe('PUT')
+    expect(JSON.parse(sent[1].body as string)).toEqual({ page_id: 'p2', read_at: expect.stringMatching(/^\d{4}-\d\d-\d\dT[\d:.]+Z$/) })
     expect([pendingPage('a'), pendingPage('b')]).toEqual([undefined, undefined])
   })
 
@@ -63,6 +66,11 @@ describe('progression lue hors ligne', () => {
     setProgressUser(3)
     expect(pendingPage('a')).toBe('p1')
     expect(localStorage.getItem('shiori.pendingProgress')).toBeNull()
+    // Page gardée par une version sans l'heure : envoyée sans heure.
+    const fetch = vi.fn(async () => json({}))
+    vi.stubGlobal('fetch', fetch)
+    await flushProgress()
+    expect(fetch).toHaveBeenCalledWith('/api/volumes/a/progress', expect.objectContaining({ body: JSON.stringify({ page_id: 'p1' }) }))
     // Illisible : abandonnée sans rien casser.
     localStorage.setItem('shiori.pendingProgress', '{pas du json')
     setProgressUser(3)
