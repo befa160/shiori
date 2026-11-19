@@ -1501,6 +1501,19 @@ Besoin : en ouvrant le binaire (Windows, macOS, Linux ; pas Docker), arriver dir
 
 L'ordre de lecture ne dépend jamais de l'ordre dans l'archive : le lecteur reçoit la liste ordonnée des `page_id` (par `ordinal`), et le serveur lit chaque page par l'`archive_index` enregistré pour cet ID. Test d'intégration prévu au lot 2.4 : sur une archive rangée dans le désordre, la page n servie par HTTP est l'image attendue à l'ordinal n (même contrôle par couleur que `every_page_is_the_right_image`).
 
+### Correctifs de l'audit avant la V1 (2026-11-19)
+
+Audit Ponytail de tout le dépôt après la phase 9 ; corrigé dans `fix/audit-v1` :
+
+1. ✅ Créer un jeton d'API exige le mot de passe : un jeton survit au changement de mot de passe (choix gardé pour les liseuses), une session volée ne doit donc pas pouvoir en créer un.
+2. ✅ Progression lue hors ligne envoyée avec son heure (`read_at`) : la page la plus récente l'emporte, « lu » ne se perd jamais ; une page lue hors ligne n'écrase plus celle lue depuis sur un autre appareil.
+3. ✅ Restauration : la garde du scanner est tenue jusqu'à la fin (`Scanner::idle`), ni la surveillance ni le scan périodique ne démarrent pendant ce temps.
+4. ✅ Essais de connexion comptés par nom depuis une adresse (5), par adresse (20) et par nom toutes adresses (50, pause d'une minute au plus) : un inconnu ne bloque plus un compte 15 minutes.
+5. ✅ Un seul plafond de décodage (256 Mio, `shiori_core::decode_image`) pour le scan profond et le rendu : une page saine au scan se redimensionne toujours, et le scan profond ne prend plus 512 Mio par fichier en parallèle.
+6. ✅ `--trusted-proxy` / `SHIORI_TRUSTED_PROXIES` : seuls ces proxies voient leur `X-Forwarded-For` cru ; sans eux, toute adresse locale (comme avant).
+7. Sans objet : la déconnexion est déjà désactivée hors ligne.
+8. ✅ Clé du compteur d'un nom écrite une seule fois (`name_key`).
+
 ## Journal des décisions
 
 - 2026-11-11 : dépôt cloné depuis `befa160/shiori` (licence MIT). `graphify-out/` ignoré par git. Hooks Graphify dans `.claude/settings.json` versionné. Playwright MCP en Chromium headless (scope projet).

@@ -32,7 +32,11 @@ function key(): string {
   return user ? `${LEGACY}.${user}` : LEGACY
 }
 
-function read(): Record<string, string> {
+/** Page lue et son heure ; une simple chaîne vient d'une version sans l'heure. */
+type Pending = { page: string; at?: string }
+type Queue = Record<string, Pending | string>
+
+function read(): Queue {
   const k = key()
   try {
     return JSON.parse(get(k) ?? '{}') || {}
@@ -41,7 +45,9 @@ function read(): Record<string, string> {
   }
 }
 
-function write(pending: Record<string, string>) {
+const entry = (value: Pending | string): Pending => (typeof value === 'string' ? { page: value } : value)
+
+function write(pending: Queue) {
   set(key(), Object.keys(pending).length ? JSON.stringify(pending) : null)
 }
 
@@ -63,12 +69,13 @@ export function setProgressUser(id: number | null) {
 }
 
 export function queueProgress(volumeId: string, pageId: string) {
-  write({ ...read(), [volumeId]: pageId })
+  write({ ...read(), [volumeId]: { page: pageId, at: new Date().toISOString() } })
 }
 
 /** Page lue hors ligne et pas encore envoyée, pour reprendre au bon endroit sans réseau. */
 export function pendingPage(volumeId: string): string | undefined {
-  return read()[volumeId]
+  const value = read()[volumeId]
+  return value === undefined ? undefined : entry(value).page
 }
 
 /** Coupure passagère, à réessayer plus tard : réseau absent, session expirée (401), proxy ou
@@ -79,9 +86,11 @@ export function retryable(error: unknown) {
 
 /** Envoie ce qui attend ; s'arrête à la première coupure, abandonne ce que le serveur refuse. */
 export async function flushProgress() {
-  for (const [volumeId, pageId] of Object.entries(read())) {
+  for (const [volumeId, value] of Object.entries(read())) {
+    const { page, at } = entry(value)
     try {
-      await api.saveProgress(volumeId, pageId)
+      // Avec son heure : une page lue depuis sur un autre appareil n'est pas écrasée.
+      await api.saveProgress(volumeId, page, undefined, at)
     } catch (error) {
       if (retryable(error)) return
     }

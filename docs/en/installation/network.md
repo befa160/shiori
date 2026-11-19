@@ -39,7 +39,7 @@ server {
 }
 ```
 
-Open to the Internet, Shiori protects itself: sign-in required, a pause that grows after several wrong passwords (per account and per address), a session cookie limited to HTTPS behind the proxy (`X-Forwarded-Proto`, `X-Forwarded-For`). Turn on **two-factor authentication** for administrator accounts. Extra protection in front of Shiori (proxy password, Authelia, Cloudflare Access) is still possible. Details: [security](/en/technical/security).
+Open to the Internet, Shiori protects itself: sign-in required, a pause that grows after several wrong passwords (per account and per address), a session cookie limited to HTTPS behind the proxy (`X-Forwarded-Proto`, `X-Forwarded-For`). If Shiori can also be reached without going through the proxy (port `7878` open on the local network), give the proxy address to `--trusted-proxy` (`SHIORI_TRUSTED_PROXIES`): otherwise a device on the network can make up an address and skew the per-address count of attempts. Turn on **two-factor authentication** for administrator accounts. Extra protection in front of Shiori (proxy password, Authelia, Cloudflare Access) is still possible. Details: [security](/en/technical/security).
 
 With Cloudflare (free plan): the 100 MB limit applies to each request, and Shiori only sends and receives pages of a few hundred KB, downloaded volumes included.
 

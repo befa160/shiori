@@ -36,7 +36,7 @@ Un tome peut être **gardé sur l'appareil** pour lire sans réseau. Depuis la p
 
 - Les pages sont téléchargées une par une, à la taille de l'écran de cet appareil : un tome pèse nettement moins que son archive.
 - **Tomes téléchargés** (barre latérale, administration, ou le lien de l'avis « Hors ligne ») liste les tomes gardés, leur taille et la place disponible ; c'est par là qu'on les ouvre sans réseau.
-- La page lue hors ligne est envoyée au serveur dès le retour du réseau.
+- La page lue hors ligne est envoyée au serveur dès le retour du réseau, avec son heure : elle ne remplace pas une page lue depuis sur un autre appareil.
 - Un téléchargement interrompu (application fermée) reprend au lancement suivant ; une coupure de réseau l'arrête, à relancer.
 
 <!-- [ecran_telecharges] -->

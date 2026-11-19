@@ -4,10 +4,10 @@
 
 - **Sessions**: random 256-bit token, only its BLAKE3 hash is kept; `shiori_session` cookie `HttpOnly`, `SameSite=Lax`, `Secure` when the proxy announces `X-Forwarded-Proto: https`; 90 days sliding. A native app can ask for the token in the response (`client: "app"`) and send it as `Authorization: Bearer`.
 - **Passwords**: Argon2id, 8 characters at least, capped length (a multi-MB password does not make Argon2 work for nothing).
-- **Failed attempts** counted per name (5 free) and per address (20 free), then a pause that doubles up to 15 minutes (429 `rate_limited`, `Retry-After`) without computing the hash. The address is the connection's, or the last `X-Forwarded-For` when the connection comes from a local proxy (loopback or private network).
+- **Failed attempts** counted per name from one address (5 free) and per address (20 free), then a pause that doubles up to 15 minutes (429 `rate_limited`, `Retry-After`) without computing the hash; and per name from any address (50 free, a pause of one minute at most): someone failing on purpose with your name does not lock you out. The address is the connection's, or the last `X-Forwarded-For` when the connection comes from a reverse proxy: those of `--trusted-proxy` if any, otherwise any local address (loopback or private network).
 - **Setup**: while no account exists, the first administrator is created with a token drawn at random at each start and printed in the console (even with `--quiet`).
 - **Two-factor authentication**: TOTP (`totp-rs`) SHA-1, 6 digits, 30 s, one step of tolerance, a code works only once; 5-minute challenge between the password and the code; 10 recovery codes (BLAKE3 hash, single use).
-- **API tokens**: `shiori_t_` + 256 bits, only the hash is kept, optional expiry; they only open reading and progress (403 `token_forbidden` elsewhere).
+- **API tokens**: `shiori_t_` + 256 bits, only the hash is kept, optional expiry, password required to create one (it outlives a password change); they only open reading and progress (403 `token_forbidden` elsewhere).
 - **Temporary password**: until it is changed, only `/api/me` and `/api/me/password` answer.
 
 ```mermaid

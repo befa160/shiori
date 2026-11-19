@@ -87,8 +87,9 @@ export const api = {
   series: (id: number, init?: RequestInit) => must<SeriesDetail>(`/series/${id}`, init),
   volume: (id: string, init?: RequestInit) => must<VolumeDetail>(`/volumes/${id}`, init),
   pages: (volumeId: string, init?: RequestInit) => must<PageInfo[]>(`/volumes/${volumeId}/pages`, init),
-  saveProgress: (volumeId: string, pageId: string, init?: RequestInit) =>
-    must<Progress>(`/volumes/${volumeId}/progress`, { ...init, method: 'PUT', body: JSON.stringify({ page_id: pageId }) }),
+  /** `readAt` : heure de lecture d'une page lue hors ligne ; le serveur garde la plus récente. */
+  saveProgress: (volumeId: string, pageId: string, init?: RequestInit, readAt?: string) =>
+    must<Progress>(`/volumes/${volumeId}/progress`, { ...init, method: 'PUT', body: JSON.stringify({ page_id: pageId, read_at: readAt }) }),
   createLibrary: (library: { name: string; root: string; kind: LibraryKind; share: boolean }) =>
     must<Library>('/libraries', { method: 'POST', body: JSON.stringify(library) }),
   setLibraryWatch: (id: number, watch: boolean) =>
@@ -140,7 +141,7 @@ export const api = {
   disableTotp: (password: string, code: string) =>
     request<null>('/me/totp', { method: 'DELETE', body: JSON.stringify({ password, code }) }),
   tokens: (init?: RequestInit) => must<ApiToken[]>('/me/tokens', init),
-  createToken: (body: { name: string; expires_in_days?: number }) =>
+  createToken: (body: { name: string; expires_in_days?: number; password: string }) =>
     must<ApiToken & { token: string }>('/me/tokens', { method: 'POST', body: JSON.stringify(body) }),
   revokeToken: (id: number) => request<null>(`/me/tokens/${id}`, { method: 'DELETE' }),
   resetTotp: (id: number) => request<null>(`/admin/users/${id}/totp`, { method: 'DELETE' }),

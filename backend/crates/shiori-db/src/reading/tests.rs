@@ -119,6 +119,61 @@ async fn progress_is_saved_finished_once_and_cleared() {
 }
 
 #[tokio::test]
+async fn a_page_read_offline_does_not_replace_a_later_one() {
+    let f = fixture(LibraryKind::Manga).await;
+    let me = crate::tests::viewer(&f.db).await;
+    let last = f.pages.len() - 1;
+    // Tablette, en ligne : page 8.
+    saved(
+        f.db.save_progress(&me, &f.volume, &f.pages[8])
+            .await
+            .unwrap(),
+    );
+    // Téléphone, hors ligne plus tôt : page 2, envoyée après. La page 8 reste.
+    let early = Some("2020-01-01T10:00:00.000Z");
+    let p = saved(
+        f.db.save_progress_at(&me, &f.volume, &f.pages[2], early)
+            .await
+            .unwrap(),
+    );
+    assert_eq!((p.ordinal, p.finished), (8, false));
+    // Mais la dernière page lue hors ligne marque quand même le tome comme lu.
+    let p = saved(
+        f.db.save_progress_at(&me, &f.volume, &f.pages[last], early)
+            .await
+            .unwrap(),
+    );
+    assert_eq!((p.ordinal, p.finished), (8, true));
+    // Une date future compte comme maintenant : elle ne fige pas la progression.
+    let future = Some("2999-01-01T00:00:00.000Z");
+    saved(
+        f.db.save_progress_at(&me, &f.volume, &f.pages[5], future)
+            .await
+            .unwrap(),
+    );
+    let p = saved(
+        f.db.save_progress(&me, &f.volume, &f.pages[6])
+            .await
+            .unwrap(),
+    );
+    assert_eq!(p.ordinal, 6);
+    // Premier enregistrement d'un tome, daté : pris tel quel.
+    f.db.clear_progress(&me, &f.volume).await.unwrap();
+    let p = saved(
+        f.db.save_progress_at(&me, &f.volume, &f.pages[4], early)
+            .await
+            .unwrap(),
+    );
+    assert_eq!(p.ordinal, 4);
+    assert_eq!(
+        f.db.save_progress_at(&me, &f.volume, &f.pages[4], Some("hier"))
+            .await
+            .unwrap(),
+        SaveProgress::InvalidTime
+    );
+}
+
+#[tokio::test]
 async fn progress_refuses_foreign_pages_and_unknown_volumes() {
     let f = fixture(LibraryKind::Manga).await;
     assert_eq!(

@@ -179,6 +179,16 @@ impl Scanner {
         Some(running.progress.read().await.clone())
     }
 
+    /// Rien ne tourne : renvoie une garde qui empêche toute passe de démarrer tant qu'elle vit
+    /// (restauration de la base) ; `None` si une passe tourne.
+    pub async fn idle(&self) -> Option<impl Sized + '_> {
+        let running = self.running.lock().await;
+        running
+            .as_ref()
+            .is_none_or(|r| r.handle.is_finished())
+            .then_some(running)
+    }
+
     /// Demande l'arrêt de la passe en cours après les fichiers déjà commencés. `false` si
     /// rien ne tourne.
     pub async fn cancel(&self) -> bool {

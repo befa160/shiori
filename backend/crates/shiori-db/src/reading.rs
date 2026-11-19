@@ -186,6 +186,8 @@ pub enum SaveProgress {
     UnknownVolume,
     /// La page n'appartient pas à ce tome.
     PageNotInVolume,
+    /// `read_at` n'est pas une date.
+    InvalidTime,
 }
 
 /// Modification de réglages : `None` = inchangé, `Some(None)` = revenir au défaut.
@@ -329,6 +331,33 @@ impl Db {
         volume: &VolumeId,
         page: &PageId,
     ) -> Result<SaveProgress, Error> {
+        self.save_progress_at(viewer, volume, page, None).await
+    }
+
+    /// Comme [`Db::save_progress`], pour une page lue à `read_at` (ISO 8601, lecture hors ligne
+    /// envoyée plus tard) : elle ne remplace pas une page lue après elle sur un autre appareil,
+    /// mais marque quand même le tome comme lu. Une date future compte comme maintenant.
+    pub async fn save_progress_at(
+        &self,
+        viewer: &Viewer,
+        volume: &VolumeId,
+        page: &PageId,
+        read_at: Option<&str>,
+    ) -> Result<SaveProgress, Error> {
+        let sql = concat!(
+            "SELECT CASE WHEN ?1 IS NULL THEN ",
+            now!(),
+            " ELSE min(strftime('%Y-%m-%dT%H:%M:%fZ', ?1), ",
+            now!(),
+            ") END"
+        );
+        let at: Option<String> = sqlx::query_scalar(sql)
+            .bind(read_at)
+            .fetch_one(&self.pool)
+            .await?;
+        let Some(at) = at else {
+            return Ok(SaveProgress::InvalidTime);
+        };
         if !self.volume_visible(viewer, volume).await? {
             return Ok(SaveProgress::UnknownVolume);
         }
@@ -350,24 +379,24 @@ impl Db {
         };
         let ordinal: i64 = p.get("ordinal");
         let last = ordinal + 1 >= v.get::<i64, _>("page_count");
-        let sql = concat!(
-            "INSERT INTO reading_progress
+        // La plus récente des deux pages l'emporte ; « lu » ne se perd jamais.
+        let sql = "INSERT INTO reading_progress
                (user_id, volume_id, page_id, ordinal, finished_at, updated_at)
-             VALUES (?, ?, ?, ?, CASE WHEN ? THEN ",
-            now!(),
-            " END, ",
-            now!(),
-            ")
-             ON CONFLICT (user_id, volume_id) DO UPDATE SET page_id = excluded.page_id,
-               ordinal = excluded.ordinal, updated_at = excluded.updated_at,
-               finished_at = COALESCE(reading_progress.finished_at, excluded.finished_at)"
-        );
+             VALUES (?1, ?2, ?3, ?4, CASE WHEN ?5 THEN ?6 END, ?6)
+             ON CONFLICT (user_id, volume_id) DO UPDATE SET
+               page_id = CASE WHEN excluded.updated_at >= reading_progress.updated_at
+                         THEN excluded.page_id ELSE reading_progress.page_id END,
+               ordinal = CASE WHEN excluded.updated_at >= reading_progress.updated_at
+                         THEN excluded.ordinal ELSE reading_progress.ordinal END,
+               updated_at = max(reading_progress.updated_at, excluded.updated_at),
+               finished_at = COALESCE(reading_progress.finished_at, excluded.finished_at)";
         sqlx::query(sql)
             .bind(viewer.user)
             .bind(&volume)
             .bind(page.to_string())
             .bind(ordinal)
             .bind(last)
+            .bind(&at)
             .execute(&self.pool)
             .await?;
         let row = sqlx::query(progress_of!("r.volume_id = ?2"))

@@ -5,8 +5,10 @@
 //!   présenté en `Authorization: Bearer`.
 //! - Toute route `/api` exige une session, sauf [`PUBLIC`]. L'interface (hors `/api`) reste
 //!   servie : elle affiche elle-même la page de connexion.
-//! - Connexion : essais ratés comptés par nom et par adresse ; au-delà d'un seuil, pause qui
-//!   double à chaque échec (429 `rate_limited` avec `Retry-After`), sans même calculer le hash.
+//! - Connexion : essais ratés comptés par nom depuis une adresse, par adresse, et par nom toutes
+//!   adresses confondues (seuil haut, pause courte : un inconnu ne peut pas bloquer un compte) ;
+//!   au-delà d'un seuil, pause qui double à chaque échec (429 `rate_limited` avec `Retry-After`),
+//!   sans même calculer le hash.
 //! - Double authentification (lot 7.5) : un mot de passe juste ne donne qu'un défi de 5 minutes ;
 //!   la session s'ouvre avec le code (`/api/auth/totp`), compté dans la même limite d'essais.
 
@@ -40,19 +42,74 @@ const PUBLIC: [&str; 6] = [
 /// Routes permises avec un mot de passe provisoire : de quoi le changer.
 const MUST_CHANGE_OPEN: [&str; 2] = ["/api/me", "/api/me/password"];
 const COOKIE: &str = "shiori_session";
-/// Essais ratés tolérés avant la première pause, pour un nom puis pour une adresse (plusieurs
-/// personnes peuvent partager une adresse, derrière une box).
+/// Essais ratés tolérés avant la première pause : pour un nom depuis une adresse, pour une
+/// adresse (plusieurs personnes peuvent partager une adresse, derrière une box), et pour un nom
+/// depuis partout (essais répartis sur beaucoup d'adresses).
 const FREE_PER_NAME: u32 = 5;
 const FREE_PER_ADDRESS: u32 = 20;
+const FREE_PER_NAME_ANYWHERE: u32 = 50;
 const MAX_PAUSE: Duration = Duration::from_secs(15 * 60);
+/// Pause la plus longue du compteur par nom toutes adresses confondues : quelqu'un qui se trompe
+/// exprès sur votre nom ne vous fait pas attendre plus d'une minute.
+const MAX_PAUSE_ANYWHERE: Duration = Duration::from_secs(60);
 /// Durée d'un défi de connexion (mot de passe juste, code attendu).
 const CHALLENGE: Duration = Duration::from_secs(5 * 60);
+
+/// Un compteur d'essais ratés : sa clé, les essais libres, la pause la plus longue, et s'il
+/// repart de zéro après une connexion réussie (pas celui d'une adresse partagée).
+#[derive(Clone)]
+struct Limit {
+    key: String,
+    free: u32,
+    max: Duration,
+    reset: bool,
+}
+
+/// Clé du compteur d'un nom de compte, la même pour la connexion et les vérifications du compte.
+fn name_key(username: &str) -> String {
+    format!("nom:{}", username.to_lowercase())
+}
+
+/// Compteur du compte connecté (mot de passe ou code exigé avant un changement sensible).
+fn own_limit(user: &User) -> [Limit; 1] {
+    [Limit {
+        key: name_key(&user.username),
+        free: FREE_PER_NAME,
+        max: MAX_PAUSE,
+        reset: true,
+    }]
+}
+
+/// Compteurs d'une connexion : nom depuis cette adresse, adresse, nom depuis partout.
+fn login_limits(username: &str, address: &str) -> [Limit; 3] {
+    let name = name_key(username);
+    [
+        Limit {
+            key: format!("{name}@{address}"),
+            free: FREE_PER_NAME,
+            max: MAX_PAUSE,
+            reset: true,
+        },
+        Limit {
+            key: format!("adresse:{address}"),
+            free: FREE_PER_ADDRESS,
+            max: MAX_PAUSE,
+            reset: false,
+        },
+        Limit {
+            key: name,
+            free: FREE_PER_NAME_ANYWHERE,
+            max: MAX_PAUSE_ANYWHERE,
+            reset: true,
+        },
+    ]
+}
 
 /// Mot de passe juste, second facteur attendu.
 struct Challenge {
     user_id: i64,
     client: Client,
-    keys: [(String, u32); 2],
+    limits: [Limit; 3],
     at: Instant,
 }
 
@@ -64,6 +121,8 @@ pub(crate) struct Guard {
     challenges: Mutex<HashMap<String, Challenge>>,
     /// Argon2 prend ~20 Mio et des dizaines de ms par essai : peu de calculs à la fois.
     hashing: Semaphore,
+    /// Reverse proxies dont on croit `X-Forwarded-For` ; vide : toute adresse locale ou privée.
+    pub(crate) trusted_proxies: Vec<IpAddr>,
 }
 
 impl Guard {
@@ -73,6 +132,7 @@ impl Guard {
             failures: Mutex::default(),
             challenges: Mutex::default(),
             hashing: Semaphore::new(2),
+            trusted_proxies: Vec::new(),
         }
     }
 
@@ -80,27 +140,30 @@ impl Guard {
         &self.setup_token
     }
 
-    /// Temps restant avant le prochain essai permis pour l'une de ces clés, s'il y en a.
-    fn paused(&self, keys: &[(String, u32)]) -> Option<Duration> {
+    /// Temps restant avant le prochain essai permis pour l'un de ces compteurs, s'il y en a.
+    fn paused(&self, limits: &[Limit]) -> Option<Duration> {
         let failures = self.failures.lock().unwrap_or_else(PoisonError::into_inner);
-        keys.iter()
-            .filter_map(|(key, free)| {
-                let &(count, last) = failures.get(key)?;
-                let pause = count.checked_sub(*free).filter(|n| *n > 0)?;
-                let pause = Duration::from_secs(1u64 << pause.min(10)).min(MAX_PAUSE);
+        limits
+            .iter()
+            .filter_map(|limit| {
+                let &(count, last) = failures.get(&limit.key)?;
+                let pause = count.checked_sub(limit.free).filter(|n| *n > 0)?;
+                let pause = Duration::from_secs(1u64 << pause.min(10)).min(limit.max);
                 pause.checked_sub(last.elapsed())
             })
             .max()
     }
 
-    fn failed(&self, keys: &[(String, u32)]) {
+    fn failed(&self, limits: &[Limit]) {
         let mut failures = self.failures.lock().unwrap_or_else(PoisonError::into_inner);
         // Des noms inventés par milliers ne doivent pas faire grossir la table sans fin.
         if failures.len() > 10_000 {
             failures.retain(|_, (_, last)| last.elapsed() < MAX_PAUSE);
         }
-        for (key, _) in keys {
-            let entry = failures.entry(key.clone()).or_insert((0, Instant::now()));
+        for limit in limits {
+            let entry = failures
+                .entry(limit.key.clone())
+                .or_insert((0, Instant::now()));
             *entry = (entry.0.saturating_add(1), Instant::now());
         }
     }
@@ -126,19 +189,23 @@ impl Guard {
         challenges.insert(token, challenge);
     }
 
-    fn succeeded(&self, name_key: &str) {
+    fn succeeded(&self, limits: &[Limit]) {
         let mut failures = self.failures.lock().unwrap_or_else(PoisonError::into_inner);
-        failures.remove(name_key);
+        for limit in limits.iter().filter(|l| l.reset) {
+            failures.remove(&limit.key);
+        }
     }
 }
 
-/// Adresse du client : celle de la connexion, ou, si elle vient d'un proxy local (même machine
-/// ou réseau privé), la dernière de `X-Forwarded-For`, ajoutée par ce proxy.
-fn client_address(peer: Option<SocketAddr>, headers: &HeaderMap) -> String {
+/// Adresse du client : celle de la connexion, ou, si elle vient d'un reverse proxy, la dernière
+/// de `X-Forwarded-For`, ajoutée par ce proxy. Proxy : l'un de `trusted` s'il y en a, sinon
+/// toute adresse locale ou privée (un client du réseau local peut alors s'inventer une adresse).
+fn client_address(peer: Option<SocketAddr>, headers: &HeaderMap, trusted: &[IpAddr]) -> String {
     let peer = peer.map(|p| p.ip());
-    let local = |ip: IpAddr| match ip {
-        IpAddr::V4(v4) => v4.is_loopback() || v4.is_private(),
-        IpAddr::V6(v6) => v6.is_loopback() || v6.is_unique_local(),
+    let local = |ip: IpAddr| match (trusted.is_empty(), ip) {
+        (false, ip) => trusted.contains(&ip.to_canonical()),
+        (true, IpAddr::V4(v4)) => v4.is_loopback() || v4.is_private(),
+        (true, IpAddr::V6(v6)) => v6.is_loopback() || v6.is_unique_local(),
     };
     let forwarded = || {
         headers
@@ -487,15 +554,9 @@ pub(crate) async fn login(
 ) -> Result<Response, ApiError> {
     let Json(credentials) = body.map_err(invalid_body)?;
     let peer = peer.map(|axum::Extension(ConnectInfo(addr))| addr);
-    let name_key = format!("nom:{}", credentials.username.to_lowercase());
-    let keys = [
-        (name_key.clone(), FREE_PER_NAME),
-        (
-            format!("adresse:{}", client_address(peer, &headers)),
-            FREE_PER_ADDRESS,
-        ),
-    ];
-    if let Some(wait) = app.auth.paused(&keys) {
+    let address = client_address(peer, &headers, &app.auth.trusted_proxies);
+    let limits = login_limits(&credentials.username, &address);
+    if let Some(wait) = app.auth.paused(&limits) {
         return Err(rate_limited(wait));
     }
     let user = {
@@ -510,7 +571,7 @@ pub(crate) async fn login(
             .await?
     };
     let Some(user) = user else {
-        app.auth.failed(&keys);
+        app.auth.failed(&limits);
         return Err(ApiError::new(
             StatusCode::UNAUTHORIZED,
             "invalid_credentials",
@@ -522,7 +583,7 @@ pub(crate) async fn login(
         let challenge = app.auth.challenge(Challenge {
             user_id: user.id,
             client: credentials.client,
-            keys,
+            limits,
             at: Instant::now(),
         });
         return Ok(Json(TotpRequired {
@@ -531,7 +592,7 @@ pub(crate) async fn login(
         })
         .into_response());
     }
-    app.auth.succeeded(&name_key);
+    app.auth.succeeded(&limits);
     sign_in(&app, &headers, user, credentials.client).await
 }
 
@@ -571,7 +632,7 @@ pub(crate) async fn second_factor(
             "délai dépassé : se reconnecter",
         ));
     };
-    if let Some(wait) = app.auth.paused(&challenge.keys) {
+    if let Some(wait) = app.auth.paused(&challenge.limits) {
         app.auth.put_back(answer.challenge, challenge);
         return Err(rate_limited(wait));
     }
@@ -581,10 +642,10 @@ pub(crate) async fn second_factor(
         .await;
     if !matches!(checked, Ok(true)) {
         // Faute de frappe ou erreur passagère : le défi reste, sans se reconnecter.
-        let keys = challenge.keys.clone();
+        let limits = challenge.limits.clone();
         app.auth.put_back(answer.challenge, challenge);
         checked?;
-        app.auth.failed(&keys);
+        app.auth.failed(&limits);
         return Err(ApiError::new(
             StatusCode::UNAUTHORIZED,
             "invalid_code",
@@ -600,7 +661,7 @@ pub(crate) async fn second_factor(
     else {
         return Err(unauthenticated());
     };
-    app.auth.succeeded(&challenge.keys[0].0);
+    app.auth.succeeded(&challenge.limits);
     sign_in(&app, &headers, user, challenge.client).await
 }
 
@@ -634,9 +695,8 @@ pub(crate) async fn check_own_password(
     user: &User,
     password: &str,
 ) -> Result<(), ApiError> {
-    let name_key = format!("nom:{}", user.username.to_lowercase());
-    let keys = [(name_key.clone(), FREE_PER_NAME)];
-    if let Some(wait) = app.auth.paused(&keys) {
+    let limits = own_limit(user);
+    if let Some(wait) = app.auth.paused(&limits) {
         return Err(rate_limited(wait));
     }
     let checked = {
@@ -649,29 +709,26 @@ pub(crate) async fn check_own_password(
         app.db.check_password(&user.username, password).await?
     };
     if checked.is_none() {
-        app.auth.failed(&keys);
+        app.auth.failed(&limits);
         return Err(ApiError::new(
             StatusCode::FORBIDDEN,
             "wrong_password",
             "mot de passe actuel incorrect",
         ));
     }
-    app.auth.succeeded(&name_key);
+    app.auth.succeeded(&limits);
     Ok(())
 }
 
 /// Code de double authentification du compte connecté (TOTP ou secours), exigé pour la
 /// retirer ; même limite d'essais que le mot de passe.
 pub(crate) async fn check_own_code(app: &App, user: &User, code: &str) -> Result<(), ApiError> {
-    let keys = [(
-        format!("nom:{}", user.username.to_lowercase()),
-        FREE_PER_NAME,
-    )];
-    if let Some(wait) = app.auth.paused(&keys) {
+    let limits = own_limit(user);
+    if let Some(wait) = app.auth.paused(&limits) {
         return Err(rate_limited(wait));
     }
     if !app.db.check_second_factor(user.id, code).await? {
-        app.auth.failed(&keys);
+        app.auth.failed(&limits);
         return Err(ApiError::new(
             StatusCode::FORBIDDEN,
             "invalid_code",

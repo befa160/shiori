@@ -94,16 +94,16 @@ Un jeton permet à un autre logiciel de lire les bibliothèques du compte et d'e
 ### `POST /api/me/tokens`
 
 ```json
-{ "name": "Liseuse", "expires_in_days": 90 }
+{ "name": "Liseuse", "expires_in_days": 90, "password": "…" }
 ```
 
-`expires_in_days` : facultatif (sans expiration si absent). **Réponse 201** : le jeton, avec son secret en clair, rendu **une seule fois**.
+`expires_in_days` : facultatif (sans expiration si absent). `password` : le mot de passe du compte, exigé (un jeton survit au changement de mot de passe : une session volée ne doit pas pouvoir en créer un). **Réponse 201** : le jeton, avec son secret en clair, rendu **une seule fois**.
 
 ```json
 { "id": 3, "name": "Liseuse", "prefix": "shiori_t_8f2a1c3d", "created_at": "…", "last_used_at": null, "expires_at": "…", "token": "shiori_t_8f2a1c3d…" }
 ```
 
-**Erreurs** : 400 `invalid_token_name` (1 à 64 caractères).
+**Erreurs** : 400 `invalid_token_name` (1 à 64 caractères), 403 `wrong_password`, 429 `rate_limited`.
 
 ### `DELETE /api/me/tokens/{id}`
 

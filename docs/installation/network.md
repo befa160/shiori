@@ -39,7 +39,7 @@ server {
 }
 ```
 
-Ouvert sur Internet, Shiori se protège seul : connexion obligatoire, pause qui s'allonge après plusieurs mots de passe faux (par compte et par adresse), cookie de session réservé au HTTPS derrière le proxy (`X-Forwarded-Proto`, `X-Forwarded-For`). Activez la **double authentification** sur les comptes administrateurs. Une protection en plus devant Shiori (mot de passe du proxy, Authelia, Cloudflare Access) reste possible. Détails : [sécurité](/technical/security).
+Ouvert sur Internet, Shiori se protège seul : connexion obligatoire, pause qui s'allonge après plusieurs mots de passe faux (par compte et par adresse), cookie de session réservé au HTTPS derrière le proxy (`X-Forwarded-Proto`, `X-Forwarded-For`). Si Shiori reste aussi joignable sans passer par le proxy (port `7878` ouvert sur le réseau local), donnez l'adresse du proxy à `--trusted-proxy` (`SHIORI_TRUSTED_PROXIES`) : sinon un appareil du réseau peut s'inventer une adresse et fausser le compte des essais par adresse. Activez la **double authentification** sur les comptes administrateurs. Une protection en plus devant Shiori (mot de passe du proxy, Authelia, Cloudflare Access) reste possible. Détails : [sécurité](/technical/security).
 
 Avec Cloudflare (compte gratuit) : la limite de 100 Mo porte sur chaque requête, et Shiori n'envoie et ne reçoit que des pages de quelques centaines de Ko, y compris pour les tomes téléchargés.
 

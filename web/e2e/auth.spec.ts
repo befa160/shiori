@@ -98,6 +98,7 @@ test('connexion, création d’un lecteur, première connexion du lecteur, déco
   await tokens.getByRole('button', { name: 'Nouveau jeton' }).click()
   const create = page.getByRole('dialog', { name: 'Nouveau jeton' })
   await create.getByLabel('Nom').fill('Liseuse')
+  await create.getByLabel('Mot de passe actuel').fill('lecteur mot de passe')
   await create.getByRole('button', { name: 'Créer le jeton' }).click()
   const token = (await page.getByRole('dialog').locator('code').textContent()) ?? ''
   await page.getByRole('button', { name: "C'est noté" }).click()
