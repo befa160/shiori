@@ -7,109 +7,94 @@
 </h1>
 
 [![CI](https://github.com/befa160/shiori/actions/workflows/ci.yml/badge.svg)](https://github.com/befa160/shiori/actions/workflows/ci.yml)
+[![Docs](https://github.com/befa160/shiori/actions/workflows/docs.yml/badge.svg)](https://befa160.github.io/shiori/)
+[![Release](https://img.shields.io/github/v/release/befa160/shiori)](https://github.com/befa160/shiori/releases)
 [![Licence MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 
-Lecteur de mangas, BD et webtoons auto-hébergé. Un seul binaire Rust sert la bibliothèque et une application web installable (PWA), pensée d'abord pour la lecture sur tablette.
+**Lecteur de mangas, BD et webtoons auto-hébergé.** Un seul programme (binaire Rust ou image Docker) lit vos dossiers de CBZ, CBR et PDF et les sert à une application web installable, pensée d'abord pour la tablette. Vos fichiers ne sont jamais modifiés.
 
-> **État : version 0.3.0 (phase 8 terminée).** Bibliothèque en couvertures avec « Continuer la lecture », recherche, filtres et tags ; lecteur manga, BD et webtoon (double page, zoom, reprise) ; administration des bibliothèques et des scans ; métadonnées des fichiers (ComicInfo.xml, `index.json`) et, si vous l'autorisez, d'AniList et de MangaDex, modifiables champ par champ ; application installable (PWA) avec lecture hors ligne des tomes téléchargés ; thèmes sombre, clair, noir OLED et sépia ; français et anglais. Image Docker et binaires Linux, Windows et macOS (un double-clic ouvre l'interface). Comptes (administrateur, lecteurs, bibliothèques ouvertes par compte, progression et préférences de chacun), double authentification, jetons d'API, sauvegarde quotidienne et restauration depuis l'interface. Lecture des PDF sans leurs marges : les images incluses servies comme des pages, pages en bandes réassemblées. L'avancement détaillé est dans [ROADMAP.md](ROADMAP.md).
+📖 **Documentation : <https://befa160.github.io/shiori/>** ([English](https://befa160.github.io/shiori/en/))
 
-## Documentation
+<!-- [ecran_readme] -->
 
-- **[Installer Shiori](docs/installation.fr.md)** ([English](docs/installation.en.md)) : Docker ou programme seul, premiers pas, comptes, accès depuis la tablette ou Internet, mise à jour, sauvegarde et restauration.
-- **[Utiliser Shiori](docs/fonctionnel.md)** : bibliothèques, comptes, rangement des fichiers, lecture, hors-ligne, métadonnées, scans et codes de diagnostic.
-- **[Documentation technique](docs/technique.md)** : architecture, identités et invariants, base, API, images, front, tests, distribution.
+## Ce que ça fait
 
-## Démarrage rapide
-
-```bash
-docker compose up -d
-```
-
-avec le [`compose.yaml`](compose.yaml) du dépôt (décommentez la ligne de vos bibliothèques), puis <http://localhost:7878> : créez le compte administrateur avec le jeton d'installation affiché dans `docker compose logs shiori`, puis **Administration → Ajouter une bibliothèque**. Sans Docker : téléchargez le programme de votre système dans les [Releases](https://github.com/befa160/shiori/releases) et lancez-le. Détails : [installation](docs/installation.fr.md).
+- **Lire partout** : manga de droite à gauche, BD, doubles pages, webtoon en défilement continu ; la progression suit d'un appareil à l'autre ; application installable (PWA) et tomes téléchargés pour lire hors ligne.
+- **Tous vos formats** : CBZ (zip64 compris), CBR (RAR 4 et 5, solide compris) et PDF, dont la planche s'affiche sans les marges de la page. Pages redimensionnées en AVIF à la taille de l'écran.
+- **Une bibliothèque qui se tient à jour** : un dossier par série, les numéros de tomes et chapitres reconnus dans les noms, la surveillance des dossiers qui scanne seule ce qui change, un scan complet périodique pour les partages réseau.
+- **Une bibliothèque en bonne santé** : chaque page vérifiée au scan, un tableau de bord des tomes sains, en avertissement ou en erreur, la liste de ce qu'il faut réparer, chaque problème expliqué.
+- **Des fiches complètes** : ComicInfo.xml, `index.json`, propriétés des PDF, et si vous l'autorisez AniList et MangaDex ; vos modifications passent toujours en premier.
+- **Toute la famille** : un compte par personne, bibliothèques ouvertes à la carte, double authentification, jetons d'API, sauvegardes automatiques et restauration depuis l'interface.
+- **Chez vous** : Linux, Windows, macOS ou Docker (amd64, arm64) ; rien ne quitte votre réseau sans votre accord. Interface en français et en anglais, thèmes sombre, clair, noir OLED et sépia.
 
 ## Pourquoi
 
-Les lecteurs existants affichent parfois la mauvaise page : un webtoon où la page 1 n'est plus la page 1, un manga qui répète la 4ème de couverture pendant soixante pages. Ces bugs viennent d'un index de page qui ne correspond plus au contenu réel de l'archive (cache périmé, nombre de pages faux).
+Les lecteurs existants affichent parfois la mauvaise page : un webtoon où la page 1 n'est plus la page 1, un manga qui répète la 4ᵉ de couverture pendant soixante pages. Ces bugs viennent d'un index de page qui ne correspond plus au contenu réel de l'archive (cache périmé, nombre de pages faux).
 
 Shiori est conçu pour que ces défauts soient impossibles :
 
-- **Chaque page a une identité stable** : un hash du fichier et du nom de l'entrée dans l'archive, jamais un simple numéro. Une URL d'image désigne toujours la même image.
+- **Chaque page a une identité stable** : un hash du fichier et du nom de l'entrée dans l'archive, jamais un simple numéro. Une adresse d'image désigne toujours la même image.
 - **Le scan est la source de vérité** : l'ordre des pages, leurs dimensions et leur type sont établis une fois au scan et stockés en base. Le lecteur n'invente rien.
 - **Une archive abîmée se voit** : une page illisible affiche une erreur explicite à sa place, jamais une autre image.
 - **Les fichiers sources ne sont jamais modifiés.**
 
-## Fonctionnalités
+## Démarrage rapide
 
-| | |
-|---|---|
-| **Scan d'intégrité** | CRC de chaque entrée, en-têtes et dimensions des images, doublons, fichiers parasites, ordre, archives tronquées ; rapport JSON et dans l'interface |
-| **Lecteur** | Gauche→droite, droite→gauche (manga), vertical continu (webtoon) ; page simple ou double ; découpage des doubles pages ; reprise exacte de la lecture |
-| **Webtoons** | Défilement vertical continu, chargement paresseux, aucun saut de mise en page (place de chaque page réservée d'après le scan) |
-| **Bibliothèque** | Grille d'affiches, séries, « Continuer la lecture », recherche, filtres par statut de publication et de lecture |
-| **Métadonnées** | ComicInfo.xml, `index.json`, propriétés des PDF, AniList et MangaDex ; édition manuelle avec verrouillage par champ ; MangaUpdates et Comic Vine plus tard |
-| **Formats** | CBZ (zip, zip64), CBR (RAR 4 et 5, solid compris) et PDF (images incluses servies sans les marges de la page, pages en bandes réassemblées), tout en Rust pur. Images jpg, png, webp, avif, servies redimensionnées en AVIF (pages) et JPEG (miniatures) |
-| **Comptes** | Administrateur et lecteurs, bibliothèques ouvertes par compte, progression et préférences de chacun, double authentification (TOTP), jetons d'API en lecture seule |
-| **Sauvegarde** | Sauvegarde quotidienne de la base dans un dossier à confier à Backrest ou restic, restauration depuis l'interface |
-| **Application** | PWA installable, lecture hors ligne des tomes téléchargés (page par page), thèmes, français et anglais |
-| **Déploiement** | Image Docker (amd64, arm64) et binaires autonomes Linux, Windows et macOS |
+Avec Docker, ce `compose.yaml` (le même que [celui du dépôt](compose.yaml)) :
 
-## Architecture
+```yaml
+services:
+  shiori:
+    image: ghcr.io/befa160/shiori:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:7878:7878"
+    volumes:
+      - shiori-data:/data
+      - shiori-cache:/cache
+      - /chemin/vers/mangas:/bibliotheques/mangas:ro
 
-```
-backend/                 workspace Rust
-  crates/shiori-core/    archives, identités stables, ordre des pages, scan d'intégrité (sans base ni async)
-  crates/shiori-db/      base SQLite : scans, bibliothèques, progression, métadonnées et leur fusion
-  crates/shiori-meta/    clients AniList et MangaDex
-  crates/shiori-testkit/ fixtures de test générées par du code
-  crates/shiori/         binaire : CLI de scan et serveur HTTP (API, images, job de scan)
-web/                     application React 19 + TypeScript + Vite
+volumes:
+  shiori-data:
+  shiori-cache:
 ```
 
-Pile : Rust (axum, tokio, sqlx + SQLite), React + Tailwind + shadcn/ui embarqué dans le binaire. Le code applicatif reste portable : il compile et passe ses tests sous Linux, Windows et macOS, et privilégie les dépendances pure Rust.
+```bash
+docker compose up -d
+docker compose logs shiori   # le jeton d'installation
+```
+
+Puis <http://localhost:7878> : créez le compte administrateur avec le jeton d'installation, puis **Administration → Ajouter une bibliothèque** avec le chemin `/bibliotheques/mangas`. Le scan démarre tout seul.
+
+Sans Docker : téléchargez le programme de votre système dans les [Releases](https://github.com/befa160/shiori/releases) et double-cliquez dessus ; il ouvre l'interface dans votre navigateur.
+
+Ensuite : [ouvrir Shiori à la tablette ou à Internet](https://befa160.github.io/shiori/installation/network), [ranger ses fichiers](https://befa160.github.io/shiori/guide/libraries), [sauvegardes](https://befa160.github.io/shiori/installation/backup).
+
+## Documentation
+
+| | Français | English |
+|---|---|---|
+| Installation | [Démarrage rapide](https://befa160.github.io/shiori/installation/) | [Quick start](https://befa160.github.io/shiori/en/installation/) |
+| Guide | [Utiliser Shiori](https://befa160.github.io/shiori/guide/) | [Using Shiori](https://befa160.github.io/shiori/en/guide/) |
+| Technique | [Architecture](https://befa160.github.io/shiori/technical/) | [Architecture](https://befa160.github.io/shiori/en/technical/) |
+| API | [Référence](https://befa160.github.io/shiori/api/) | [Reference](https://befa160.github.io/shiori/en/api/) |
+
+Les sources de la documentation sont dans [`docs/`](docs/), l'avancement détaillé dans [ROADMAP.md](ROADMAP.md).
+
+## In English
+
+Shiori is a self-hosted manga, comics and webtoon reader: a single Rust binary (or Docker image) that reads your CBZ, CBR and PDF folders and serves them to an installable web app, designed tablet-first. Every page has a stable identity and is checked when scanned, so the reader never shows the wrong page. See the [English documentation](https://befa160.github.io/shiori/en/).
 
 ## Développement
 
-Prérequis : les dernières versions stables de [Rust](https://rustup.rs) (canal `stable`, fixé par `backend/rust-toolchain.toml`) et de [Node.js](https://nodejs.org) (26, fixé par `web/.node-version`). Le projet suit toujours les dernières versions de ses outils et dépendances, pour que la maintenance reste simple.
+Rust (axum, tokio, sqlx + SQLite) et React 19 + TypeScript + Tailwind + shadcn/ui, embarqué dans le binaire. Code portable (Linux, Windows, macOS), dépendances Rust pur de préférence, couverture de tests d'au moins 80 %.
 
 ```bash
-cd backend
-cargo test --workspace
-cargo clippy --workspace --all-targets -- -D warnings
-cargo fmt --all --check
+cd backend && cargo test --workspace
+cd web && npm ci && npm run dev
 ```
 
-```bash
-cd web
-npm ci
-npm run dev
-```
-
-Scanner une bibliothèque (rapport dans le terminal, base SQLite dans le dossier de données de l'OS, ou `SHIORI_DATA_DIR`) :
-
-```bash
-cd backend
-cargo run --release -p shiori -- scan /chemin/vers/ma/bibliotheque
-```
-
-Options utiles : `--deep` (décode chaque image), `--json rapport.json` (rapport complet), `--no-db` (sans base), `--fail-on warning`.
-
-Lancer Shiori (interface web et API sous `/api`, connexion exigée, écoute sur `127.0.0.1:7878` par défaut ; sans compte, la console affiche le jeton d'installation du premier administrateur). Le front est intégré au binaire de release : le construire d'abord.
-
-```bash
-cd web && npm ci && npm run build
-```
-
-```bash
-cd backend && cargo run --release -p shiori -- serve
-```
-
-puis ouvrir <http://localhost:7878> : **Administration → Ajouter une bibliothèque**, avec le chemin complet du dossier (un sous-dossier par série) et son type (manga, BD ou webtoon, qui donne le sens de lecture par défaut). Le scan démarre aussitôt ; son avancement, son historique et ses journaux sont dans **Administration → Historique et options**.
-
-Dans le lecteur : tap sur les côtés ou flèches pour tourner les pages, tap au centre (ou Tab) pour les commandes, double tap pour zoomer ; le panneau « Affichage » règle le sens de lecture et la disposition, retenus pour la série.
-
-Tests du front : `npm test` (Vitest) et `npm run e2e` (dans Chromium contre un vrai serveur, sur une bibliothèque générée : le lecteur, et le parcours complet de la création d'une bibliothèque à la lecture ; une fois : `npx playwright install chromium`).
-
-Toute modification passe par une branche et une pull request. La CI vérifie le format, clippy et les tests sous Linux, Windows et macOS, le build du front, le lecteur de bout en bout dans Chromium, et une couverture de tests d'au moins 80 % des lignes et des branches. Les règles complètes sont dans [CLAUDE.md](CLAUDE.md).
+Commandes, règles et publication : [Contribuer](https://befa160.github.io/shiori/development/) ; règles complètes dans [CLAUDE.md](CLAUDE.md).
 
 ## Licence
 

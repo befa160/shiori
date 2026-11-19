@@ -34,6 +34,12 @@ Front (depuis `web/`) :
 - Lint : `npm run lint` (oxlint)
 - Bout en bout : `npm run e2e` (build du front, puis Playwright contre un `shiori serve` de debug sur une base et une bibliothèque générées dans `e2e/.data` ; une fois : `npx playwright install chromium`)
 
+Documentation (depuis `docs/`, VitePress, publiée sur <https://befa160.github.io/shiori/> par `docs.yml`) :
+
+- Installation : `npm ci`
+- Dev : `npm run dev` ; build (liens morts compris) : `npm run build`
+- Chaque page existe en français (racine) et en anglais (`docs/en/`) ; schémas en blocs ```` ```mermaid ````. Une fonctionnalité qui change l'usage, l'installation ou l'API met à jour les pages concernées dans les deux langues.
+
 Avant chaque commit : clippy sans avertissement, `cargo fmt` propre, tests verts, build front OK.
 
 ## Versions (obligatoire)
