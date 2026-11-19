@@ -59,7 +59,7 @@ Route-specific codes are listed on each page.
 No authentication.
 
 ```json
-{ "status": "ok", "version": "0.3.0" }
+{ "status": "ok", "version": "0.4.0" }
 ```
 
 ## Reference pages
