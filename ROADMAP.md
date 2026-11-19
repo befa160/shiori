@@ -1386,6 +1386,7 @@ Décisions (2026-11-18) : surveillance active par défaut, 30 s de calme, scan c
   - ✅ `docs.yml` : build sur chaque PR qui touche `docs/` (liens morts refusés), publication GitHub Pages à chaque fusion ; Dependabot surveille `docs/`. Anciens `docs/fonctionnel.md`, `installation.*.md` et `technique.md` remplacés ; `docs/cbr.md` gardée (note de conception), hors du site.
   - ✅ README refait (ce que fait Shiori, pourquoi, démarrage rapide, liens vers le site), description et topics du dépôt.
   - Captures d'écran : repères `[ecran_…]` posés dans les pages, en attente des images.
+  - ✅ Lien vers la documentation dans l'application, dans la langue de l'interface, nouvel onglet annoncé : barre latérale, page Compte (mobile), et « Que veulent dire ces problèmes ? » de la page Santé vers les codes de diagnostic.
 - **9.5 Bilan** : maturité pour une V1, fonctionnalités restantes.
 
 Plus tard, sans ordre : collections et listes de lecture, relations entre séries (suites, éditions), OPDS (avec les jetons d'API), statistiques de lecture, Comic Vine et MangaUpdates. EPUB : non. PDF : phase 8.

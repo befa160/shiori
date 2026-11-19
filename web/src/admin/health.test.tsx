@@ -62,6 +62,10 @@ describe('santé des bibliothèques', () => {
     mockApi({ '/api/admin/health': () => json(health), [files()]: () => json([broken, unreadable]) })
     renderAt('/admin/health')
     const region = within(await main().findByRole('region', { name: 'À réparer' }))
+    expect(region.getByRole('link', { name: 'Que veulent dire ces problèmes ? (nouvel onglet)' })).toHaveAttribute(
+      'href',
+      'https://befa160.github.io/shiori/guide/diagnostics',
+    )
     const first = (await region.findByText('A T01.cbz')).closest('li') as HTMLElement
     expect(within(first).getByText('Erreur')).toHaveClass('text-destructive')
     expect(first).toHaveTextContent('/srv/manga/A/A T01.cbz')

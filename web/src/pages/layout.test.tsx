@@ -33,6 +33,10 @@ describe('cadre de navigation', () => {
     mockApi({ '/api/libraries': () => json(libraries) })
     const { router } = renderAt('/')
     const webtoons = await within(sidebarNav()).findByRole('link', { name: 'Webtoons' })
+    // La documentation s'ouvre à côté, sans quitter l'application, et le dit.
+    const docs = within(sidebarNav()).getByRole('link', { name: 'Documentation (nouvel onglet)' })
+    expect(docs).toHaveAttribute('href', 'https://befa160.github.io/shiori/')
+    expect(docs).toHaveAttribute('target', '_blank')
     // Dépliée : pas d'infobulle, donc pas de libellé lu deux fois au focus.
     within(sidebarNav()).getByRole('link', { name: 'Accueil' }).focus()
     expect(within(sidebarNav()).getByRole('link', { name: 'Accueil' })).not.toHaveAttribute('aria-describedby')

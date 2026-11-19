@@ -1,4 +1,4 @@
-import { BookCopy, CircleUserRound, HardDriveDownload, House, Loader2, RefreshCw, Search, Settings, WifiOff } from 'lucide-react'
+import { BookCopy, BookOpen, CircleUserRound, HardDriveDownload, House, Loader2, RefreshCw, Search, Settings, WifiOff } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link, NavLink, Outlet } from 'react-router'
 import { useLibraries } from '@/api/queries'
@@ -23,6 +23,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar'
 import { ScanWatcher } from '@/admin/scans'
+import { docsUrl } from '@/lib/docs'
 import { useOnline } from '@/lib/online'
 import { useTheme } from '@/lib/theme'
 import { SignOut } from '@/account/SignOut'
@@ -122,6 +123,7 @@ function AppSidebar() {
           )}
           <SidebarGroup className="mt-auto">
             <SidebarMenu>
+              <DocsItem />
               <NavItem {...DOWNLOADS} />
               {admin && <NavItem {...ADMIN} />}
               {/* Le nom du compte plutôt que « Compte » : on voit qui est connecté. */}
@@ -155,6 +157,21 @@ function ScanButton({ library }: { library: Library }) {
     >
       {scan.isPending ? <Loader2 aria-hidden className="size-4 animate-spin" /> : <RefreshCw aria-hidden className="size-4" />}
     </button>
+  )
+}
+
+/** Documentation publiée, dans un nouvel onglet (l'application garde sa page). */
+function DocsItem() {
+  const { t, i18n } = useTranslation()
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton tooltip={t('layout.docs')}>
+        <a href={docsUrl(i18n.language)} target="_blank" rel="noopener noreferrer" aria-label={`${t('layout.docs')} ${t('layout.newTab')}`}>
+          <BookOpen aria-hidden />
+          <span>{t('layout.docs')}</span>
+        </a>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
   )
 }
 

@@ -15,6 +15,8 @@ export const fr = {
     navigation: 'Navigation principale',
     collapse: 'Réduire le menu',
     expand: 'Déplier le menu',
+    docs: 'Documentation',
+    newTab: '(nouvel onglet)',
   },
   nav: {
     home: 'Accueil',
@@ -321,6 +323,7 @@ export const fr = {
     pages_other: '{{count, number}} pages',
   },
   health: {
+    codesHelp: 'Que veulent dire ces problèmes ?',
     title: 'Santé des bibliothèques',
     link: 'Voir la santé',
     adminHelp: "Tomes sains, en avertissement ou en erreur, et ce qu'il faut réparer.",
