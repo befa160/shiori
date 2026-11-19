@@ -56,6 +56,8 @@ describe('page du compte', () => {
     const main = within(screen.getByRole('main'))
     expect(main.getByText(/Lecteur/)).toBeInTheDocument()
     expect(main.queryByRole('link', { name: 'Administration' })).toBeNull()
+    // Sur mobile, pas de barre latérale : la documentation est ici.
+    expect(main.getByRole('link', { name: 'Documentation (nouvel onglet)' })).toHaveAttribute('href', 'https://befa160.github.io/shiori/')
   })
 
   it('liste les appareils et en déconnecte un autre que celui-ci', async () => {

@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
-import { Loader2, ShieldCheck } from 'lucide-react'
+import { BookOpen, Loader2, ShieldCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router'
 import { api } from '@/api/client'
@@ -8,6 +8,7 @@ import { BackLink, QueryState } from '@/browse/parts'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { issueText } from '@/i18n/errors'
+import { docsUrl } from '@/lib/docs'
 import { cn } from '@/lib/utils'
 import { formatDate } from './format'
 import { useStartScan } from './useStartScan'
@@ -85,7 +86,7 @@ function LibraryCard({ library }: { library: LibraryHealth }) {
 
 /** Fichiers à réparer, filtrables par bibliothèque et par code (état dans l'adresse), par pages. */
 function ToRepair({ libraries, codes }: { libraries: LibraryHealth[]; codes: string[] }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [params, setParams] = useSearchParams()
   const library = params.get('library') ?? ALL
   const code = params.get('code') ?? ALL
@@ -114,9 +115,21 @@ function ToRepair({ libraries, codes }: { libraries: LibraryHealth[]; codes: str
   const label = (c: string) => issueText({ code: c, message: c }, t)
   return (
     <section aria-labelledby="health-repair" className="space-y-3">
-      <h2 id="health-repair" className="text-lg font-semibold">
-        {t('health.toRepair')}
-      </h2>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h2 id="health-repair" className="text-lg font-semibold">
+          {t('health.toRepair')}
+        </h2>
+        <a
+          href={docsUrl(i18n.language, 'guide/diagnostics')}
+          target="_blank"
+          aria-label={`${t('health.codesHelp')} ${t('layout.newTab')}`}
+          rel="noopener noreferrer"
+          className="inline-flex min-h-11 items-center gap-1 text-sm text-primary underline-offset-4 hover:underline"
+        >
+          <BookOpen aria-hidden className="size-4" />
+          {t('health.codesHelp')}
+        </a>
+      </div>
       <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
         {(libraries.length > 1 || library !== ALL) && (
           <Select value={library} onValueChange={(v) => filter('library', v)}>

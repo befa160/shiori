@@ -15,6 +15,8 @@ export const en: Translations = {
     navigation: 'Main navigation',
     collapse: 'Collapse menu',
     expand: 'Expand menu',
+    docs: 'Documentation',
+    newTab: '(new tab)',
   },
   nav: {
     home: 'Home',
@@ -320,6 +322,7 @@ export const en: Translations = {
     pages_other: '{{count, number}} pages',
   },
   health: {
+    codesHelp: 'What do these problems mean?',
     title: 'Library health',
     link: 'See health',
     adminHelp: 'Healthy volumes, volumes with warnings or errors, and what needs repairing.',

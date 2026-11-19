@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { HardDriveDownload, Settings } from 'lucide-react'
+import { BookOpen, HardDriveDownload, Settings } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { toast } from 'sonner'
@@ -11,6 +11,7 @@ import { ThemeSetting } from '@/admin/ThemeSetting'
 import { accountError, useUser } from '@/auth/session'
 import { QueryState } from '@/browse/parts'
 import { Button } from '@/components/ui/button'
+import { docsUrl } from '@/lib/docs'
 import { LanguageSelect } from '@/pages/LanguageSelect'
 import { deviceName } from './device'
 import { PasswordForm } from './PasswordForm'
@@ -21,7 +22,7 @@ import { TotpSection } from './TotpSection'
 /** Mon compte : préférences, mot de passe, double authentification, appareils connectés, déconnexion ; raccourcis vers
  * les tomes téléchargés et, pour l'administrateur, l'administration. */
 export function AccountPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const user = useUser()
   const queryClient = useQueryClient()
   return (
@@ -49,6 +50,12 @@ export function AccountPage() {
             <HardDriveDownload aria-hidden />
             {t('nav.downloads')}
           </Link>
+        </Button>
+        <Button asChild variant="secondary">
+          <a href={docsUrl(i18n.language)} target="_blank" rel="noopener noreferrer" aria-label={`${t('layout.docs')} ${t('layout.newTab')}`}>
+            <BookOpen aria-hidden />
+            {t('layout.docs')}
+          </a>
         </Button>
         <SignOut />
       </div>
