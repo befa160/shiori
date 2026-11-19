@@ -229,15 +229,21 @@ async fn a_library_created_while_running_is_left_to_its_own_scan() {
         .await
         .unwrap();
     tokio::time::sleep(Duration::from_millis(800)).await;
-    assert_eq!(
-        f.runs().await.len(),
-        1,
-        "le scan de l'interface ne doit pas être doublé"
+    // Pas de rattrapage de la racine (l'interface lance déjà ce scan). macOS peut signaler en
+    // retard les fichiers créés juste avant : un scan ciblé du dossier est alors permis.
+    let root = shown(&bd);
+    let runs = f.runs().await;
+    assert!(
+        !runs.iter().any(|(r, _)| *r == root),
+        "le scan de l'interface ne doit pas être doublé : {runs:?}"
     );
     // Mais elle est bien surveillée : un ajout est scanné.
+    let before = runs.len();
     fixtures::unpadded(&bd.join("Série"));
     let folder = shown(&bd.join("Série"));
-    f.until("scan ciblé", |runs| runs.iter().any(|(r, _)| *r == folder))
-        .await;
+    f.until("scan ciblé", |runs| {
+        runs.len() > before && runs[before..].iter().any(|(r, _)| *r == folder)
+    })
+    .await;
     task.abort();
 }
