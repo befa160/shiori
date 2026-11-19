@@ -1408,7 +1408,7 @@ Décisions (2026-11-18) : surveillance active par défaut, 30 s de calme, scan c
 
 ## Maturité pour une V1 (bilan du 2026-11-19)
 
-Usage visé (rappel) : une bibliothèque manga, BD et webtoon chez soi, lue en streaming sur la Galaxy Tab A9 et le Galaxy A55, à la maison et ailleurs (reverse proxy, comptes). Dernière version publiée : `v0.3.0` ; la phase 9 est sur `main`, pas encore publiée.
+Usage visé (rappel) : une bibliothèque manga, BD et webtoon chez soi, lue en streaming sur la Galaxy Tab A9 et le Galaxy A55, à la maison et ailleurs (reverse proxy, comptes). Dernière version publiée : `v0.3.0` à la date du bilan ; la phase 9 et les correctifs de l'audit sortent en `v0.4.0`.
 
 ### Ce qui est prêt
 
@@ -1550,3 +1550,4 @@ Audit Ponytail de tout le dépôt après la phase 9 ; corrigé dans `fix/audit-v
 - 2026-11-18 : phase 7 terminée (comptes et rôles, progression par compte, double authentification, jetons d'API, sauvegarde quotidienne et restauration dans l'interface) ; version `v0.2.0`.
 - 2026-11-18 : phase 8 terminée (lecture des PDF sans marges : images incluses servies comme des pages, pages en plusieurs images recomposées, diagnostics et métadonnées du PDF) ; version `v0.3.0`.
 - 2026-11-19 : phase 9 terminée (surveillance des dossiers, scan complet périodique, santé des bibliothèques, documentation VitePress bilingue) ; bilan de maturité pour une V1 proposé.
+- 2026-11-19 : correctifs de l'audit avant la V1 (jetons d'API avec mot de passe, progression hors ligne datée, restauration sans scan concurrent, limites de connexion, `--trusted-proxy`) ; version `v0.4.0`.
