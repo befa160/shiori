@@ -46,7 +46,7 @@ Avant chaque commit : clippy sans avertissement, `cargo fmt` propre, tests verts
 
 - Toujours les **dernières versions stables** : Rust `stable` (`backend/rust-toolchain.toml`), Node.js courant (`web/.node-version`, aujourd'hui 26, aussi utilisé par la CI), dernières versions des crates, paquets npm et actions GitHub. Pas de support de versions anciennes.
 - Ajouter une dépendance = prendre sa dernière version (`cargo info <crate>`, `npm view <paquet> version`) ; `npm outdated` doit rester vide et `cargo update` ne doit rien laisser en retard dans une PR qui touche aux dépendances.
-- Seules exceptions, figées volontairement et montées à la main : le nightly de la couverture (`NIGHTLY` dans la CI) et la version de `cargo-llvm-cov`.
+- Seules exceptions, figées volontairement et montées à la main : le nightly de la couverture (`NIGHTLY` dans la CI) et la version de `cargo-llvm-cov` ; dans `docs/`, `overrides.vite` en 6.x (VitePress 1 exige Vite 5, vulnérable, et ne fonctionne pas avec Vite 8) jusqu'à VitePress 2 stable.
 - Dependabot (`.github/dependabot.yml` : cargo, npm, GitHub Actions) ouvre chaque semaine une PR groupée par écosystème pour les mineures et correctifs, une PR par majeure ; fusion à la main, après la CI.
 
 ## Couverture de tests (obligatoire)
