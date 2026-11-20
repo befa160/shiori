@@ -1450,7 +1450,7 @@ Premier essai sur la vraie bibliothèque de l'utilisateur, servie depuis son NAS
 
 - `/home/fabrice/Dofus v01.cbz` : JPEG au segment de commentaire trop court (tome entier refusé) ;
 - `/home/fabrice/Gamaran v01.cbz` : même défaut, pages dans un sous-dossier ;
-- `/home/fabrice/Change 123 v01.cbz` : JPEG sains, pages dans un sous-dossier (les BMP sont dans le tome 9, absent) ;
+- `/home/fabrice/Change 123 v01.cbz` : 95 JPEG sains, pages dans un sous-dossier ; seul avertissement : `subdirectories`. Ce n'est **pas** un exemple de BMP : dans cette série, les 2 pages BMP sont dans le tome 9. Pour tester BMP, demander `Terra Formars v20.cbz` (418 pages BMP) ou `Change 123 v09.cbz` ;
 - `/home/fabrice/Triage X v23.cbr` : archive 7z nommée `.cbr` ;
 - `/home/fabrice/Screen_Recording_20261120_083906_Chrome.mp4` : vidéo du zoom sur le A55 (pas de ffmpeg dans WSL : images extraites avec le Chromium de Playwright, `<video>` puis capture à chaque instant).
 
