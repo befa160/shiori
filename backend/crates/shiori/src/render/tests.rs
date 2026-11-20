@@ -12,6 +12,26 @@ fn jpeg_keeps_the_aspect_ratio_and_the_picture() {
 }
 
 #[test]
+fn bmp_gif_and_short_comment_jpeg_pages_are_resized() {
+    let encode = |format| {
+        let mut out = std::io::Cursor::new(Vec::new());
+        image::RgbImage::new(40, 60)
+            .write_to(&mut out, format)
+            .unwrap();
+        out.into_inner()
+    };
+    for bytes in [
+        encode(image::ImageFormat::Bmp),
+        encode(image::ImageFormat::Gif),
+        shiori_testkit::jpeg_short_comment(40, 60, [1, 2, 3]),
+    ] {
+        let out = render(&bytes, 20, Format::Jpeg).unwrap();
+        let size = imagesize::blob_size(&out).unwrap();
+        assert_eq!((size.width, size.height), (20, 30));
+    }
+}
+
+#[test]
 fn avif_is_a_real_avif_of_the_right_size() {
     let out = render(&jpeg(800, 1280, [120, 60, 200]), 480, Format::Avif).unwrap();
     assert_eq!(&out[4..12], b"ftypavif");

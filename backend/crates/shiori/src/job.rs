@@ -326,9 +326,9 @@ impl Pass {
             let (db, library, run) = (self.db.clone(), self.library.clone(), self.run);
             let (options, rehash) = (self.options, self.rehash);
             tasks.spawn(async move {
-                let mut scanned = db.scan(run, &path, options, rehash).await?;
-                db.attach(&library, &path).await?;
-                db.log_file(run, &scanned).await?;
+                let mut scanned = db
+                    .scan_recorded(run, &path, options, rehash, &library)
+                    .await?;
                 scanned.report.pages = Vec::new(); // seuls les compteurs servent ensuite
                 Ok::<_, shiori_db::Error>(scanned)
             });

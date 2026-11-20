@@ -1482,16 +1482,17 @@ Premier essai sur la vraie bibliothèque de l'utilisateur, servie depuis son NAS
 
 ### Lots
 
-- ⏳ **10.1 `fix/scan-real-library`** (backend, scan)
-  - Dimensions d'une page : `imagesize`, puis repli sur `image::ImageReader::into_dimensions()` (en-têtes seulement) avant de déclarer `image_undecodable`. Test avec un JPEG au segment de commentaire trop court, construit dans `shiori-testkit`.
-  - Pages BMP et GIF : features `bmp` et `gif` de `image` (Rust pur), `image/bmp` et `image/gif` reconnus, servis en original et redimensionnés comme les autres (GIF : première image).
-  - Formats lus listés partout : README et accueil de la documentation (archives CBZ, CBR, PDF ; images JPEG, PNG, WebP, AVIF, BMP, GIF), guide « Bibliothèques » et `unsupported_image` des codes de diagnostic mis à jour (fr, en).
-  - Vérifier sur les fichiers d'exemple : Dofus et Gamaran entièrement lisibles, Triage X avec le nouveau code, et les compteurs d'un scan de la base de l'utilisateur.
-  - Archive 7z (`7z\xBC\xAF\x27\x1C`) : nouveau code d'erreur stable (`unsupported_archive`, « archive 7z (CB7) non prise en charge »), traduit dans l'interface et documenté dans les codes de diagnostic.
-  - Sévérités : `subdirectories` et `archive_order_differs` en information ; `extension_mismatch` en information, une ligne par fichier (avec le nombre de pages) ; `desktop.ini`, `*.nfo`, `.html`/`.xhtml`/`.css`/`.opf`/`.ncx` ajoutés aux entrées ignorées en silence (`is_ignored`).
-  - `ComicInfo.xml` mal formé : lecture champ par champ, les champs lisibles gardés, avertissement maintenu.
-  - Message `slow statement` de sqlx au niveau debug (`log_slow_statements`) ; une seule transaction par fichier pour le rapport, le rattachement et la ligne de journal.
-  - `SCANNER_VERSION` + 1 : le prochain scan relit tout (environ 1 h sur le NAS) et débloque les tomes ; à dire dans la PR et les notes de version.
+- ✅ **10.1 `fix/scan-real-library`** (backend, scan ; fait le 2026-11-20)
+  - ✅ Dimensions d'une page : `imagesize`, puis repli sur `image::ImageReader::into_dimensions()` (en-têtes seulement) avant de déclarer `image_undecodable`. Test avec un JPEG au segment de commentaire trop court, construit dans `shiori-testkit`.
+  - ✅ Pages BMP et GIF : features `bmp` et `gif` de `image` (Rust pur), `image/bmp` et `image/gif` reconnus, servis en original et redimensionnés comme les autres (GIF : première image). Un BMP n'est jamais servi tel quel (non compressé) : réencodé à sa propre largeur quand on demande plus large ; une archive 7z garde le format `cb7`.
+  - ✅ Formats lus listés partout : README et accueil de la documentation (archives CBZ, CBR, PDF ; images JPEG, PNG, WebP, AVIF, BMP, GIF), guide « Bibliothèques » et `unsupported_image` des codes de diagnostic mis à jour (fr, en).
+  - ✅ Vérifier sur les fichiers d'exemple : Dofus et Gamaran entièrement lisibles, Triage X avec le nouveau code, et les compteurs d'un scan de la base de l'utilisateur.
+  - ✅ Archive 7z (`7z\xBC\xAF\x27\x1C`) : nouveau code d'erreur stable (`unsupported_archive`, « archive 7z (CB7) non prise en charge »), traduit dans l'interface et documenté dans les codes de diagnostic.
+  - ✅ Sévérités : `subdirectories` et `archive_order_differs` en information ; `extension_mismatch` en information, une ligne par fichier (avec le nombre de pages) ; `desktop.ini`, `*.nfo`, `.html`/`.xhtml`/`.css`/`.opf`/`.ncx` ajoutés aux entrées ignorées en silence (`is_ignored`).
+  - ✅ `ComicInfo.xml` mal formé : lecture champ par champ, les champs lisibles gardés, avertissement maintenu.
+  - ✅ Message `slow statement` de sqlx au niveau debug (`log_slow_statements`) ; une seule transaction par fichier pour le rapport, le rattachement et la ligne de journal.
+  - ✅ `SCANNER_VERSION` + 1 : le prochain scan relit tout (environ 1 h sur le NAS) et débloque les tomes ; à dire dans la PR et les notes de version.
+  - Vérifié sur les fichiers d'exemple (scan profond) : Dofus v01 227 pages et Gamaran v01 188 pages, saines ; Terra Formars v20 (RAR nommé `.cbz`) 638 pages, BMP comprises ; Triage X v23 en `unsupported_archive`. D'après la base de l'utilisateur (sans les fichiers, restés sur le NAS) : 3 811 des 3 818 tomes en avertissement et les 100 tomes illisibles devraient passer sains, il resterait 2 erreurs (les 7z). À confirmer par le scan du NAS.
   - À mesurer ensuite sur le NAS : durée du scan ; si la double lecture des fichiers (`shortcut:` de `integrity.rs`) pèse, la supprimer ici ou dans un lot à part.
 - ⏳ **10.2 `fix/metadata-sources`** (backend + interface)
   - Délier tient : la ligne `series_sources` reste, marquée refusée par l'utilisateur ; `to_identify` la saute ; « Identifier » permet toujours un lien manuel.

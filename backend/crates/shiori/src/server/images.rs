@@ -93,9 +93,13 @@ pub(super) async fn page_image(
             "page illisible dans l'archive (voir les problèmes du tome)",
         ));
     }
-    // Pas de décodeur AVIF pur Rust (Q2), et on n'agrandit jamais : l'originale est servie.
-    let resize = wanted.filter(|&(w, _)| {
-        page.media_type.as_deref() != Some("image/avif") && page.width.is_none_or(|pw| w < pw)
+    // Pas de décodeur AVIF pur Rust (Q2), et on n'agrandit jamais : l'originale est servie,
+    // sauf un BMP (non compressé, plusieurs Mo), réencodé à sa propre largeur.
+    let bmp = page.media_type.as_deref() == Some("image/bmp");
+    let resize = wanted.and_then(|(w, f)| match page.width {
+        _ if page.media_type.as_deref() == Some("image/avif") => None,
+        Some(pw) if w >= pw => bmp.then_some((pw, f)),
+        _ => Some((w, f)),
     });
     let etag = match resize {
         Some((w, f)) => format!("\"{id}-w{w}-{}-v{RENDER_VERSION}\"", f.extension()),

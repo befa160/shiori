@@ -23,7 +23,7 @@ hero:
 features:
   - icon: 📚
     title: CBZ, CBR and PDF
-    details: Zip, RAR 4 and 5 (solid included) and PDF read without conversion or full extraction. For a PDF, the artwork is shown without the page margins.
+    details: Zip, RAR 4 and 5 (solid included) and PDF read without conversion or full extraction; JPEG, PNG, WebP, AVIF, BMP and GIF pages. For a PDF, the artwork is shown without the page margins.
   - icon: 📖
     title: A reader for every format
     details: Right-to-left manga, comics, double pages, continuous webtoon scrolling. Progress follows you from one device to another.

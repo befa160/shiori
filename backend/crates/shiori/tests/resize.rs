@@ -274,3 +274,24 @@ async fn cache_write_failure_still_serves_the_page() {
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(nearest(&body(response).await).1, (320, 480));
 }
+
+/// Un BMP n'est jamais servi tel quel (non compressé) : même demandé plus large que lui, il
+/// est réencodé à sa propre largeur.
+#[tokio::test]
+async fn a_bmp_page_is_reencoded_even_when_not_shrunk() {
+    let f = Fixture::new().await;
+    let mut bmp = std::io::Cursor::new(Vec::new());
+    image::RgbImage::from_pixel(100, 150, image::Rgb(color(0)))
+        .write_to(&mut bmp, image::ImageFormat::Bmp)
+        .unwrap();
+    let path = write_zip(f.dir.path(), "bmp.cbz", &[("1.bmp", bmp.get_ref(), STORED)]);
+    let id = f.pages(&path).await[0]["id"].as_str().unwrap().to_owned();
+    let response = f
+        .get(&format!("/api/pages/{id}/image?w=320&f=jpeg"), None)
+        .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()[header::CONTENT_TYPE], "image/jpeg");
+    assert_eq!(nearest(&body(response).await), (0, (100, 150)));
+    let original = f.get(&format!("/api/pages/{id}/image"), None).await;
+    assert_eq!(original.headers()[header::CONTENT_TYPE], "image/bmp");
+}

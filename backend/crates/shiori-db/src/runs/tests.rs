@@ -50,7 +50,6 @@ async fn a_run_records_its_counts_and_its_log() {
             .await
             .unwrap();
         counts.add(&scanned);
-        db.log_file(run, &scanned).await.unwrap();
     }
     // Rescan : inchangé, compté mais pas journalisé.
     let again = db
@@ -58,7 +57,6 @@ async fn a_run_records_its_counts_and_its_log() {
         .await
         .unwrap();
     counts.add(&again);
-    db.log_file(run, &again).await.unwrap();
     counts.removed = 4;
     db.finish_run(run, RunStatus::Completed, &counts, None)
         .await
@@ -67,8 +65,8 @@ async fn a_run_records_its_counts_and_its_log() {
     assert_eq!(
         counts,
         RunCounts {
-            ok: 0,
-            warning: 2,
+            ok: 2,
+            warning: 0,
             error: 1,
             unchanged: 1,
             removed: 4
@@ -78,14 +76,14 @@ async fn a_run_records_its_counts_and_its_log() {
     assert_eq!(row.get::<String, _>("status"), "completed");
     assert_eq!(row.get::<String, _>("origin"), "api");
     assert_eq!(row.get::<i64, _>("files_total"), 2);
-    assert_eq!(row.get::<i64, _>("files_warning"), 2);
+    assert_eq!(row.get::<i64, _>("files_ok"), 2);
     assert_eq!(row.get::<i64, _>("files_error"), 1);
     assert_eq!(row.get::<i64, _>("files_unchanged"), 1);
     assert_eq!(row.get::<i64, _>("files_removed"), 4);
     assert!(row.get::<Option<String>, _>("finished_at").is_some());
 
     let log = logs(&db, run).await;
-    assert!(log[0].2.starts_with("scanné : warning"), "{log:?}");
+    assert!(log[0].2.starts_with("scanné : ok"), "{log:?}");
     assert!(
         log.iter()
             .any(|l| l.1.as_deref() == Some("archive_order_differs"))
@@ -199,12 +197,11 @@ async fn log_lines_point_to_their_volume() {
         .begin_run(RunOrigin::Api, Some(library.id), "/", "{}")
         .await
         .unwrap();
+    // Rapport, rattachement et journal dans la même transaction.
     let scanned = db
-        .scan(run, &manga, ScanOptions::default(), false)
+        .scan_recorded(run, &manga, ScanOptions::default(), false, &library)
         .await
         .unwrap();
-    db.attach(&library, &manga).await.unwrap();
-    db.log_file(run, &scanned).await.unwrap();
     db.log(
         run,
         Severity::Warning,

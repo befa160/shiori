@@ -246,6 +246,52 @@ fn comic_info(text: &str) -> Result<LocalMetadata, String> {
     })
 }
 
+/// `ComicInfo.xml` mal formé (balise mal placée ou mal fermée) : chaque champ lisible est repris
+/// à sa première occurrence, à n'importe quelle profondeur, jusqu'à une erreur de syntaxe, puis
+/// relu par le lecteur normal. Rien de lisible : `None`.
+pub fn salvage_comic_info(bytes: &[u8]) -> Option<LocalMetadata> {
+    use quick_xml::events::Event;
+    let text = decode(bytes).ok()?;
+    let mut reader = quick_xml::Reader::from_str(&text);
+    reader.config_mut().check_end_names = false;
+    let mut open: Vec<String> = Vec::new();
+    // Texte encore échappé, tel quel dans le fichier : le lecteur normal le déséchappera.
+    let mut fields: Vec<(String, String)> = Vec::new();
+    let mut current: Option<String> = None;
+    while let Ok(event) = reader.read_event() {
+        let raw = match event {
+            Event::Start(e) => {
+                open.push(e.name().0.to_owned());
+                current = None;
+                continue;
+            }
+            Event::End(_) => {
+                if let (Some(name), Some(value)) = (open.pop(), current.take())
+                    && !value.trim().is_empty()
+                    && !fields.iter().any(|(n, _)| *n == name)
+                {
+                    fields.push((name, value));
+                }
+                continue;
+            }
+            Event::Text(e) => String::from(&*e),
+            Event::GeneralRef(e) => format!("&{};", &*e),
+            Event::CData(e) => format!("<![CDATA[{}]]>", &*e),
+            Event::Eof => break,
+            _ => continue,
+        };
+        current.get_or_insert_default().push_str(&raw);
+    }
+    if fields.is_empty() {
+        return None;
+    }
+    let body: String = fields
+        .iter()
+        .map(|(name, value)| format!("<{name}>{value}</{name}>"))
+        .collect();
+    comic_info(&format!("<ComicInfo>{body}</ComicInfo>")).ok()
+}
+
 /// Adresses web seulement : certains outils écrivent un titre dans `<Web>`, et un lien
 /// affiché ne doit jamais être autre chose que `http(s)` (`javascript:` dans une archive).
 fn urls(value: Option<String>) -> Vec<String> {

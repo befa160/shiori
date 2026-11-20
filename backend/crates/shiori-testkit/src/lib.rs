@@ -57,8 +57,16 @@ pub fn webp(width: u32, height: u32, rgb: [u8; 3]) -> Vec<u8> {
     encode(width, height, rgb, ImageFormat::WebP)
 }
 
-/// GIF 1×1 minimal (format reconnu mais non pris en charge comme page).
-pub const GIF_1X1: &[u8] = b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;";
+/// En-tête TIFF minimal (format reconnu mais non pris en charge comme page).
+pub const TIFF_HEADER: &[u8] = b"II*\x00\x08\x00\x00\x00\x00\x00\x00\x00";
+
+/// JPEG dont le segment de commentaire (`FFFE`) se déclare trop court d'un octet, comme dans de
+/// vrais tomes : les navigateurs l'affichent, `imagesize` n'en lit pas les dimensions.
+pub fn jpeg_short_comment(width: u32, height: u32, rgb: [u8; 3]) -> Vec<u8> {
+    let full = jpeg(width, height, rgb);
+    // Longueur 5 = 2 octets de longueur + 3 de texte, mais 4 octets de texte suivent.
+    [&full[..2], b"\xFF\xFE\x00\x05abcd", &full[2..]].concat()
+}
 
 /// AVIF 8×12 rouge (200, 30, 30), 287 octets, encodé une fois avec `ravif` 0.13
 /// (vitesse 10, qualité 50) : pas d'encodeur AV1 dans les dépendances de test.
@@ -318,7 +326,7 @@ pub mod fixtures {
             &[
                 ("01.jpg", &small(0), STORED),
                 ("02.png", b"\x89PNG pas vraiment", STORED),
-                ("03.gif", GIF_1X1, STORED),
+                ("03.tif", TIFF_HEADER, STORED),
                 ("04.png", &small(3), STORED),
                 ("05.webp", b"du texte, pas une image", STORED),
             ],
@@ -336,12 +344,18 @@ pub mod fixtures {
         )
     }
 
-    /// Une page de chaque format pris en charge : jpg, png, webp, avif.
+    /// Une page de chaque format pris en charge : jpg, png, webp, avif, bmp, gif, et un JPEG au
+    /// commentaire trop court.
     pub fn all_formats(dir: &Path) -> PathBuf {
         let (j, p, w) = (
             jpeg(8, 12, page_color(0)),
             png(8, 12, page_color(1)),
             webp(8, 12, page_color(2)),
+        );
+        let (b, g, c) = (
+            encode(8, 12, page_color(4), ImageFormat::Bmp),
+            encode(8, 12, page_color(5), ImageFormat::Gif),
+            jpeg_short_comment(8, 12, page_color(6)),
         );
         write_zip(
             dir,
@@ -351,6 +365,9 @@ pub mod fixtures {
                 ("2.png", &p, STORED),
                 ("3.webp", &w, STORED),
                 ("4.avif", AVIF_8X12, STORED),
+                ("5.bmp", &b, STORED),
+                ("6.gif", &g, STORED),
+                ("7.jpg", &c, STORED),
             ],
         )
     }

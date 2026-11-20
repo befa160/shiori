@@ -10,7 +10,7 @@
 {
   "id": "a41b…", "size": 48213504, "format": "cbz", "status": "warning", "page_count": 204, "scanned_at": "…",
   "locations": [{ "path": "/bibliotheques/mangas/One Piece/One Piece T01.cbz", "library_id": 1, "series_id": 7 }],
-  "issues": [{ "code": "archive_order_differs", "severity": "warning", "entry": null, "message": "…" }],
+  "issues": [{ "code": "duplicate_entry_identical", "severity": "warning", "entry": null, "message": "…" }],
   "settings": { "reading_mode": "rtl", "page_layout": "auto", "page_turn": "reading", "reading_mode_override": null, "page_layout_override": null, "page_turn_override": null },
   "progress": null
 }

@@ -25,8 +25,9 @@ comfy-table = "8.0"
 directories = "6.0"
 # Hasard du système pour les jetons de session et les mots de passe provisoires.
 getrandom = "0.4"
-image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
+image = { version = "0.25", default-features = false, features = ["bmp", "gif", "jpeg", "png", "webp"] }
 imagesize = "0.15"
+log = "0.4"
 ravif = { version = "0.13", default-features = false, features = ["threading"] }
 regex = "1.13"
 serde = { version = "1.0", features = ["derive"] }

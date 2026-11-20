@@ -20,7 +20,7 @@
 ## Ce que ça fait
 
 - **Lire partout** : manga de droite à gauche, BD, doubles pages, webtoon en défilement continu ; la progression suit d'un appareil à l'autre ; application installable (PWA) et tomes téléchargés pour lire hors ligne.
-- **Tous vos formats** : CBZ (zip64 compris), CBR (RAR 4 et 5, solide compris) et PDF, dont la planche s'affiche sans les marges de la page. Pages redimensionnées en AVIF à la taille de l'écran.
+- **Tous vos formats** : CBZ (zip64 compris), CBR (RAR 4 et 5, solide compris) et PDF, dont la planche s'affiche sans les marges de la page ; images JPEG, PNG, WebP, AVIF, BMP et GIF. Pages redimensionnées en AVIF à la taille de l'écran.
 - **Une bibliothèque qui se tient à jour** : un dossier par série, les numéros de tomes et chapitres reconnus dans les noms, la surveillance des dossiers qui scanne seule ce qui change, un scan complet périodique pour les partages réseau.
 - **Une bibliothèque en bonne santé** : chaque page vérifiée au scan, un tableau de bord des tomes sains, en avertissement ou en erreur, la liste de ce qu'il faut réparer, chaque problème expliqué.
 - **Des fiches complètes** : ComicInfo.xml, `index.json`, propriétés des PDF, et si vous l'autorisez AniList et MangaDex ; vos modifications passent toujours en premier.
@@ -83,7 +83,7 @@ Les sources de la documentation sont dans [`docs/`](docs/), l'avancement détail
 
 ## In English
 
-Shiori is a self-hosted manga, comics and webtoon reader: a single Rust binary (or Docker image) that reads your CBZ, CBR and PDF folders and serves them to an installable web app, designed tablet-first. Every page has a stable identity and is checked when scanned, so the reader never shows the wrong page. See the [English documentation](https://befa160.github.io/shiori/en/).
+Shiori is a self-hosted manga, comics and webtoon reader: a single Rust binary (or Docker image) that reads your CBZ, CBR and PDF folders (JPEG, PNG, WebP, AVIF, BMP and GIF pages) and serves them to an installable web app, designed tablet-first. Every page has a stable identity and is checked when scanned, so the reader never shows the wrong page. See the [English documentation](https://befa160.github.io/shiori/en/).
 
 ## Développement
 

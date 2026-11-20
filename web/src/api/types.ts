@@ -275,7 +275,7 @@ export interface Issue {
 export interface VolumeDetail {
   id: string
   size: number
-  format: 'cbz' | 'cbr' | 'pdf'
+  format: 'cbz' | 'cbr' | 'pdf' | 'cb7'
   status: Status
   page_count: number
   scanned_at: string

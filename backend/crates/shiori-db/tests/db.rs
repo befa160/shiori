@@ -57,7 +57,11 @@ async fn first_scan_stores_volume_pages_location_and_issues() {
         .fetch_one(db.pool())
         .await
         .unwrap();
-    assert_eq!(row.get::<String, _>(0), "warning");
+    assert_eq!(
+        row.get::<String, _>(0),
+        "ok",
+        "l'ordre de l'archive n'est qu'une information"
+    );
     assert_eq!(row.get::<i64, _>(1), 11);
     assert_eq!(row.get::<i64, _>(2), shiori_core::SCANNER_VERSION);
     db.finish_run(
@@ -241,6 +245,19 @@ async fn broken_archives_are_remembered() {
     assert!(b.skipped, "un fichier cassé et inchangé n'est pas rescanné");
     assert_eq!(b.report.issues[0].code, IssueCode::ArchiveUnreadable);
     assert_eq!(b.report.status, Status::Error);
+}
+
+#[tokio::test]
+async fn a_7z_archive_is_remembered_as_cb7() {
+    let dir = tempfile::tempdir().unwrap();
+    let (db, run) = open(dir.path()).await;
+    let path = dir.path().join("Triage X v23.cbr");
+    std::fs::write(&path, b"7z\xBC\xAF\x27\x1C\x00\x04").unwrap();
+    scan(&db, run, &path).await;
+    let again = scan(&db, run, &path).await;
+    assert!(again.skipped);
+    assert_eq!(again.report.format, "cb7");
+    assert_eq!(again.report.issues[0].code, IssueCode::UnsupportedArchive);
 }
 
 #[tokio::test]

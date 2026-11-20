@@ -82,10 +82,14 @@ fn diagnostics_group_codes_and_hide_infos() {
             IssueCode::NonImageEntry,
             IssueCode::IgnoredEntry,
             IssueCode::NonImageEntry,
+            IssueCode::UnsupportedImage,
             IssueCode::Subdirectories,
         ],
     );
-    assert_eq!(diagnostics(&r.report), "non_image_entry ×2, subdirectories");
+    assert_eq!(
+        diagnostics(&r.report),
+        "non_image_entry ×2, unsupported_image"
+    );
     assert_eq!(
         diagnostics(&scanned(Status::Ok, false, &[IssueCode::IgnoredEntry]).report),
         "—"

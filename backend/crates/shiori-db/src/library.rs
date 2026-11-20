@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use shiori_core::{ParsedName, compare_in_series, parse_name};
-use sqlx::Row;
+use sqlx::{Row, Sqlite, Transaction};
 
 use crate::{Db, Error, LibraryKind, from_db, location_key, to_db};
 
@@ -213,74 +213,12 @@ impl Db {
     /// n'est pas sous la racine ou n'a pas d'emplacement (jamais scanné, illisible avant
     /// le hash, modifié pendant le scan). Un tome en erreur est rattaché : l'erreur doit se voir.
     pub async fn attach(&self, library: &Library, path: &Path) -> Result<bool, Error> {
-        let key = location_key(path);
-        let Some(rel) = relative(&library.root, &key) else {
-            return Ok(false);
-        };
-        let parsed = parse_name(rel);
         // IMMEDIATE : verrou d'écriture pris d'emblée. Une transaction qui lit avant d'écrire
         // échoue aussitôt (SQLITE_BUSY, sans attente) si un autre fichier a écrit entre-temps.
         let mut tx = self.pool.begin_with("BEGIN IMMEDIATE").await?;
-        let located = sqlx::query("SELECT 1 FROM file_locations WHERE path = ?")
-            .bind(&key)
-            .fetch_optional(&mut *tx)
-            .await?
-            .is_some();
-        if !located {
-            return Ok(false);
-        }
-        let series: i64 = match &parsed.folder {
-            Some(folder) => sqlx::query(concat!(
-                "INSERT INTO series (library_id, folder, name, created_at) VALUES (?, ?, ?, ",
-                now!(),
-                ") ON CONFLICT (library_id, folder) WHERE folder IS NOT NULL
-                     DO UPDATE SET folder = excluded.folder RETURNING id"
-            ))
-            .bind(library.id)
-            .bind(folder)
-            .bind(&parsed.series)
-            .fetch_one(&mut *tx)
-            .await?
-            .get("id"),
-            None => {
-                // shortcut: NOCASE ne replie que l'ASCII (`ÉTÉ` ≠ `été`) ; replier en Rust si un cas réel apparaît.
-                let existing = sqlx::query(
-                    "SELECT id FROM series WHERE library_id = ? AND name = ? COLLATE NOCASE
-                     ORDER BY folder IS NULL, id LIMIT 1",
-                )
-                .bind(library.id)
-                .bind(&parsed.series)
-                .fetch_optional(&mut *tx)
-                .await?;
-                match existing {
-                    Some(row) => row.get("id"),
-                    None => sqlx::query(concat!(
-                        "INSERT INTO series (library_id, folder, name, created_at) VALUES (?, NULL, ?, ",
-                        now!(),
-                        ") RETURNING id"
-                    ))
-                    .bind(library.id)
-                    .bind(&parsed.series)
-                    .fetch_one(&mut *tx)
-                    .await?
-                    .get("id"),
-                }
-            }
-        };
-        sqlx::query(
-            "UPDATE file_locations SET library_id = ?, series_id = ?, kind = ?, number = ?,
-               number_end = ? WHERE path = ?",
-        )
-        .bind(library.id)
-        .bind(series)
-        .bind(to_db(&parsed.kind))
-        .bind(parsed.number)
-        .bind(parsed.number_end)
-        .bind(&key)
-        .execute(&mut *tx)
-        .await?;
+        let done = attach_in(&mut tx, library, &location_key(path)).await?;
         tx.commit().await?;
-        Ok(true)
+        Ok(done)
     }
 
     /// Marque comme vus dans `run` les emplacements sous `under`, que `remove_missing` garde.
@@ -440,6 +378,77 @@ impl Db {
         tx.commit().await?;
         self.refresh_metadata(Some(library.id)).await
     }
+}
+
+/// [`Db::attach`] dans la transaction d'un fichier (voir [`Db::scan_recorded`]).
+pub(crate) async fn attach_in(
+    tx: &mut Transaction<'_, Sqlite>,
+    library: &Library,
+    key: &str,
+) -> Result<bool, Error> {
+    let Some(rel) = relative(&library.root, key) else {
+        return Ok(false);
+    };
+    let parsed = parse_name(rel);
+    let located = sqlx::query("SELECT 1 FROM file_locations WHERE path = ?")
+        .bind(key)
+        .fetch_optional(&mut **tx)
+        .await?
+        .is_some();
+    if !located {
+        return Ok(false);
+    }
+    let series: i64 = match &parsed.folder {
+        Some(folder) => sqlx::query(concat!(
+            "INSERT INTO series (library_id, folder, name, created_at) VALUES (?, ?, ?, ",
+            now!(),
+            ") ON CONFLICT (library_id, folder) WHERE folder IS NOT NULL
+                 DO UPDATE SET folder = excluded.folder RETURNING id"
+        ))
+        .bind(library.id)
+        .bind(folder)
+        .bind(&parsed.series)
+        .fetch_one(&mut **tx)
+        .await?
+        .get("id"),
+        None => {
+            // shortcut: NOCASE ne replie que l'ASCII (`ÉTÉ` ≠ `été`) ; replier en Rust si un cas réel apparaît.
+            let existing = sqlx::query(
+                "SELECT id FROM series WHERE library_id = ? AND name = ? COLLATE NOCASE
+                 ORDER BY folder IS NULL, id LIMIT 1",
+            )
+            .bind(library.id)
+            .bind(&parsed.series)
+            .fetch_optional(&mut **tx)
+            .await?;
+            match existing {
+                Some(row) => row.get("id"),
+                None => sqlx::query(concat!(
+                    "INSERT INTO series (library_id, folder, name, created_at) VALUES (?, NULL, ?, ",
+                    now!(),
+                    ") RETURNING id"
+                ))
+                .bind(library.id)
+                .bind(&parsed.series)
+                .fetch_one(&mut **tx)
+                .await?
+                .get("id"),
+            }
+        }
+    };
+    sqlx::query(
+        "UPDATE file_locations SET library_id = ?, series_id = ?, kind = ?, number = ?,
+           number_end = ? WHERE path = ?",
+    )
+    .bind(library.id)
+    .bind(series)
+    .bind(to_db(&parsed.kind))
+    .bind(parsed.number)
+    .bind(parsed.number_end)
+    .bind(key)
+    .execute(&mut **tx)
+    .await?;
+    Ok(true)
 }
 
 #[cfg(test)]

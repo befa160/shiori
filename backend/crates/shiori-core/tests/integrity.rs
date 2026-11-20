@@ -216,7 +216,7 @@ fn scanning_never_modifies_the_source() {
 fn unpadded_names_are_read_in_natural_order() {
     let dir = tempfile::tempdir().unwrap();
     let r = scan(&fixtures::unpadded(dir.path()));
-    assert_eq!(r.status, Status::Warning);
+    assert_eq!(r.status, Status::Ok);
     assert_eq!(codes(&r), [IssueCode::ArchiveOrderDiffers]);
     let expected: Vec<String> = (1..=11).map(|n| format!("{n}.png")).collect();
     assert_eq!(names(&r), expected);
@@ -304,15 +304,22 @@ fn odd_images_are_classified() {
     let r = scan(&fixtures::odd_images(dir.path()));
     assert_eq!(r.status, Status::Error);
     assert_eq!(names(&r), ["01.jpg", "02.png", "04.png", "05.webp"]);
+    let mismatch = r
+        .issues
+        .iter()
+        .find(|i| i.code == IssueCode::ExtensionMismatch);
     assert_eq!(
-        issue_entry(&r, IssueCode::ExtensionMismatch),
-        Some("01.jpg")
+        mismatch.map(|i| (i.entry.as_deref(), i.message.as_str())),
+        Some((
+            None,
+            "1 page(s) à l'extension trompeuse, par exemple 01.jpg : contenu image/png"
+        ))
     );
     assert_eq!(r.pages[0].media_type, Some("image/png"));
     assert_eq!(r.pages[0].status, PageStatus::Ok);
     assert_eq!(issue_entry(&r, IssueCode::ImageUndecodable), Some("02.png"));
     assert_eq!(r.pages[1].status, PageStatus::Broken);
-    assert_eq!(issue_entry(&r, IssueCode::UnsupportedImage), Some("03.gif"));
+    assert_eq!(issue_entry(&r, IssueCode::UnsupportedImage), Some("03.tif"));
     let undecodable: Vec<_> = r
         .issues
         .iter()
@@ -333,7 +340,15 @@ fn every_supported_format_becomes_a_page() {
         let media: Vec<_> = r.pages.iter().map(|p| p.media_type.unwrap()).collect();
         assert_eq!(
             media,
-            ["image/jpeg", "image/png", "image/webp", "image/avif"]
+            [
+                "image/jpeg",
+                "image/png",
+                "image/webp",
+                "image/avif",
+                "image/bmp",
+                "image/gif",
+                "image/jpeg"
+            ]
         );
         assert!(
             r.pages
@@ -388,6 +403,15 @@ fn unreadable_files_are_errors() {
     assert_eq!(codes(&r), [IssueCode::ArchiveUnreadable]);
     assert!(r.volume_id.is_some());
 
+    // Une archive 7z nommée `.cbr` (CB7) : signalée comme telle, pas comme un zip abîmé.
+    let seven = dir.path().join("Triage X v23.cbr");
+    std::fs::write(&seven, b"7z\xBC\xAF\x27\x1C\x00\x04 la suite").unwrap();
+    let r = scan(&seven);
+    assert_eq!(r.status, Status::Error);
+    assert_eq!(codes(&r), [IssueCode::UnsupportedArchive]);
+    assert_eq!(r.format, "cb7");
+    assert!(r.issues[0].message.contains("7z"));
+
     let missing = scan(&dir.path().join("absent.cbz"));
     assert_eq!(missing.status, Status::Error);
     assert_eq!(codes(&missing), [IssueCode::ArchiveUnreadable]);
@@ -436,7 +460,7 @@ fn rar_volumes_are_scanned_like_zip_ones() {
         }
         expected.extend([IssueCode::ArchiveOrderDiffers, IssueCode::Subdirectories]);
         assert_eq!(codes(&r), expected, "{name}");
-        assert_eq!(r.status, Status::Warning);
+        assert_eq!(r.status, Status::Ok);
         assert_eq!(
             names(&r),
             [
@@ -559,9 +583,12 @@ fn metadata_files_are_read_and_broken_ones_only_warn() {
         issue_entry(&r, IssueCode::MetadataInvalid),
         Some("ComicInfo.xml")
     );
-    assert_eq!(r.metadata.len(), 1);
-    assert_eq!(r.metadata[0].0, MetadataSource::IndexJson);
-    assert_eq!(r.metadata[0].1.series.as_deref(), Some("Leviathan"));
+    // Le champ lisible du ComicInfo.xml mal formé est gardé, l'avertissement reste.
+    assert_eq!(r.metadata.len(), 2);
+    assert_eq!(r.metadata[0].0, MetadataSource::Comicinfo);
+    assert_eq!(r.metadata[0].1.series.as_deref(), Some("x"));
+    assert_eq!(r.metadata[1].0, MetadataSource::IndexJson);
+    assert_eq!(r.metadata[1].1.series.as_deref(), Some("Leviathan"));
 
     let path = write_zip(
         dir.path(),

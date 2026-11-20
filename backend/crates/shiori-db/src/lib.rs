@@ -19,7 +19,7 @@ use shiori_core::{
 use sqlx::sqlite::{
     SqliteConnectOptions, SqliteJournalMode, SqlitePool, SqlitePoolOptions, SqliteSynchronous,
 };
-use sqlx::{Row, Sqlite, Transaction};
+use sqlx::{ConnectOptions, Row, Sqlite, Transaction};
 
 pub use sqlx::Error;
 
@@ -118,9 +118,16 @@ fn from_db<T: DeserializeOwned>(s: &str) -> Result<T, Error> {
 }
 
 fn media_type(s: Option<&str>) -> Option<&'static str> {
-    ["image/jpeg", "image/png", "image/webp", "image/avif"]
-        .into_iter()
-        .find(|m| Some(*m) == s)
+    [
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "image/avif",
+        "image/bmp",
+        "image/gif",
+    ]
+    .into_iter()
+    .find(|m| Some(*m) == s)
 }
 
 impl Db {
@@ -140,7 +147,10 @@ impl Db {
             .foreign_keys(true)
             // SQLite n'a qu'un écrivain : les scans parallèles attendent leur tour au lieu
             // d'échouer (une écriture de 12 000 pages prend plus d'une seconde).
-            .busy_timeout(Duration::from_secs(60));
+            .busy_timeout(Duration::from_secs(60))
+            // Une écriture lente attend presque toujours le verrou (scan parallèle, disque de NAS) :
+            // pas un avertissement pour l'utilisateur.
+            .log_slow_statements(log::LevelFilter::Debug, Duration::from_secs(1));
         let pool = SqlitePoolOptions::new().connect_with(options).await?;
         let db = Self { pool };
         let migrator = sqlx::migrate!();
@@ -165,7 +175,8 @@ impl Db {
         &self.pool
     }
 
-    /// Scanne un fichier, ou relit son rapport s'il n'a pas changé (sauf `rehash`).
+    /// Scanne un fichier, ou relit son rapport s'il n'a pas changé (sauf `rehash`), et l'écrit au
+    /// journal de la passe dans la transaction du rapport.
     pub async fn scan(
         &self,
         run: i64,
@@ -173,13 +184,61 @@ impl Db {
         options: ScanOptions,
         rehash: bool,
     ) -> Result<Scanned, Error> {
+        self.scan_into(run, path, options, rehash, None).await
+    }
+
+    /// Comme [`Db::scan`], et rattache aussi le fichier à sa série dans `library`, toujours dans la
+    /// même transaction : un seul passage par fichier par le verrou d'écriture, que les scans
+    /// parallèles se disputent.
+    pub async fn scan_recorded(
+        &self,
+        run: i64,
+        path: &Path,
+        options: ScanOptions,
+        rehash: bool,
+        library: &Library,
+    ) -> Result<Scanned, Error> {
+        self.scan_into(run, path, options, rehash, Some(library))
+            .await
+    }
+
+    async fn scan_into(
+        &self,
+        run: i64,
+        path: &Path,
+        options: ScanOptions,
+        rehash: bool,
+        library: Option<&Library>,
+    ) -> Result<Scanned, Error> {
         let key = location_key(path);
         let before = stamp(path);
+        let mut known = None;
         if !rehash
             && let Some(stamp) = before
             && let Some(volume) = self.known_volume(&key, stamp).await?
-            && let Some(report) = self.load_report(&volume, path).await?
         {
+            known = self.load_report(&volume, path).await?;
+        }
+        let scanned = match known {
+            Some(report) => Scanned {
+                report,
+                skipped: true,
+            },
+            None => {
+                let owned = path.to_path_buf();
+                let report = tokio::task::spawn_blocking(move || scan_file(&owned, options))
+                    .await
+                    .map_err(|e| Error::Io(io::Error::other(e)))?;
+                Scanned {
+                    report,
+                    skipped: false,
+                }
+            }
+        };
+
+        // IMMEDIATE : verrou d'écriture pris d'emblée (voir `attach`), le fichier déjà lu.
+        let mut tx = self.pool.begin_with("BEGIN IMMEDIATE").await?;
+        if scanned.skipped {
             let sql = concat!(
                 "UPDATE file_locations SET last_seen_run = ?, last_seen_at = ",
                 now!(),
@@ -188,23 +247,17 @@ impl Db {
             sqlx::query(sql)
                 .bind(run)
                 .bind(&key)
-                .execute(&self.pool)
+                .execute(&mut *tx)
                 .await?;
-            return Ok(Scanned {
-                report,
-                skipped: true,
-            });
+        } else {
+            Self::save(&mut tx, run, &key, before, &scanned.report).await?;
         }
-
-        let owned = path.to_path_buf();
-        let report = tokio::task::spawn_blocking(move || scan_file(&owned, options))
-            .await
-            .map_err(|e| Error::Io(io::Error::other(e)))?;
-        self.save(run, &key, before, &report).await?;
-        Ok(Scanned {
-            report,
-            skipped: false,
-        })
+        if let Some(library) = library {
+            library::attach_in(&mut tx, library, &key).await?;
+        }
+        runs::log_file_in(&mut tx, run, &scanned).await?;
+        tx.commit().await?;
+        Ok(scanned)
     }
 
     async fn known_volume(
@@ -225,15 +278,14 @@ impl Db {
         row.map(|r| from_hex(r.get("volume_id"))).transpose()
     }
 
-    /// Enregistre un rapport en une transaction.
+    /// Enregistre un rapport dans la transaction d'un fichier.
     async fn save(
-        &self,
+        tx: &mut Transaction<'_, Sqlite>,
         run: i64,
         key: &str,
         stamp: Option<Stamp>,
         report: &FileReport,
     ) -> Result<(), Error> {
-        let mut tx = self.pool.begin().await?;
         // Un fichier modifié pendant le scan n'a pas de tome fiable : rien n'est rattaché.
         let changed = report
             .issues
@@ -243,11 +295,11 @@ impl Db {
 
         sqlx::query("DELETE FROM scan_issues WHERE path = ? AND volume_id IS NULL")
             .bind(key)
-            .execute(&mut *tx)
+            .execute(&mut **tx)
             .await?;
         match (&volume, stamp) {
             (Some(volume), Some((size, mtime))) => {
-                save_volume(&mut tx, volume, report).await?;
+                save_volume(tx, volume, report).await?;
                 let sql = concat!(
                     "INSERT INTO file_locations
                        (path, volume_id, size, mtime_ns, last_seen_run, last_seen_at)
@@ -264,18 +316,18 @@ impl Db {
                     .bind(size)
                     .bind(mtime)
                     .bind(run)
-                    .execute(&mut *tx)
+                    .execute(&mut **tx)
                     .await?;
                 sqlx::query("DELETE FROM scan_issues WHERE volume_id = ?")
                     .bind(volume)
-                    .execute(&mut *tx)
+                    .execute(&mut **tx)
                     .await?;
             }
             _ => {
                 // Pas de tome fiable : le prochain scan devra tout refaire.
                 sqlx::query("DELETE FROM file_locations WHERE path = ?")
                     .bind(key)
-                    .execute(&mut *tx)
+                    .execute(&mut **tx)
                     .await?;
             }
         }
@@ -293,10 +345,10 @@ impl Db {
             .bind(to_db(&issue.code))
             .bind(&issue.entry)
             .bind(&issue.message)
-            .execute(&mut *tx)
+            .execute(&mut **tx)
             .await?;
         }
-        tx.commit().await
+        Ok(())
     }
 
     /// Relit le rapport d'un tome depuis la base.
@@ -378,6 +430,7 @@ impl Db {
             format: match row.get::<&str, _>("format") {
                 "cbr" => "cbr",
                 "pdf" => "pdf",
+                "cb7" => "cb7",
                 _ => "cbz",
             },
             size: row.get::<i64, _>("size") as u64,

@@ -53,6 +53,7 @@ pub enum IssueCode {
     MetadataInvalid,
     PdfPageWithoutImage,
     PdfTextIgnored,
+    UnsupportedArchive,
 }
 
 impl IssueCode {
@@ -70,16 +71,15 @@ impl IssueCode {
             | ImageUndecodable
             | DuplicateEntryConflict
             | NoPages
-            | FileChangedDuringScan => Severity::Error,
+            | FileChangedDuringScan
+            | UnsupportedArchive => Severity::Error,
             DuplicateEntryIdentical
-            | ExtensionMismatch
             | UnsupportedImage
             | NonImageEntry
-            | Subdirectories
-            | ArchiveOrderDiffers
             | MetadataInvalid
             | PdfPageWithoutImage => Severity::Warning,
-            IgnoredEntry | SolidArchive | PdfTextIgnored => Severity::Info,
+            ExtensionMismatch | Subdirectories | ArchiveOrderDiffers | IgnoredEntry
+            | SolidArchive | PdfTextIgnored => Severity::Info,
         }
     }
 }
@@ -132,7 +132,7 @@ pub struct FileReport {
     pub path: PathBuf,
     /// Absent si le fichier n'a même pas pu être lu.
     pub volume_id: Option<VolumeId>,
-    /// `cbz`, `cbr` ou `pdf`, d'après le contenu du fichier.
+    /// `cbz`, `cbr`, `pdf` ou `cb7` (signalé, jamais lu), d'après le contenu du fichier.
     pub format: &'static str,
     pub size: u64,
     pub status: Status,
@@ -150,7 +150,8 @@ fn lossy_path<S: Serializer>(path: &Path, s: S) -> Result<S::Ok, S::Error> {
 /// Version des règles de scan. À incrémenter quand un changement de ces règles
 /// (ordre, classification, codes) doit déclencher le rescan des tomes déjà connus.
 /// 2 : lecture de `ComicInfo.xml` et `index.json` (phase 5).
-pub const SCANNER_VERSION: i64 = 2;
+/// 3 : JPEG au commentaire trop court, BMP, GIF, 7z signalé, sévérités revues (lot 10.1).
+pub const SCANNER_VERSION: i64 = 3;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ScanOptions {
@@ -239,6 +240,8 @@ fn scan_unguarded(path: &Path, options: ScanOptions) -> FileReport {
     report.volume_id = Some(volume);
     if archive::is_rar(path) {
         report.format = "cbr";
+    } else if archive::is_7z(path) {
+        report.format = "cb7";
     } else if archive::pdf::is_pdf(path) {
         report.format = "pdf";
     }
@@ -331,12 +334,22 @@ fn scan_unguarded(path: &Path, options: ScanOptions) -> FileReport {
     indices.sort_unstable();
     archive.read_each(&indices, &mut |index, bytes| {
         if let Some((source, name)) = metadata.remove(&index) {
+            let bytes = bytes.map_err(|e| e.to_string());
             match bytes
-                .map_err(|e| e.to_string())
-                .and_then(|b| metadata::parse(source, &b))
+                .as_deref()
+                .map_err(Clone::clone)
+                .and_then(|b| metadata::parse(source, b))
             {
                 Ok(meta) => report.metadata.push((source, meta)),
-                Err(msg) => report.issue(IssueCode::MetadataInvalid, Some(&name), msg),
+                Err(msg) => {
+                    report.issue(IssueCode::MetadataInvalid, Some(&name), msg);
+                    // Les champs lisibles d'un `ComicInfo.xml` mal formé restent utiles.
+                    if let (MetadataSource::Comicinfo, Ok(b)) = (source, &bytes)
+                        && let Some(meta) = metadata::salvage_comic_info(b)
+                    {
+                        report.metadata.push((source, meta));
+                    }
+                }
             }
             return;
         }
@@ -394,6 +407,7 @@ fn issue_for(err: &ArchiveError) -> IssueCode {
         ArchiveError::SizeMismatch => IssueCode::SizeMismatch,
         ArchiveError::EntryTooLarge(_) => IssueCode::EntryTooLarge,
         ArchiveError::ImageUndecodable(_) => IssueCode::ImageUndecodable,
+        ArchiveError::UnsupportedArchive(_) => IssueCode::UnsupportedArchive,
         ArchiveError::Unreadable(_) | ArchiveError::NoSuchEntry(_) | ArchiveError::Io(_) => {
             IssueCode::ArchiveUnreadable
         }
@@ -416,6 +430,8 @@ fn media_for_extension(ext: &str) -> Option<&'static str> {
         "png" => Some("image/png"),
         "webp" => Some("image/webp"),
         "avif" => Some("image/avif"),
+        "bmp" => Some("image/bmp"),
+        "gif" => Some("image/gif"),
         _ => None,
     }
 }
@@ -424,9 +440,13 @@ fn is_ignored(name: &str) -> bool {
     let mut parts = name.split(['/', '\\']).filter(|p| !p.is_empty());
     let base = parts.clone().next_back().unwrap_or_default();
     parts.any(|p| p == "__MACOSX")
-        || ["comicinfo.xml", "thumbs.db", ".ds_store"]
+        || ["comicinfo.xml", "thumbs.db", ".ds_store", "desktop.ini"]
             .iter()
             .any(|n| base.eq_ignore_ascii_case(n))
+        // Restes d'une conversion (Calibre) ou d'un téléchargement.
+        || extension(base).is_some_and(|e| {
+            ["nfo", "html", "xhtml", "css", "opf", "ncx"].contains(&e.as_str())
+        })
 }
 
 /// Première moitié de l'examen d'une entrée, sans la lire : la page à venir et si son nom
@@ -486,7 +506,6 @@ fn check(
 ) -> Option<Page> {
     let name = page.entry_name.clone();
     let name = name.as_str();
-    let ext = extension(name);
     let broken = |report: &mut FileReport, code: IssueCode, msg: String, page: Page| {
         report.issue(code, Some(name), msg);
         looks_like_image.then_some(page)
@@ -502,6 +521,8 @@ fn check(
         Ok(ImageType::Png) => "image/png",
         Ok(ImageType::Webp) => "image/webp",
         Ok(ImageType::Heif(Compression::Av1)) => "image/avif",
+        Ok(ImageType::Bmp) => "image/bmp",
+        Ok(ImageType::Gif) => "image/gif",
         Ok(other) => {
             report.issue(
                 IssueCode::UnsupportedImage,
@@ -525,15 +546,12 @@ fn check(
     };
     page.media_type = Some(media);
 
-    let size = match imagesize::blob_size(&bytes) {
-        Ok(s) if s.width > 0 && s.height > 0 => s,
-        _ => {
-            let msg = "dimensions illisibles dans l'en-tête".to_string();
-            return broken(report, IssueCode::ImageUndecodable, msg, page);
-        }
+    let Some((width, height)) = dimensions(&bytes) else {
+        let msg = "dimensions illisibles dans l'en-tête".to_string();
+        return broken(report, IssueCode::ImageUndecodable, msg, page);
     };
-    page.width = u32::try_from(size.width).ok();
-    page.height = u32::try_from(size.height).ok();
+    page.width = Some(width);
+    page.height = Some(height);
 
     if options.deep
         && media != "image/avif"
@@ -543,17 +561,25 @@ fn check(
         return broken(report, IssueCode::ImageUndecodable, msg, page);
     }
 
-    if let Some(expected) = ext.as_deref().and_then(media_for_extension)
-        && expected != media
-    {
-        report.issue(
-            IssueCode::ExtensionMismatch,
-            Some(name),
-            format!("extension trompeuse : contenu {media}"),
-        );
-    }
     page.status = PageStatus::Ok;
     Some(page)
+}
+
+/// Largeur et hauteur lues dans l'en-tête. `imagesize` refuse un JPEG au segment de commentaire
+/// déclaré trop court d'un octet (fréquent, et que les navigateurs affichent) : `image` lit alors
+/// l'en-tête à son tour, toujours sans décoder les pixels.
+fn dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
+    let size = imagesize::blob_size(bytes)
+        .ok()
+        .and_then(|s| Some((u32::try_from(s.width).ok()?, u32::try_from(s.height).ok()?)))
+        .or_else(|| {
+            image::ImageReader::new(std::io::Cursor::new(bytes))
+                .with_guessed_format()
+                .ok()?
+                .into_dimensions()
+                .ok()
+        })?;
+    (size.0 > 0 && size.1 > 0).then_some(size)
 }
 
 /// Mémoire maximale d'un décodage : une bande de webtoon 800×16 000 en RGBA pèse 51 Mio. La même
@@ -590,6 +616,22 @@ fn finalize_pages(report: &mut FileReport) {
         archive_order_differs |= i > 0 && pages[i - 1].archive_index > pages[i].archive_index;
     }
     let in_subdirectories = pages.iter().any(|p| p.entry_name.contains(['/', '\\']));
+    // Une seule ligne par fichier : un tome converti en WebP sans renommer en compte des centaines.
+    let mismatched: Vec<&Page> = pages
+        .iter()
+        .filter(|p| {
+            let expected = extension(&p.entry_name).and_then(|e| media_for_extension(&e));
+            p.media_type.is_some() && expected.is_some() && expected != p.media_type
+        })
+        .collect();
+    let mismatch = mismatched.first().map(|first| {
+        format!(
+            "{} page(s) à l'extension trompeuse, par exemple {} : contenu {}",
+            mismatched.len(),
+            first.entry_name,
+            first.media_type.unwrap_or_default(),
+        )
+    });
 
     if pages.is_empty() {
         report.issue(IssueCode::NoPages, None, "aucune image dans l'archive");
@@ -600,6 +642,9 @@ fn finalize_pages(report: &mut FileReport) {
             None,
             "l'ordre de l'archive diffère de l'ordre naturel des noms ; l'ordre naturel est appliqué",
         );
+    }
+    if let Some(message) = mismatch {
+        report.issue(IssueCode::ExtensionMismatch, None, message);
     }
     if in_subdirectories {
         report.issue(

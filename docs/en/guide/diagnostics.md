@@ -20,24 +20,25 @@ An erroneous page is never replaced by another one: the reader shows the error i
 | `duplicate_entry_conflict` | Two pages have the same name with different contents. | Rename one of them in the archive. |
 | `no_pages` | No readable page in the file. | Check the archive's content. |
 | `file_changed_during_scan` | The file changed while being read (copy in progress). | Scan again once the copy is done (watching does it on its own). |
+| `unsupported_archive` | Unsupported archive format: a 7z archive (CB7), whatever its extension. | Convert it to CBZ. |
 
 ## Warnings
 
 | Code | What it means |
 |---|---|
 | `duplicate_entry_identical` | A page is duplicated with identical content; only one is kept. |
-| `extension_mismatch` | The extension does not match the image's real format (a `.jpg` that is a PNG); the page is read anyway. |
-| `unsupported_image` | Image in an unsupported format (GIF, BMP, TIFF, JPEG XL, HEIC): page ignored. |
+| `unsupported_image` | Image in an unsupported format (TIFF, JPEG XL, HEIC): page ignored. |
 | `non_image_entry` | A file that is not an image: ignored. |
-| `subdirectories` | Pages are stored in subfolders of the archive; they are read anyway. |
-| `archive_order_differs` | The order of pages in the archive differs from the reading order; Shiori follows the order of names. |
-| `metadata_invalid` | An unreadable `ComicInfo.xml` or `index.json`: ignored, the volume stays readable. |
+| `metadata_invalid` | A malformed `ComicInfo.xml` or an unreadable `index.json`: only the readable fields of a `ComicInfo.xml` are kept, the volume stays readable. |
 | `pdf_page_without_image` | A PDF page without an image (text only), or whose image covers less than half of it: skipped. |
 
 ## Information
 
 | Code | What it means |
 |---|---|
-| `ignored_entry` | A known side file (`ComicInfo.xml`, `Thumbs.db`, `.DS_Store`, `__MACOSX` folder) was ignored. |
+| `ignored_entry` | A known side file (`ComicInfo.xml`, `Thumbs.db`, `.DS_Store`, `desktop.ini`, `*.nfo`, leftovers of a Calibre conversion in `.html`, `.xhtml`, `.css`, `.opf`, `.ncx`, `__MACOSX` folder) was ignored. |
+| `extension_mismatch` | The extension of some pages does not match the image's real format (a `.jpg` that is a WebP); they are read anyway. One line per file, with the number of pages. |
+| `subdirectories` | Pages are stored in subfolders of the archive; they are read anyway. |
+| `archive_order_differs` | The order of pages in the archive differs from the reading order; Shiori follows the order of names. |
 | `solid_archive` | Solid RAR archive: the first page takes a little longer to open. |
 | `pdf_text_ignored` | The visible text of a PDF page is not shown: only the image is. |

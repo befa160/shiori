@@ -44,8 +44,9 @@ Des fichiers posés directement à la racine de la bibliothèque sont regroupés
 
 - **CBZ** : zip, y compris les très gros fichiers (zip64).
 - **CBR** : RAR 4 et 5, y compris « solide » (la première page s'ouvre un peu plus lentement). Les archives en plusieurs volumes (`.part1.rar`) ne sont pas lues.
+- Le type d'une archive est lu dans son contenu, pas dans son extension : un RAR nommé `.cbz` se lit. Une archive **7z** (CB7) n'est pas lue : elle est signalée (`unsupported_archive`), à reconvertir en CBZ.
 - **PDF** : Shiori affiche les images incluses, **sans les marges** de la page PDF ; sur une tablette, la planche occupe tout l'écran. Une page faite de plusieurs morceaux (bandes, tuiles) est réassemblée. Une page de texte seul, ou dont l'image couvre moins de la moitié, est sautée et signalée ; le texte posé sur une planche (crédits, préface) n'est pas affiché. Un PDF protégé par un mot de passe n'est pas lu.
-- **Images** : JPEG, PNG, WebP, AVIF. Les pages sont triées dans l'ordre naturel de leurs noms (`2` avant `10`), quel que soit leur ordre dans l'archive.
+- **Images** : JPEG, PNG, WebP, AVIF, BMP, GIF (première image d'un GIF animé). Les pages sont triées dans l'ordre naturel de leurs noms (`2` avant `10`), quel que soit leur ordre dans l'archive.
 
 ## Ce que Shiori ne fait pas
 

@@ -166,11 +166,7 @@ pub async fn run(args: ScanArgs, quiet: bool) -> Result<ExitCode> {
         tasks.spawn(async move {
             let _permit = limit.acquire_owned().await?;
             let scanned = match (&db, run_id) {
-                (Some(db), Some(run)) => {
-                    let scanned = db.scan(run, &path, options, rehash).await?;
-                    db.log_file(run, &scanned).await?;
-                    scanned
-                }
+                (Some(db), Some(run)) => db.scan(run, &path, options, rehash).await?,
                 _ => Scanned {
                     report: tokio::task::spawn_blocking(move || scan_file(&path, options)).await?,
                     skipped: false,

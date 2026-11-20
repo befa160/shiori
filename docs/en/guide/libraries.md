@@ -44,8 +44,9 @@ Files placed directly at the root of the library are grouped by series name; the
 
 - **CBZ**: zip, very large files included (zip64).
 - **CBR**: RAR 4 and 5, "solid" included (the first page opens a bit more slowly). Multi-volume archives (`.part1.rar`) are not read.
+- An archive's type is read from its content, not its extension: a RAR named `.cbz` is read. A **7z** archive (CB7) is not read: it is reported (`unsupported_archive`), to be converted to CBZ.
 - **PDF**: Shiori shows the embedded images, **without the margins** of the PDF page; on a tablet, the artwork fills the screen. A page made of several pieces (strips, tiles) is reassembled. A text-only page, or one whose image covers less than half of it, is skipped and reported; text on top of artwork (credits, preface) is not shown. A password-protected PDF is not read.
-- **Images**: JPEG, PNG, WebP, AVIF. Pages are sorted in the natural order of their names (`2` before `10`), whatever their order in the archive.
+- **Images**: JPEG, PNG, WebP, AVIF, BMP, GIF (first frame of an animated GIF). Pages are sorted in the natural order of their names (`2` before `10`), whatever their order in the archive.
 
 ## What Shiori does not do
 

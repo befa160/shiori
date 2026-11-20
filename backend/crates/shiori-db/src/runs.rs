@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use shiori_core::{IssueCode, Severity, Status};
 use sqlx::Row;
-use sqlx::sqlite::SqliteRow;
+use sqlx::sqlite::{SqliteConnection, SqliteRow};
 
 use crate::{Db, Error, Scanned, from_db, location_key, to_db};
 
@@ -267,45 +267,8 @@ impl Db {
         code: Option<IssueCode>,
         message: &str,
     ) -> Result<(), Error> {
-        let sql = concat!(
-            "INSERT INTO scan_run_logs (scan_run_id, at, level, path, code, message)
-             VALUES (?, ",
-            now!(),
-            ", ?, ?, ?, ?)"
-        );
-        sqlx::query(sql)
-            .bind(run)
-            .bind(to_db(&level))
-            .bind(path)
-            .bind(code.map(|c| to_db(&c)))
-            .bind(message)
-            .execute(&self.pool)
-            .await?;
-        Ok(())
-    }
-
-    /// Journalise un fichier rescanné et chacun de ses problèmes. Un fichier inchangé n'est
-    /// que compté : son rapport n'a pas été recalculé.
-    pub async fn log_file(&self, run: i64, scanned: &Scanned) -> Result<(), Error> {
-        if scanned.skipped {
-            return Ok(());
-        }
-        let report = &scanned.report;
-        // Même forme que la clé des emplacements (absolue, `/`) : le journal y retrouve le tome.
-        let path = location_key(&report.path);
-        let pages = report.pages.len();
-        let message = format!("scanné : {}, {pages} page(s)", to_db(&report.status));
-        self.log(run, Severity::Info, Some(&path), None, &message)
-            .await?;
-        for issue in &report.issues {
-            let message = match &issue.entry {
-                Some(entry) => format!("{entry} : {}", issue.message),
-                None => issue.message.clone(),
-            };
-            self.log(run, issue.severity, Some(&path), Some(issue.code), &message)
-                .await?;
-        }
-        Ok(())
+        let mut conn = self.pool.acquire().await?;
+        log_in(&mut conn, run, level, path, code, message).await
     }
 
     /// Passes du serveur restées `running` (arrêt brutal) : elles ne reprendront jamais. Les
@@ -334,6 +297,65 @@ impl Db {
         .await?;
         Ok(done.rows_affected())
     }
+}
+
+async fn log_in(
+    conn: &mut SqliteConnection,
+    run: i64,
+    level: Severity,
+    path: Option<&str>,
+    code: Option<IssueCode>,
+    message: &str,
+) -> Result<(), Error> {
+    let sql = concat!(
+        "INSERT INTO scan_run_logs (scan_run_id, at, level, path, code, message)
+         VALUES (?, ",
+        now!(),
+        ", ?, ?, ?, ?)"
+    );
+    sqlx::query(sql)
+        .bind(run)
+        .bind(to_db(&level))
+        .bind(path)
+        .bind(code.map(|c| to_db(&c)))
+        .bind(message)
+        .execute(conn)
+        .await?;
+    Ok(())
+}
+
+/// Journalise un fichier rescanné et chacun de ses problèmes, dans la transaction de son rapport
+/// ([`Db::scan`]). Un fichier inchangé n'est que compté : son rapport n'a pas été recalculé.
+pub(crate) async fn log_file_in(
+    conn: &mut SqliteConnection,
+    run: i64,
+    scanned: &Scanned,
+) -> Result<(), Error> {
+    if scanned.skipped {
+        return Ok(());
+    }
+    let report = &scanned.report;
+    // Même forme que la clé des emplacements (absolue, `/`) : le journal y retrouve le tome.
+    let path = location_key(&report.path);
+    let pages = report.pages.len();
+    let message = format!("scanné : {}, {pages} page(s)", to_db(&report.status));
+    log_in(conn, run, Severity::Info, Some(&path), None, &message).await?;
+    for issue in &report.issues {
+        let message = match &issue.entry {
+            Some(entry) => format!("{entry} : {}", issue.message),
+            None => issue.message.clone(),
+        };
+        log_in(
+            conn,
+            run,
+            issue.severity,
+            Some(&path),
+            Some(issue.code),
+            &message,
+        )
+        .await?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

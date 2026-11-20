@@ -123,8 +123,8 @@ async fn library_pass_scans_attaches_and_counts() {
     assert_eq!(row.get::<String, _>("status"), "completed");
     assert_eq!(row.get::<String, _>("origin"), "api");
     assert_eq!(row.get::<i64, _>("library_id"), f.library.id);
-    // 3 fichiers : manga ok, unpadded avertissement, bad-crc erreur.
-    assert_eq!(counts(&row), [3, 1, 1, 1, 0, 0]);
+    // 3 fichiers : manga et unpadded (désordre : information) ok, bad-crc erreur.
+    assert_eq!(counts(&row), [3, 2, 0, 1, 0, 0]);
     assert_eq!(f.series().await, ["Série A (2)", "bad-crc (1)"]);
     let logs: i64 = sqlx::query("SELECT COUNT(*) AS n FROM scan_run_logs WHERE scan_run_id = ?")
         .bind(row.get::<i64, _>("id"))
@@ -141,7 +141,7 @@ async fn library_pass_scans_attaches_and_counts() {
     // Deuxième passe : tout est inchangé ; un fichier supprimé est retiré.
     std::fs::remove_file(f.root().join("bad-crc.cbz")).unwrap();
     let row = f.pass(&scanner, f.request(None)).await;
-    assert_eq!(counts(&row), [2, 1, 1, 0, 2, 1]);
+    assert_eq!(counts(&row), [2, 2, 0, 0, 2, 1]);
     assert_eq!(f.series().await, ["Série A (2)"]);
 }
 
