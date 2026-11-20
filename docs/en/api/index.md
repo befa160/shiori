@@ -62,6 +62,8 @@ No authentication.
 { "status": "ok", "version": "0.5.0" }
 ```
 
+`version`: the installed release number (`0.5.0-rc.2` for a pre-release), otherwise the code version.
+
 ## Reference pages
 
 | Page | Routes |

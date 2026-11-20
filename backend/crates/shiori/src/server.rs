@@ -597,7 +597,7 @@ fn volume_id(raw: &str) -> Result<VolumeId, ApiError> {
 }
 
 async fn health() -> Json<serde_json::Value> {
-    Json(json!({ "status": "ok", "version": env!("CARGO_PKG_VERSION") }))
+    Json(json!({ "status": "ok", "version": crate::RELEASE }))
 }
 
 /// Où sont la base et le cache (administration), pour les sauvegarder ou les retrouver.

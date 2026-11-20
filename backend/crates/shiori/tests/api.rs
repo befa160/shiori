@@ -118,7 +118,7 @@ async fn health() {
     let (status, body) = get(&f.app, "/api/health").await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["status"], "ok");
-    assert_eq!(body["version"], env!("CARGO_PKG_VERSION"));
+    assert_eq!(body["version"], shiori::RELEASE);
 }
 
 #[tokio::test]

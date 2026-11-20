@@ -72,6 +72,8 @@ jobs:
         working-directory: backend
         run: |
           rustup target add "$TARGET"
+          # Le numéro de release exact (`0.5.0-rc.2`) montré par l'application ; rien hors d'un tag.
+          if [[ $GITHUB_REF == refs/tags/v* ]]; then export SHIORI_RELEASE=${GITHUB_REF_NAME#v}; fi
           cargo build --release --locked -p shiori --target "$TARGET"
         env:
           TARGET: ${{ matrix.target }}

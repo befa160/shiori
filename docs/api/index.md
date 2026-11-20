@@ -62,6 +62,8 @@ Sans authentification.
 { "status": "ok", "version": "0.5.0" }
 ```
 
+`version` : le numéro de la release installée (`0.5.0-rc.2` pour une préversion), sinon la version du code.
+
 ## Pages de la référence
 
 | Page | Routes |
