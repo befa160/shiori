@@ -11,11 +11,11 @@ async fn previous_version(path: &Path) {
     db.create_user("ancien", "mot de passe", Role::Admin)
         .await
         .unwrap();
-    // Défait la dernière migration (20) : retire sa colonne. À recaler sur chaque nouvelle
+    // Défait la dernière migration (21) : retire sa colonne. À recaler sur chaque nouvelle
     // migration.
     for undo in [
-        "ALTER TABLE libraries DROP COLUMN deep_checked_at",
-        "DELETE FROM _sqlx_migrations WHERE version = 20",
+        "ALTER TABLE series_sources DROP COLUMN unlinked",
+        "DELETE FROM _sqlx_migrations WHERE version = 21",
     ] {
         sqlx::query(undo).execute(db.pool()).await.unwrap();
     }
@@ -147,7 +147,7 @@ async fn a_migration_is_preceded_by_a_backup_and_old_backups_still_restore() {
         .collect();
     assert_eq!(saved.len(), 1);
     let name = saved[0].file_name().unwrap().to_str().unwrap();
-    assert!(name.starts_with("shiori-avant-0020-"), "{name}");
+    assert!(name.starts_with("shiori-avant-0021-"), "{name}");
 
     // Base à jour : pas de nouvelle sauvegarde ; base neuve non plus.
     db.pool().close().await;

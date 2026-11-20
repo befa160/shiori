@@ -5,10 +5,10 @@ Sources web : `anilist`, `mangadex`. Toutes ces routes sont **admin** ; les sour
 État d'une source pour une série (`sources` du [détail d'une série](/api/series#get-api-series-id)) :
 
 ```json
-{ "source": "mangadex", "external_id": "a1c7c817-…", "matched_by": "auto", "checked_at": "…", "last_error": null, "candidates": [] }
+{ "source": "mangadex", "external_id": "a1c7c817-…", "matched_by": "auto", "checked_at": "…", "last_error": null, "unlinked": false, "candidates": [] }
 ```
 
-`matched_by` : `auto` (identification) ou `user` ; `candidates` : fiches à confirmer ; `last_error` : `offline`, `rate_limited`, `not_found`, `http_error`, `bad_response`.
+`matched_by` : `auto` (identification) ou `user` ; `unlinked` : déliée par l'utilisateur (l'identification automatique ne la relie plus) ; `candidates` : fiches à confirmer ; `last_error` : `offline`, `rate_limited`, `not_found`, `http_error`, `bad_response`.
 
 ### `GET /api/series/{id}/metadata/search`
 
@@ -32,7 +32,7 @@ Lie la série à une fiche.
 
 ### `DELETE /api/series/{id}/metadata/links/{source}`
 
-Délie la source : ses données ne comptent plus. **Réponse 200** : le détail de la série.
+Délie la source : ses données ne comptent plus, et elle reste marquée `unlinked` (plus jamais reliée par l'identification automatique ; un `PUT` la relie). **Réponse 200** : le détail de la série.
 
 ### `POST /api/series/{id}/metadata/refresh`
 

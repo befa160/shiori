@@ -553,7 +553,7 @@ fn web_fills_what_the_files_do_not_say() {
 }
 
 #[test]
-fn a_main_source_gives_title_and_summary_before_the_language() {
+fn the_language_comes_before_the_main_source() {
     let anilist = web(
         "1",
         &[(Some("en"), "One Piece"), (None, "Wan Pīsu")],
@@ -571,11 +571,29 @@ fn a_main_source_gives_title_and_summary_before_the_language() {
         "fr",
         true,
     );
+    // Le français de MangaDex passe avant l'anglais de la source principale (lot 10.2).
+    assert_eq!(
+        (meta.title.as_deref(), meta.summary.as_deref()),
+        (Some("One Piece (fr)"), Some("Un garçon."))
+    );
+    // À langue égale, la source principale l'emporte.
+    let english = web(
+        "y",
+        &[(Some("en"), "One Piece (y)")],
+        &[("en", "A boy (y).")],
+    );
+    let meta = with_web(
+        SeriesMetadata::default(),
+        "x",
+        &[anilist.clone(), english],
+        "fr",
+        true,
+    );
     assert_eq!(
         (meta.title.as_deref(), meta.summary.as_deref()),
         (Some("One Piece"), Some("A boy (AniList)."))
     );
-    // Sans source principale, la langue de l'interface l'emporte.
+    // Sans source principale, la langue de l'interface l'emporte aussi.
     let meta = with_web(
         SeriesMetadata::default(),
         "x",
@@ -587,13 +605,14 @@ fn a_main_source_gives_title_and_summary_before_the_language() {
         (meta.title.as_deref(), meta.summary.as_deref()),
         (Some("One Piece (fr)"), Some("Un garçon."))
     );
-    // La source principale sans résumé : les autres fiches en repli.
+    // La source principale sans résumé (interface en anglais) : son titre, et le résumé d'une autre
+    // fiche en repli, faute d'anglais nulle part.
     let silent = web("2", &[(Some("en"), "Silent")], &[]);
     let meta = with_web(
         SeriesMetadata::default(),
         "x",
         &[silent, mangadex],
-        "fr",
+        "en",
         true,
     );
     assert_eq!(

@@ -23,8 +23,11 @@ A volume also has its own metadata (title, summary, date, authors), editable fro
 They are **off by default** (**Administration → Web metadata**). Only the series title is sent, with a generic client name; never a path, a file name or a user name. Once allowed:
 
 - after each scan, a series is linked on its own if a single result has exactly its title; otherwise it is "to check";
-- **Identify** (series page) searches a source and offers the results with their cover;
+- **Identify** (series page) shows each linked source first (refresh, use its cover, unlink), then searches a source and offers the results with their cover;
+- an **unlinked** source stays unlinked: automatic identification no longer links it; to link it again, choose an entry in **Identify**;
 - the order of the sources is set in the administration (by default, MangaDex first in French, AniList first in English), and a series can impose its main source;
+- **language comes before source**: the title and summary in the interface language are looked for in every linked source before English; for the same language, the main source, then the set order, decide;
+- genres and tags from the sources (in English there) are shown translated into the interface language; search and the "Tags" filter find them in both languages;
 - adult entries are excluded from searches, unless the administration allows them.
 
 <!-- [ecran_identifier] -->

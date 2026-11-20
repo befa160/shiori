@@ -19,9 +19,10 @@ const PAGES: Record<SourceId, string> = {
   mangadex: 'https://mangadex.org/title/',
 }
 
-/** Fenêtre « Identifier » façon Plex (lot 5.7b) : choisir la source, chercher, choisir la bonne
- * fiche parmi des couvertures ; pour une source liée, l'actualiser, prendre sa couverture ou la
- * délier. Les vignettes sont relayées par le serveur : le navigateur ne contacte pas les sources. */
+/** Fenêtre « Identifier » façon Plex (lot 5.7b) : en tête, chaque source liée, à actualiser, dont
+ * prendre la couverture ou à délier (lot 10.2) ; puis choisir une source, chercher, et choisir la
+ * bonne fiche parmi des couvertures. Les vignettes sont relayées par le serveur : le navigateur ne
+ * contacte pas les sources. */
 export function IdentifyDialog({ series }: { series: SeriesDetail }) {
   const { t, i18n } = useTranslation()
   const id = useId()
@@ -39,13 +40,14 @@ export function IdentifyDialog({ series }: { series: SeriesDetail }) {
   const failed = (e: Error) => toast.error(t('series.identifyFailed'), { description: errorText(e, t) })
   const link = useSeriesAction(series.id, (externalId: string) => api.linkSource(series.id, source, externalId))
   const refresh = useSeriesAction(series.id, () => api.refreshMetadata(series.id))
-  const cover = useSeriesAction(series.id, () => api.useSourceCover(series.id, source))
-  const unlink = useSeriesAction(series.id, () => api.unlinkSource(series.id, source))
+  const cover = useSeriesAction(series.id, (s: SourceId) => api.useSourceCover(series.id, s))
+  const unlink = useSeriesAction(series.id, (s: SourceId) => api.unlinkSource(series.id, s))
+  const linked = series.sources.filter((s) => s.external_id)
+  const unlinked = series.sources.filter((s) => s.unlinked)
   const busy = link.isPending || refresh.isPending || cover.isPending || unlink.isPending
   // Résultats d'une recherche de cette source, sinon les fiches gardées à confirmer.
   const searched = search.isSuccess
   const results = search.data ?? state?.candidates ?? []
-  const name = t(`admin.sourceNames.${source}`)
 
   return (
     <DialogContent closeLabel={t('common.close')} className="sm:max-w-3xl">
@@ -53,6 +55,59 @@ export function IdentifyDialog({ series }: { series: SeriesDetail }) {
         <DialogTitle>{t('series.identifyTitle', { name: series.name })}</DialogTitle>
         <DialogDescription>{t('series.identifyDescription')}</DialogDescription>
       </DialogHeader>
+      {linked.length > 0 && (
+        <section aria-labelledby={`${id}-linked`} className="space-y-2">
+          <h3 id={`${id}-linked`} className="text-sm font-medium">
+            {t('series.identifyLinkedList')}
+          </h3>
+          <ul className="space-y-2">
+            {linked.map((s) => (
+              <li key={s.source} className="space-y-2 rounded-md bg-background p-3">
+                <p className="text-sm">
+                  <span className="font-medium">{t(`admin.sourceNames.${s.source}`)}</span> ·{' '}
+                  {t(s.matched_by === 'user' ? 'series.identifyUser' : 'series.identifyAuto')}{' '}
+                  <a
+                    href={`${PAGES[s.source]}${encodeURIComponent(s.external_id ?? '')}`}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="inline-flex min-h-11 items-center gap-1 underline underline-offset-4"
+                  >
+                    {t('series.identifyOpen')}
+                    <ExternalLink aria-hidden className="size-4" />
+                  </a>
+                </p>
+                {s.last_error && (
+                  <p className="text-sm text-destructive">{t('series.identifyLastError', { error: sourceErrorText(s.last_error, t) })}</p>
+                )}
+                {/* Un groupe nommé : avec deux sources liées, « Délier » dit laquelle au lecteur d'écran. */}
+                <div role="group" aria-label={t(`admin.sourceNames.${s.source}`)} className="flex flex-wrap gap-2">
+                  <Button variant="secondary" disabled={busy} onClick={() => refresh.mutate(undefined, { onError: failed })}>
+                    {t('series.identifyRefresh')}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    disabled={busy}
+                    onClick={() =>
+                      cover.mutate(s.source, { onSuccess: () => toast.success(t('series.identifyCoverDone')), onError: failed })
+                    }
+                  >
+                    {t('series.identifyUseCover')}
+                  </Button>
+                  <Button variant="ghost" disabled={busy} onClick={() => unlink.mutate(s.source, { onError: failed })}>
+                    {t('series.identifyUnlink')}
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {unlinked.map((s) => (
+        <p key={s.source} className="text-sm text-muted-foreground">
+          {t('series.identifyUnlinked', { source: t(`admin.sourceNames.${s.source}`) })}
+        </p>
+      ))}
+
       <form
         className="grid min-w-0 gap-3 sm:grid-cols-[12rem_1fr_auto] sm:items-end"
         onSubmit={(e) => {
@@ -99,42 +154,6 @@ export function IdentifyDialog({ series }: { series: SeriesDetail }) {
         <p role="alert" className="text-sm text-destructive">
           {error}
         </p>
-      )}
-
-      {state?.external_id && (
-        <div className="space-y-2 rounded-md bg-background p-3">
-          <p className="text-sm">
-            {t('series.identifyLinked', { source: name })} ·{' '}
-            {t(state.matched_by === 'user' ? 'series.identifyUser' : 'series.identifyAuto')}{' '}
-            <a
-              href={`${PAGES[source]}${encodeURIComponent(state.external_id)}`}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="inline-flex min-h-11 items-center gap-1 underline underline-offset-4"
-            >
-              {t('series.identifyOpen')}
-              <ExternalLink aria-hidden className="size-4" />
-            </a>
-          </p>
-          {state.last_error && (
-            <p className="text-sm text-destructive">{t('series.identifyLastError', { error: sourceErrorText(state.last_error, t) })}</p>
-          )}
-          <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" disabled={busy} onClick={() => refresh.mutate(undefined, { onError: failed })}>
-              {t('series.identifyRefresh')}
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={busy}
-              onClick={() => cover.mutate(undefined, { onSuccess: () => toast.success(t('series.identifyCoverDone')), onError: failed })}
-            >
-              {t('series.identifyUseCover')}
-            </Button>
-            <Button variant="ghost" disabled={busy} onClick={() => unlink.mutate(undefined, { onError: failed })}>
-              {t('series.identifyUnlink')}
-            </Button>
-          </div>
-        </div>
       )}
 
       {(searched || results.length > 0) && (

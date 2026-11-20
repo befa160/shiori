@@ -11,14 +11,15 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { errorText } from '@/i18n/errors'
-import { STATUS_FILTERS } from '@/library/filters'
+import { canonicalTag, tagLabel } from '@/i18n/tags'
+import { STATUS_FILTERS, tagKey } from '@/library/filters'
 
 // shortcut: replié d'après la longueur du texte, pas sa hauteur affichée ; mesurer le débordement si un résumé court sur un écran étroit se retrouve coupé sans bouton.
 const LONG_SUMMARY = 240
 
 /** Ce que l'on sait de la série : auteurs, repères, résumé repliable, genres et tags, autres titres, liens. */
 export function SeriesAbout({ series }: { series: SeriesDetail }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const m = series.metadata
   const [open, setOpen] = useState(false)
   const facts = [
@@ -27,7 +28,8 @@ export function SeriesAbout({ series }: { series: SeriesDetail }) {
     m.publication_status && t(`browse.status.${m.publication_status}`),
     m.age_rating,
   ].filter(Boolean)
-  const chips = [...new Set([...m.genres, ...m.tags])]
+  // Une puce par tag (« Comedy » et « Comédie » n'en font qu'une), dans la langue de l'interface.
+  const chips = [...new Map([...m.genres, ...m.tags].map((tag) => [tagKey(tag), canonicalTag(tag)])).values()]
   const links = webLinks(m.links)
   const summaryId = useId()
   const long = (m.summary?.length ?? 0) > LONG_SUMMARY
@@ -57,7 +59,7 @@ export function SeriesAbout({ series }: { series: SeriesDetail }) {
                 to={`/series?${new URLSearchParams({ tag: chip })}`}
                 className="relative flex h-8 max-w-full items-center rounded-full bg-card px-3 text-sm after:absolute after:inset-x-0 after:-inset-y-1.5 hover:bg-accent"
               >
-                <span className="truncate">{chip}</span>
+                <span className="truncate">{tagLabel(chip, i18n.language)}</span>
               </Link>
             </li>
           ))}

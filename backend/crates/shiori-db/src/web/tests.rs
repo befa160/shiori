@@ -86,10 +86,12 @@ async fn linked_sources_feed_the_merged_view_in_the_chosen_order() {
     )
     .await
     .unwrap();
+    // Deux fiches en anglais : seul l'ordre des sources (ou la source principale) les départage ;
+    // la langue, qui passe avant, est testée dans `metadata::tests`.
     db.record_source(
         one,
         SourceId::Mangadex,
-        linked("a1c7", "One Piece (MangaDex)", "fr"),
+        linked("a1c7", "One Piece (MangaDex)", "en"),
     )
     .await
     .unwrap();
@@ -181,6 +183,30 @@ async fn linked_sources_feed_the_merged_view_in_the_chosen_order() {
     assert_eq!(series(&db, one).await.name, "One Piece (AniList)");
     db.unlink_source(one, SourceId::Anilist).await.unwrap();
     assert_eq!(series(&db, one).await.name, "one-piece");
+
+    // Délier tient : la série n'est plus à identifier chez ces sources (l'identification
+    // automatique de fin de scan ne la relie pas), et un lien choisi à la main efface le refus.
+    let states = db.source_states(one).await.unwrap();
+    assert!(states.iter().all(|s| s.unlinked && s.external_id.is_none()));
+    for source in [SourceId::Anilist, SourceId::Mangadex] {
+        assert!(!left(&db, source).await.contains(&one), "{source:?}");
+    }
+    db.record_source(
+        one,
+        SourceId::Anilist,
+        linked("30013", "One Piece (AniList)", "en"),
+    )
+    .await
+    .unwrap();
+    let anilist = db.source_states(one).await.unwrap();
+    assert!(
+        !anilist
+            .iter()
+            .find(|s| s.source == SourceId::Anilist)
+            .unwrap()
+            .unlinked
+    );
+    assert!(db.source_issues().await.unwrap().is_empty());
 }
 
 #[tokio::test]
