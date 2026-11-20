@@ -78,3 +78,11 @@ The series' reading settings for the account; `null` goes back to the default.
 ```
 
 `reading_mode`: `rtl`, `ltr`, `vertical`; `page_layout`: `single`, `double`, `auto`; `page_turn`: `reading`, `ltr`, `rtl`. **Response 200**: the settings applied.
+
+### `PUT /api/series/{id}/read`
+
+"Mark the series as read", for the account: each readable volume goes to its last page (a volume already read keeps the date it was first read). **Response 200**: the series detail. **Error**: 404 `not_found`.
+
+### `DELETE /api/series/{id}/read`
+
+"Mark the series as unread", for the account: the progress of all its volumes is cleared. **Response 200**: the series detail. **Error**: 404 `not_found`.

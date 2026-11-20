@@ -106,6 +106,9 @@ export const api = {
   scanLogs: (id: number, query: URLSearchParams, init?: RequestInit) =>
     must<LogLine[]>(`/admin/scans/${id}/logs?${query}`, init),
   clearProgress: (volumeId: string) => request<null>(`/volumes/${volumeId}/progress`, { method: 'DELETE' }),
+  /** Toute la série lue (dernière page de chaque tome) ou non lue (progression effacée). */
+  markSeries: (seriesId: number, read: boolean) =>
+    must<SeriesDetail>(`/series/${seriesId}/read`, { method: read ? 'PUT' : 'DELETE' }),
   patchSeries: (seriesId: number, patch: SeriesPatch) =>
     must<SeriesDetail>(`/series/${seriesId}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   searchMetadata: (seriesId: number, source: SourceId, q: string, init?: RequestInit) =>

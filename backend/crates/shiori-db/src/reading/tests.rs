@@ -435,6 +435,55 @@ async fn each_account_has_its_own_progress_and_settings() {
     assert_eq!(detail.settings.reading_mode, ReadingMode::Ltr);
 }
 
+/// Toute la série d'un coup, pour un seul compte : « lue » mène chaque tome à sa dernière page
+/// (et garde la date d'une première lecture), « non lue » efface la progression.
+#[tokio::test]
+async fn a_whole_series_is_marked_read_then_unread_for_one_account() {
+    let f = fixture(LibraryKind::Manga).await;
+    let alice = crate::tests::viewer(&f.db).await;
+    let bob =
+        f.db.create_user("bob", "mot de passe", crate::Role::Reader)
+            .await
+            .unwrap();
+    let bob = f.db.viewer(bob.id).await.unwrap();
+    saved(
+        f.db.save_progress(&bob, &f.volume, &f.pages[3])
+            .await
+            .unwrap(),
+    );
+    saved(
+        f.db.save_progress(&alice, &f.volume, &f.pages[4])
+            .await
+            .unwrap(),
+    );
+
+    f.db.mark_series(&alice, f.series, true).await.unwrap();
+    let read = f.db.progress(&alice, &f.volume).await.unwrap().unwrap();
+    assert_eq!((read.ordinal, read.finished), (11, true));
+    assert_eq!(read.page_id, f.pages[11].to_string());
+    // Deux fois : rien ne change, et l'autre compte garde sa page.
+    f.db.mark_series(&alice, f.series, true).await.unwrap();
+    assert!(
+        f.db.progress(&alice, &f.volume)
+            .await
+            .unwrap()
+            .unwrap()
+            .finished
+    );
+    assert_eq!(
+        f.db.progress(&bob, &f.volume)
+            .await
+            .unwrap()
+            .unwrap()
+            .ordinal,
+        3
+    );
+
+    f.db.mark_series(&alice, f.series, false).await.unwrap();
+    assert_eq!(f.db.progress(&alice, &f.volume).await.unwrap(), None);
+    assert!(f.db.progress(&bob, &f.volume).await.unwrap().is_some());
+}
+
 #[tokio::test]
 async fn the_viewer_language_is_the_account_one_then_the_instance_one() {
     let f = fixture(LibraryKind::Manga).await;

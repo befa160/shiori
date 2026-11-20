@@ -18,6 +18,7 @@ import { volumeLabel, volumeTitle } from './labels'
 import { BackLink, QueryState } from './parts'
 import { useIsAdmin } from '@/auth/session'
 import { IdentifyDialog } from './IdentifyDialog'
+import { SeriesReadMenu } from './SeriesReadMenu'
 import { LISTS } from './series'
 import { EditSeriesDialog, SeriesAbout } from './SeriesMetadata'
 
@@ -134,6 +135,21 @@ function SeriesHeader({ series }: { series: SeriesDetail }) {
               <ScanSearch aria-hidden />
               {t('series.identify')}
             </Button>
+          )}
+          {total > 0 && (
+            <SeriesReadMenu
+              id={series.id}
+              name={series.name}
+              // Comme le serveur : un tome sans page (illisible) ne retient pas la série.
+              status={
+                read >= series.volumes.filter((v) => v.page_count > 0).length
+                  ? 'read'
+                  : series.volumes.some((v) => v.progress)
+                    ? 'in_progress'
+                    : 'unread'
+              }
+              volumes={total}
+            />
           )}
         </div>
         <SeriesAbout series={series} />

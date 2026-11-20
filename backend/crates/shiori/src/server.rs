@@ -378,6 +378,10 @@ pub fn router(app: Arc<App>, hosts: Option<Vec<String>>) -> Router {
         .route("/api/series/{id}", get(series).patch(patch_series))
         .route("/api/continue", get(continue_reading))
         .route("/api/series/{id}/settings", patch(series_settings))
+        .route(
+            "/api/series/{id}/read",
+            put(mark_series_read).delete(mark_series_unread),
+        )
         .route("/api/series/{id}/metadata/search", get(search_metadata))
         .route(
             "/api/series/{id}/metadata/links/{source}",
@@ -1133,6 +1137,36 @@ async fn save_progress(
             "cette page n'appartient pas à ce tome",
         )),
     }
+}
+
+/// « Marquer la série comme lue » pour ce compte ; renvoie son détail.
+async fn mark_series_read(
+    State(app): State<Arc<App>>,
+    Me(me): Me,
+    Path(id): Path<String>,
+) -> ApiResult<shiori_db::SeriesDetail> {
+    mark_series(&app, &me, &id, true).await
+}
+
+/// « Marquer la série comme non lue » : la progression de tous ses tomes est effacée.
+async fn mark_series_unread(
+    State(app): State<Arc<App>>,
+    Me(me): Me,
+    Path(id): Path<String>,
+) -> ApiResult<shiori_db::SeriesDetail> {
+    mark_series(&app, &me, &id, false).await
+}
+
+async fn mark_series(
+    app: &App,
+    me: &Viewer,
+    id: &str,
+    read: bool,
+) -> ApiResult<shiori_db::SeriesDetail> {
+    let id = int_id(id)?;
+    series_or_404(app, me, id).await?;
+    app.db.mark_series(me, id, read).await?;
+    Ok(Json(series_or_404(app, me, id).await?))
 }
 
 /// « Marquer comme non lu ».

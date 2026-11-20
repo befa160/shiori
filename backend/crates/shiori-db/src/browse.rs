@@ -434,9 +434,11 @@ impl Db {
                     .filter_map(|v| progress.get(&v.volume.volume_id))
                     .map(|p| &p.updated_at)
                     .max();
+                // Un tome sans page (illisible) ne peut pas être lu : il ne retient pas la série.
+                let readable = vols.iter().filter(|v| v.volume.page_count > 0).count();
                 let reading_status = match read_at {
                     None => ReadingStatus::Unread,
-                    Some(_) if read_count == vols.len() => ReadingStatus::Read,
+                    Some(_) if read_count >= readable => ReadingStatus::Read,
                     Some(_) => ReadingStatus::InProgress,
                 };
                 Ok(SeriesSummary {

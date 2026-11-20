@@ -24,7 +24,7 @@ This guide describes Shiori screen by screen. To install it: [quick start](/en/i
 
 <!-- [ecran_series] -->
 
-- **Series page**: cover, summary, authors, genres and tags (each leads to the series that have it), progress, a button to resume or start, and the list of volumes. A volume's menu marks it read or unread, downloads it for offline reading and shows the problems of its last scan.
+- **Series page**: cover, summary, authors, genres and tags (each leads to the series that have it), progress, a button to resume or start, and the list of volumes. A volume's menu marks it read or unread, downloads it for offline reading and shows the problems of its last scan. The series menu (on its page, or on its card in lists) marks the **whole** series read or unread, for your account only; "unread" clears the progress of all its volumes, so it asks for confirmation. A series is "Read" as soon as everything readable is read: an unreadable volume (in error) does not hold it back, it stays flagged by its badge.
 
 An amber bar at the bottom of a cover shows the progress of a volume in progress.
 

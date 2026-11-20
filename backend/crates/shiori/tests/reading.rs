@@ -462,3 +462,33 @@ async fn progress_and_settings_belong_to_the_account() {
     let (_, mine) = call(&f.app, "GET", &uri, None).await;
     assert_eq!(mine["ordinal"], 4);
 }
+
+/// « Marquer la série comme lue / non lue » renvoie son détail à jour ; une série inconnue est 404.
+#[tokio::test]
+async fn a_series_is_marked_read_then_unread() {
+    let f = fixture(None).await;
+    let uri = format!("/api/series/{}/read", f.series);
+    let (status, detail) = call(&f.app, "PUT", &uri, None).await;
+    assert_eq!(status, StatusCode::OK, "{detail}");
+    let progress = &detail["volumes"][0]["progress"];
+    assert_eq!(
+        (progress["finished"].as_bool(), progress["page_id"].as_str()),
+        (Some(true), Some(f.pages[11].as_str()))
+    );
+    let (status, detail) = call(&f.app, "DELETE", &uri, None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(detail["volumes"][0]["progress"].is_null(), "{detail}");
+    let volume = format!("/api/volumes/{}/progress", f.volume);
+    assert_eq!(
+        call(&f.app, "GET", &volume, None).await.0,
+        StatusCode::NO_CONTENT
+    );
+    for method in ["PUT", "DELETE"] {
+        let (status, err) = call(&f.app, method, "/api/series/999999/read", None).await;
+        assert_eq!(
+            (status, err["code"].as_str()),
+            (StatusCode::NOT_FOUND, Some("not_found")),
+            "{method}"
+        );
+    }
+}
