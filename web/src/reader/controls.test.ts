@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fittedWidth, keyMove, moveIndex, pageUrl, requestWidth, stripHeight, stripUrl, swipeAction, tapAction } from './controls'
+import { fittedWidth, keyMove, moveIndex, pageUrl, preloadAhead, requestWidth, stripHeight, stripUrl, swipeAction, tapAction } from './controls'
 
 describe('fittedWidth', () => {
   it('ajuste la page à l’écran sans la déformer', () => {
@@ -102,5 +102,15 @@ describe('moveIndex', () => {
     expect(moveIndex(4, 'first', 10)).toBe(0)
     expect(moveIndex(4, 'last', 10)).toBe(9)
     expect(moveIndex(0, 'last', 0)).toBe(0)
+  })
+})
+
+describe('preloadAhead', () => {
+  it('précharge plus sur une bonne connexion, moins sur une lente ou en économie de données', () => {
+    expect(preloadAhead({ effectiveType: '4g' })).toBe(4)
+    // Navigateur sans `navigator.connection` (Firefox, Safari) : la bonne connexion par défaut.
+    expect(preloadAhead(undefined)).toBe(4)
+    expect(preloadAhead({ effectiveType: '3g' })).toBe(2)
+    expect(preloadAhead({ effectiveType: '4g', saveData: true })).toBe(2)
   })
 })

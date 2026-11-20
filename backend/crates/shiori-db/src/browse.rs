@@ -675,6 +675,23 @@ impl Db {
     }
 
     /// Page et fichier où la lire ; `None` si l'ID est inconnu ou le tome invisible du compte.
+    /// Les `count` pages lisibles qui suivent `id` dans son tome, dans l'ordre de lecture (rendu
+    /// anticipé, lot 10.4) ; la visibilité est celle de la page demandée, vérifiée par l'appelant.
+    pub async fn next_pages(&self, id: &PageId, count: i64) -> Result<Vec<PageId>, Error> {
+        sqlx::query_scalar::<_, String>(
+            "SELECT n.id FROM pages p JOIN pages n ON n.volume_id = p.volume_id
+             WHERE p.id = ? AND n.ordinal > p.ordinal AND n.status = 'ok'
+             ORDER BY n.ordinal LIMIT ?",
+        )
+        .bind(id.to_string())
+        .bind(count)
+        .fetch_all(&self.pool)
+        .await?
+        .iter()
+        .map(|id| id.parse().map_err(|e| Error::Decode(Box::new(e))))
+        .collect()
+    }
+
     pub async fn page_source(
         &self,
         viewer: &Viewer,

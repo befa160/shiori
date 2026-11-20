@@ -17,7 +17,7 @@ const AVIF_QUALITY: f32 = 70.0;
 /// Vitesse 1 (lent, compact) à 10 (rapide) ; sans assembleur, rav1e est lent : on privilégie la vitesse.
 const AVIF_SPEED: u8 = 10;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Format {
     Avif,

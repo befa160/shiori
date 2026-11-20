@@ -27,7 +27,7 @@ A damaged page in the archive shows an **explicit error in its place**, never an
 
 ## Pages fitted to the screen
 
-Pages are served at the width of the screen (in real pixels), in AVIF, and kept in cache on the server and on the device. A page narrower than the screen is served as is, never enlarged. The next two pages are preloaded.
+Pages are served at the width of the screen (in real pixels), in AVIF, and kept in cache on the server and on the device. A page narrower than the screen is served as is, never enlarged. The next four pages are preloaded (two on a slow connection or with data saver on), and the server prepares the next five in advance: flipping quickly no longer waits for each page to be encoded.
 
 ## Reading offline
 

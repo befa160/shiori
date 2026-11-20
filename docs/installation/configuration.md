@@ -19,7 +19,7 @@ Shiori se règle par options de la ligne de commande ou variables d'environnemen
 | `--backup-keep <N>` | `SHIORI_BACKUP_KEEP` | `7` | sauvegardes périodiques gardées |
 | `--open` | | | ouvre l'interface dans le navigateur une fois prêt |
 
-Options générales : `-v` / `-vv` (plus de journaux), `--quiet`. Journaux détaillés : `RUST_LOG=shiori=debug`. Aide complète : `shiori serve --help`.
+Options générales : `-v` / `-vv` (plus de journaux), `--quiet`. Journaux détaillés : `RUST_LOG=shiori=debug` (dont la durée de chaque rendu de page, « page rendue … ms », pour juger une petite machine). Aide complète : `shiori serve --help`.
 
 Dans l'image Docker : base dans `/data`, cache dans `/cache`, écoute sur `0.0.0.0:7878`, `SHIORI_ALLOWED_HOSTS=localhost`.
 

@@ -19,7 +19,7 @@ Shiori is configured with command-line options or environment variables; interfa
 | `--backup-keep <N>` | `SHIORI_BACKUP_KEEP` | `7` | periodic backups kept |
 | `--open` | | | opens the interface in the browser once ready |
 
-General options: `-v` / `-vv` (more logs), `--quiet`. Detailed logs: `RUST_LOG=shiori=debug`. Full help: `shiori serve --help`.
+General options: `-v` / `-vv` (more logs), `--quiet`. Detailed logs: `RUST_LOG=shiori=debug` (including the time of each page render, "page rendue … ms", to judge a small machine). Full help: `shiori serve --help`.
 
 In the Docker image: database in `/data`, cache in `/cache`, listening on `0.0.0.0:7878`, `SHIORI_ALLOWED_HOSTS=localhost`.
 

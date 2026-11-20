@@ -18,7 +18,7 @@ import { useLanguage } from '@/i18n/useLanguage'
 import { useTheme } from '@/lib/theme'
 import { cn } from '@/lib/utils'
 import { NotFound } from '@/pages/NotFound'
-import { type Direction, type Move, keyMove, moveIndex, pageUrl, swipeAction, tapAction } from './controls'
+import { type Direction, type Move, keyMove, moveIndex, pageUrl, preloadAhead, swipeAction, tapAction } from './controls'
 import { Choice, DisplayOptions, PageSlider, Toolbar } from './chrome'
 import { useChromeKeys, useSaveProgress, useViewport } from './hooks'
 import { PageView } from './PageView'
@@ -215,9 +215,10 @@ function Pages({
     }
   })
 
-  // Précharge les deux pages suivantes et la précédente, à la même taille.
+  // Précharge les vues suivantes (selon la connexion) et la précédente, à la même taille.
   useEffect(() => {
-    for (const i of [index + 1, index + 2, index - 1]) {
+    const ahead = Array.from({ length: preloadAhead() }, (_, i) => index + 1 + i)
+    for (const i of [...ahead, index - 1]) {
       const near = views[i]
       if (!near) continue
       for (const p of viewPages(near)) if (p.status === 'ok') new Image().src = pageUrl(p, viewSize(near, view))

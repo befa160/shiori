@@ -11,7 +11,7 @@ use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
 use shiori_core::{Archive, PageId, PageStatus, open_archive as open_file};
-use shiori_db::{PageFile, PageSource};
+use shiori_db::{PageFile, PageSource, Viewer};
 use shiori_meta::FetchError;
 
 use super::auth::{Admin, Me};
@@ -22,6 +22,9 @@ use crate::render::{self, Format, RENDER_VERSION, WIDTHS};
 
 /// Une page ne change jamais sous un même ID (principe 2) : cache permanent.
 pub(crate) const IMMUTABLE: &str = "private, max-age=31536000, immutable";
+
+/// Pages suivantes rendues d'avance à chaque page redimensionnée demandée (lot 10.4).
+const PREFETCH: i64 = 5;
 
 #[derive(Deserialize)]
 pub(super) struct ImageQuery {
@@ -93,14 +96,7 @@ pub(super) async fn page_image(
             "page illisible dans l'archive (voir les problèmes du tome)",
         ));
     }
-    // Pas de décodeur AVIF pur Rust (Q2), et on n'agrandit jamais : l'originale est servie,
-    // sauf un BMP (non compressé, plusieurs Mo), réencodé à sa propre largeur.
-    let bmp = page.media_type.as_deref() == Some("image/bmp");
-    let resize = wanted.and_then(|(w, f)| match page.width {
-        _ if page.media_type.as_deref() == Some("image/avif") => None,
-        Some(pw) if w >= pw => bmp.then_some((pw, f)),
-        _ => Some((w, f)),
-    });
+    let resize = wanted.and_then(|wanted| target(&page, wanted));
     let etag = match resize {
         Some((w, f)) => format!("\"{id}-w{w}-{}-v{RENDER_VERSION}\"", f.extension()),
         None => format!("\"{id}\""),
@@ -141,10 +137,15 @@ pub(super) async fn page_image(
             let media_type = media_type.unwrap_or_else(|| "application/octet-stream".into());
             (original.await?, media_type)
         }
-        Some((w, f)) => (
-            resized(&app, id, w, f, original).await?,
-            f.media_type().into(),
-        ),
+        Some((w, f)) => {
+            let bytes = resized(&app, id, w, f, original).await?;
+            // Le lecteur demande ses pages en AVIF ; une couverture (première page d'un tome, en
+            // JPEG) ne doit pas faire préparer la suite de chaque tome d'une grille.
+            if f == Format::Avif {
+                prefetch(app.clone(), me, id, w, f);
+            }
+            (bytes, f.media_type().into())
+        }
     };
     let headers = [
         (header::CONTENT_TYPE, media_type),
@@ -156,6 +157,18 @@ pub(super) async fn page_image(
     Ok((headers, bytes).into_response())
 }
 
+/// Largeur et format du rendu d'une page demandée à `wanted`, ou `None` pour servir l'originale.
+/// Pas de décodeur AVIF pur Rust (Q2), et on n'agrandit jamais : l'originale est servie, sauf un
+/// BMP (non compressé, plusieurs Mo), réencodé à sa propre largeur.
+fn target(page: &PageSource, (w, f): (u32, Format)) -> Option<(u32, Format)> {
+    let bmp = page.media_type.as_deref() == Some("image/bmp");
+    match page.width {
+        _ if page.media_type.as_deref() == Some("image/avif") => None,
+        Some(pw) if w >= pw => bmp.then_some((pw, f)),
+        _ => Some((w, f)),
+    }
+}
+
 /// Rendu en cache, sinon calculé (nombre de rendus simultanés borné) puis mis en cache.
 async fn resized(
     app: &Arc<App>,
@@ -164,23 +177,107 @@ async fn resized(
     format: Format,
     original: impl Future<Output = Result<Vec<u8>, ApiError>>,
 ) -> Result<Vec<u8>, ApiError> {
+    let rendered = render_cached(app, id, width, format, original, true).await?;
+    Ok(rendered.expect("un rendu demandé attend son tour"))
+}
+
+/// Rendu anticipé (lot 10.4) : les [`PREFETCH`] pages lisibles suivantes du tome, à la même
+/// largeur demandée et au même format, mises en cache en arrière-plan, une à la fois. Priorité
+/// basse : une page n'est rendue que si un jeton de rendu reste libre pour les vraies demandes,
+/// et une page déjà en cache ou déjà en cours d'anticipation est sautée.
+fn prefetch(app: Arc<App>, me: Viewer, id: PageId, width: u32, format: Format) {
+    tokio::spawn(async move {
+        let Ok(next) = app.db.next_pages(&id, PREFETCH).await else {
+            return;
+        };
+        for next in next {
+            let Ok(Some(page)) = app.db.page_source(&me, &next).await else {
+                continue;
+            };
+            let (Some((w, f)), PageFile::Ready(path, stamp)) =
+                (target(&page, (width, format)), &page.file)
+            else {
+                continue;
+            };
+            let key = (next, w, f);
+            if !app
+                .prefetching
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .insert(key)
+            {
+                continue;
+            }
+            let (path, stamp) = (path.clone(), *stamp);
+            let reader = app.clone();
+            let original = async move {
+                tokio::task::spawn_blocking(move || read_page(&reader.images, &path, stamp, &page))
+                    .await
+                    .map_err(|_| corrupt("lecture interrompue"))?
+            };
+            let done = render_cached(&app, next, w, f, original, false).await;
+            app.prefetching
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .remove(&key);
+            // Plus de jeton libre : les pages suivantes attendront leur vraie demande.
+            if matches!(done, Ok(None)) {
+                break;
+            }
+        }
+    });
+}
+
+/// Comme [`resized`] ; sans `wait`, rien n'est rendu (`None`) s'il ne reste pas au moins un jeton
+/// libre après celui-ci : l'anticipation ne retarde jamais une page demandée.
+async fn render_cached(
+    app: &Arc<App>,
+    id: PageId,
+    width: u32,
+    format: Format,
+    original: impl Future<Output = Result<Vec<u8>, ApiError>>,
+    wait: bool,
+) -> Result<Option<Vec<u8>>, ApiError> {
+    // Cette page est déjà en cours d'anticipation : l'attendre plutôt que la rendre deux fois.
+    let anticipated = || {
+        let set = app
+            .prefetching
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        set.contains(&(id, width, format))
+    };
+    while wait && anticipated() {
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
     let cache = app.clone();
     let hit = tokio::task::spawn_blocking(move || cache.images.get(&id, width, format)).await;
     if let Ok(Some(bytes)) = hit {
-        return Ok(bytes);
+        return Ok(Some(bytes));
     }
     // Jeton d'abord : au plus `renders` originales en mémoire à la fois, pas une par requête.
-    let _permit = app.renders.acquire().await.expect("sémaphore jamais fermé");
+    let _permit = if wait {
+        app.renders.acquire().await.expect("sémaphore jamais fermé")
+    } else if app.renders.available_permits() > 1
+        && let Ok(permit) = app.renders.try_acquire()
+    {
+        permit
+    } else {
+        return Ok(None);
+    };
     let original = original.await?;
     let cache = app.clone();
     let failed = |e: String| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "render_failed", e);
     tokio::task::spawn_blocking(move || {
+        let start = std::time::Instant::now();
         let bytes = render::render(&original, width, format)?;
+        // Durée d'un rendu (`RUST_LOG=shiori=debug`) : mesurer l'encodage sur une petite machine.
+        let ms = start.elapsed().as_millis();
+        tracing::debug!(page = %id, width, ?format, ms, ahead = !wait, "page rendue");
         // Un cache plein ou en lecture seule ne doit pas empêcher de servir la page.
         if let Err(e) = cache.images.put(&id, width, format, &bytes) {
             tracing::warn!("cache d'images : {e}");
         }
-        Ok(bytes)
+        Ok(Some(bytes))
     })
     .await
     .map_err(|_| failed("rendu interrompu".into()))?
@@ -360,3 +457,6 @@ pub(super) async fn cover(
     };
     Ok(([(header::CONTENT_TYPE, media_type)], cache, bytes).into_response())
 }
+
+#[cfg(test)]
+mod tests;

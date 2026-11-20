@@ -28,7 +28,7 @@ Une page abîmée dans l'archive affiche une **erreur explicite à sa place**, j
 
 ## Pages adaptées à l'écran
 
-Les pages sont servies à la largeur de l'écran (en pixels réels), en AVIF, et gardées en cache sur le serveur et sur l'appareil. Une page plus étroite que l'écran est servie telle quelle, jamais agrandie. Les deux pages suivantes sont préchargées.
+Les pages sont servies à la largeur de l'écran (en pixels réels), en AVIF, et gardées en cache sur le serveur et sur l'appareil. Une page plus étroite que l'écran est servie telle quelle, jamais agrandie. Les quatre pages suivantes sont préchargées (deux sur une connexion lente ou en économie de données), et le serveur prépare d'avance les cinq suivantes : feuilleter vite ne fait plus attendre l'encodage de chaque page.
 
 ## Lire hors ligne
 
