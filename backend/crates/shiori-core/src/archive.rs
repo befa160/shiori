@@ -77,6 +77,8 @@ pub enum ArchiveError {
     SizeMismatch,
     #[error("image illisible : {0}")]
     ImageUndecodable(String),
+    #[error("format d'archive non pris en charge : {0}")]
+    UnsupportedArchive(&'static str),
     #[error("aucune entrée d'index {0}")]
     NoSuchEntry(usize),
     #[error(transparent)]
@@ -190,15 +192,27 @@ pub trait Archive {
 
 /// Le format se reconnaît à son contenu, pas à l'extension : bien des `.cbr` sont des zip.
 pub fn is_rar(path: &Path) -> bool {
-    let mut magic = [0u8; 6];
+    starts_with(path, b"Rar!\x1a\x07")
+}
+
+/// Archive 7z (CB7), quelle que soit son extension : reconnue pour être signalée, pas lue.
+pub fn is_7z(path: &Path) -> bool {
+    starts_with(path, b"7z\xBC\xAF\x27\x1C")
+}
+
+fn starts_with(path: &Path, magic: &[u8]) -> bool {
+    let mut head = vec![0u8; magic.len()];
     File::open(path)
-        .and_then(|mut f| f.read_exact(&mut magic))
+        .and_then(|mut f| f.read_exact(&mut head))
         .is_ok()
-        && magic == *b"Rar!\x1a\x07"
+        && head == magic
 }
 
 /// Ouvre un CBZ, un CBR ou un PDF selon son contenu.
 pub fn open(path: &Path) -> Result<Box<dyn Archive + Send>, ArchiveError> {
+    if is_7z(path) {
+        return Err(ArchiveError::UnsupportedArchive("archive 7z (CB7)"));
+    }
     Ok(if is_rar(path) {
         Box::new(RarArchive::open(path)?)
     } else if pdf::is_pdf(path) {

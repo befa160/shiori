@@ -224,3 +224,22 @@ fn pdf_info_gives_authors_summary_and_tags_only() {
     assert_eq!(pdf_info(None, Some(&huge), None), None);
     assert!(parse(MetadataSource::Pdf, b"").is_err());
 }
+
+#[test]
+fn a_malformed_comic_info_keeps_its_readable_fields() {
+    // `<Day>` mal placé et non fermé, `<Series>` en double, entité et CDATA.
+    let xml = "<ComicInfo><Series>Tom &amp; Jerry</Series><Series>Autre</Series>\
+               <Year>2001<Day>3</Year><Summary><![CDATA[a < b]]></Summary></ComicInfo>";
+    assert!(parse(MetadataSource::Comicinfo, xml.as_bytes()).is_err());
+    let meta = salvage_comic_info(xml.as_bytes()).unwrap();
+    assert_eq!(meta.series.as_deref(), Some("Tom & Jerry"));
+    assert_eq!(meta.summary.as_deref(), Some("a < b"));
+    assert_eq!(meta.release_date, None, "<Year> mal fermé : illisible");
+    for nothing in [
+        &b"<ComicInfo>\n  <Pages/>\n</ComicInfo>"[..],
+        b"\xC3\x28",
+        b"",
+    ] {
+        assert_eq!(salvage_comic_info(nothing), None, "{nothing:?}");
+    }
+}

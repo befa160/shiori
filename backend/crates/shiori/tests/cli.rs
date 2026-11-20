@@ -22,7 +22,7 @@ fn stderr(o: &Output) -> String {
     String::from_utf8_lossy(&o.stderr).into_owned()
 }
 
-/// Une petite bibliothèque : un tome sain, un avec avertissement, deux cassés.
+/// Une petite bibliothèque : deux tomes sains (l'un dans le désordre, une simple information), deux cassés.
 fn library(root: &Path) {
     let series = root.join("Série A");
     std::fs::create_dir_all(&series).unwrap();
@@ -49,13 +49,12 @@ fn scans_a_library_then_skips_unchanged_files() {
         "bad-crc.cbz",
         "not-a-zip.cbz",
         "crc_mismatch",
-        "archive_order_differs",
     ] {
         assert!(out.contains(expected), "{expected} absent de :\n{out}");
     }
     assert!(!out.contains("lisez-moi"), "{out}");
     assert!(
-        out.contains("4 fichier(s) : 1 ok, 1 avertissement(s), 2 erreur(s) ; 0 inchangé(s)"),
+        out.contains("4 fichier(s) : 2 ok, 0 avertissement(s), 2 erreur(s) ; 0 inchangé(s)"),
         "{out}"
     );
     assert!(
@@ -89,7 +88,7 @@ fn fail_on_controls_the_exit_code() {
     let lib = tempfile::tempdir().unwrap();
     let data = tempfile::tempdir().unwrap();
     let ok = fixtures::manga(lib.path());
-    let warn = fixtures::unpadded(lib.path());
+    let warn = fixtures::duplicates(lib.path(), true);
     let (ok, warn) = (ok.to_str().unwrap(), warn.to_str().unwrap());
 
     assert_eq!(

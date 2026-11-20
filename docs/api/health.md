@@ -11,7 +11,7 @@ Routes **admin** de la page Santé des bibliothèques.
   ],
   "codes": [
     { "code": "crc_mismatch", "severity": "error", "files": 2 },
-    { "code": "archive_order_differs", "severity": "warning", "files": 12 }
+    { "code": "duplicate_entry_identical", "severity": "warning", "files": 12 }
   ]
 }
 ```

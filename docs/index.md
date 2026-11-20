@@ -23,7 +23,7 @@ hero:
 features:
   - icon: 📚
     title: CBZ, CBR et PDF
-    details: Zip, RAR 4 et 5 (solide compris) et PDF lus sans conversion ni extraction complète. Pour un PDF, la planche s'affiche sans les marges de la page.
+    details: Zip, RAR 4 et 5 (solide compris) et PDF lus sans conversion ni extraction complète ; pages JPEG, PNG, WebP, AVIF, BMP et GIF. Pour un PDF, la planche s'affiche sans les marges de la page.
   - icon: 📖
     title: Un lecteur pour chaque format
     details: Manga de droite à gauche, BD, doubles pages, webtoon en défilement continu. La progression suit d'un appareil à l'autre.

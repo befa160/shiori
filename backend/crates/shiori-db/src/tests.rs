@@ -45,14 +45,18 @@ async fn saves_and_reloads_a_huge_volume() {
     let report = synthetic(12_760);
 
     let t = std::time::Instant::now();
-    db.save(run, "/synthetique.cbz", Some((1, 1)), &report)
+    let mut tx = db.pool.begin().await.unwrap();
+    Db::save(&mut tx, run, "/synthetique.cbz", Some((1, 1)), &report)
         .await
         .unwrap();
+    tx.commit().await.unwrap();
     let first = t.elapsed();
     let t = std::time::Instant::now();
-    db.save(run, "/synthetique.cbz", Some((1, 1)), &report)
+    let mut tx = db.pool.begin().await.unwrap();
+    Db::save(&mut tx, run, "/synthetique.cbz", Some((1, 1)), &report)
         .await
         .unwrap();
+    tx.commit().await.unwrap();
     eprintln!(
         "12 760 pages : écriture {first:?}, réécriture {:?}",
         t.elapsed()
@@ -79,7 +83,8 @@ fn enum_names_come_from_serde() {
     );
     assert!(from_db::<IssueCode>("inconnu").is_err());
     assert_eq!(media_type(Some("image/avif")), Some("image/avif"));
-    assert_eq!(media_type(Some("image/gif")), None);
+    assert_eq!(media_type(Some("image/gif")), Some("image/gif"));
+    assert_eq!(media_type(Some("image/tiff")), None);
     assert_eq!(media_type(None), None);
 }
 

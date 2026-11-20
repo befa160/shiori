@@ -20,24 +20,25 @@ Une page en erreur n'est jamais remplacée par une autre : le lecteur affiche l'
 | `duplicate_entry_conflict` | Deux pages portent le même nom avec des contenus différents. | Renommer l'une des deux dans l'archive. |
 | `no_pages` | Aucune page lisible dans le fichier. | Vérifier le contenu de l'archive. |
 | `file_changed_during_scan` | Le fichier a changé pendant sa lecture (copie en cours). | Relancer le scan une fois la copie finie (la surveillance le fait seule). |
+| `unsupported_archive` | Format d'archive non pris en charge : une archive 7z (CB7), quelle que soit son extension. | La reconvertir en CBZ. |
 
 ## Avertissements
 
 | Code | Ce que ça veut dire |
 |---|---|
 | `duplicate_entry_identical` | Une page est en double avec un contenu identique ; une seule est gardée. |
-| `extension_mismatch` | L'extension ne correspond pas au format réel de l'image (un `.jpg` qui est un PNG) ; la page est lue quand même. |
-| `unsupported_image` | Image dans un format non pris en charge (GIF, BMP, TIFF, JPEG XL, HEIC) : page ignorée. |
+| `unsupported_image` | Image dans un format non pris en charge (TIFF, JPEG XL, HEIC) : page ignorée. |
 | `non_image_entry` | Un fichier qui n'est pas une image : ignoré. |
-| `subdirectories` | Les pages sont rangées dans des sous-dossiers de l'archive ; elles sont lues quand même. |
-| `archive_order_differs` | L'ordre des pages dans l'archive diffère de l'ordre de lecture ; Shiori suit l'ordre des noms. |
-| `metadata_invalid` | Un `ComicInfo.xml` ou un `index.json` illisible : ignoré, le tome reste lisible. |
+| `metadata_invalid` | Un `ComicInfo.xml` mal formé ou un `index.json` illisible : seuls les champs lisibles d'un `ComicInfo.xml` sont gardés, le tome reste lisible. |
 | `pdf_page_without_image` | Une page du PDF sans image (texte seul), ou dont l'image couvre moins de la moitié : sautée. |
 
 ## Informations
 
 | Code | Ce que ça veut dire |
 |---|---|
-| `ignored_entry` | Un fichier annexe connu (`ComicInfo.xml`, `Thumbs.db`, `.DS_Store`, dossier `__MACOSX`) a été ignoré. |
+| `ignored_entry` | Un fichier annexe connu (`ComicInfo.xml`, `Thumbs.db`, `.DS_Store`, `desktop.ini`, `*.nfo`, restes d'une conversion Calibre en `.html`, `.xhtml`, `.css`, `.opf`, `.ncx`, dossier `__MACOSX`) a été ignoré. |
+| `extension_mismatch` | L'extension de pages ne correspond pas au format réel de l'image (un `.jpg` qui est un WebP) ; elles sont lues quand même. Une seule ligne par fichier, avec le nombre de pages. |
+| `subdirectories` | Les pages sont rangées dans des sous-dossiers de l'archive ; elles sont lues quand même. |
+| `archive_order_differs` | L'ordre des pages dans l'archive diffère de l'ordre de lecture ; Shiori suit l'ordre des noms. |
 | `solid_archive` | Archive RAR solide : la première page met un peu plus de temps à s'ouvrir. |
 | `pdf_text_ignored` | Le texte visible d'une page du PDF n'est pas affiché : seule l'image l'est. |

@@ -115,7 +115,7 @@ async fn scan_then_read_history_detail_and_logs() {
     assert_eq!(detail["files_total"], 2);
     assert_eq!(
         detail["counts"],
-        json!({ "ok": 0, "warning": 1, "error": 1, "unchanged": 0, "removed": 0 })
+        json!({ "ok": 1, "warning": 0, "error": 1, "unchanged": 0, "removed": 0 })
     );
     assert_eq!(
         detail["options"],
