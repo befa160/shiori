@@ -88,8 +88,18 @@ export function AccountPage() {
       <TotpSection />
       <Devices />
       <TokensSection />
+      <Version />
     </section>
   )
+}
+
+/** Version du serveur (et de l'interface, embarquée dans le même binaire) : à citer pour signaler
+ * un problème ou savoir si une mise à jour est installée. */
+function Version() {
+  const { t } = useTranslation()
+  const health = useQuery({ queryKey: ['health'], queryFn: ({ signal }) => api.health({ signal }), staleTime: Infinity })
+  if (!health.data) return null
+  return <p className="text-sm text-muted-foreground">{t('account.version', { version: health.data.version })}</p>
 }
 
 function Devices() {

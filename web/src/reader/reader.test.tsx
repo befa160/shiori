@@ -539,7 +539,8 @@ describe('zoom', () => {
     expect(img()).toHaveAttribute('src', '/api/pages/p1/image?w=1080&f=avif')
     expect(img()).toHaveStyle({ width: '1024px' })
     expect(main()).toHaveClass('overflow-auto')
-    expect(main()).toHaveStyle({ touchAction: 'pinch-zoom' })
+    // Zoomée, un écran tactile (PC) s'y déplace aussi au doigt.
+    expect(main()).toHaveStyle({ touchAction: 'manipulation' })
     // Le double-clic n'a pas montré les commandes.
     await wait()
     expect(screen.getByRole('toolbar', { hidden: true })).toHaveClass('invisible')
@@ -561,6 +562,9 @@ describe('zoom', () => {
   })
 
   it('au doigt : plus de zoom au double tap, le pincement du navigateur seul', async () => {
+    // `visualViewport` : l'échelle du zoom visuel (pincement), et son événement `resize`.
+    const viewport = Object.assign(new EventTarget(), { scale: 1 })
+    vi.stubGlobal('visualViewport', viewport)
     api('ltr')
     renderAt(`/read/${VOLUME}`)
     await screen.findByRole('img', { name: 'Page 1 sur 3' })
@@ -574,11 +578,16 @@ describe('zoom', () => {
     fireEvent.doubleClick(main(), { clientX: 450, clientY: 300 })
     expect(main()).toHaveClass('overflow-hidden')
     expect(main()).toHaveStyle({ touchAction: 'pinch-zoom' })
-    // Pincée par le navigateur, la page se déplace au doigt : un tap sur le côté ne la tourne pas.
-    vi.stubGlobal('visualViewport', { scale: 2 })
+    // Pincée par le navigateur : le déplacement au doigt lui revient aussi, et un tap sur le côté
+    // ne tourne pas la page ; dézoomée, tout redevient comme avant.
+    viewport.scale = 2
+    act(() => void viewport.dispatchEvent(new Event('resize')))
+    expect(main()).toHaveStyle({ touchAction: 'manipulation' })
     tap(850)
     expect(img()).toHaveAccessibleName('Page 1 sur 3')
-    vi.stubGlobal('visualViewport', { scale: 1 })
+    viewport.scale = 1
+    act(() => void viewport.dispatchEvent(new Event('resize')))
+    expect(main()).toHaveStyle({ touchAction: 'pinch-zoom' })
     tap(850)
     expect(screen.getByRole('img', { name: /^Page 2 sur 3/ })).toBeInTheDocument()
   })

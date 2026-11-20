@@ -242,6 +242,16 @@ test.describe('tablette 8" tactile, en portrait', () => {
     await expect(main).toHaveClass(/overflow-hidden/)
     await expect(main).toHaveCSS('touch-action', 'pinch-zoom')
     await expect(live).toHaveText('Page 2 sur 12')
+    // Pincée par le navigateur (même zoom visuel, posé par DevTools : le pincement simulé ne zoome
+    // pas en headless), le déplacement à un doigt revient au navigateur (bug du A55, lot 10.4b) ;
+    // dézoomée, un doigt revient aux gestes du lecteur. Le déplacement lui-même ne se simule pas
+    // en headless (même sur une page vide) : essai sur l'appareil.
+    await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 2.5 })
+    await expect.poll(() => page.evaluate(() => visualViewport?.scale ?? 1)).toBeGreaterThan(1.5)
+    await expect(main).toHaveCSS('touch-action', 'manipulation')
+    await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1 })
+    await expect(main).toHaveCSS('touch-action', 'pinch-zoom')
+    await expect(live).toHaveText('Page 2 sur 12')
   })
 })
 

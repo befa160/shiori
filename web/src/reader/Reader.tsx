@@ -251,8 +251,18 @@ function Pages({
   // Type du dernier pointeur posé : Chrome sur Android fait un `dblclick` de deux taps quand son
   // zoom au double tap est coupé ; seul un double-clic de souris zoome.
   const pointerType = useRef('mouse')
-  // Pincée par le navigateur, la page se déplace au doigt : aucun geste ne la tourne.
+  // Pincée par le navigateur (zoom visuel), la page se déplace au doigt : le navigateur reçoit
+  // alors aussi le déplacement à un doigt (`manipulation`), et aucun geste ne la tourne. Dézoomée,
+  // un doigt revient aux gestes du lecteur (taps, balayages) et seul le pincement reste natif.
   const pinchZoomed = () => (window.visualViewport?.scale ?? 1) > 1.01
+  const [pinched, setPinched] = useState(pinchZoomed)
+  useEffect(() => {
+    const viewport = window.visualViewport
+    if (!viewport) return
+    const update = () => setPinched(pinchZoomed())
+    viewport.addEventListener('resize', update)
+    return () => viewport.removeEventListener('resize', update)
+  }, [])
 
   // Clic droit ou molette (enregistrer l'image…) : jamais un changement de page.
   const ignored = (event: PointerEvent) => event.pointerType === 'mouse' && event.button !== 0
@@ -339,8 +349,9 @@ function Pages({
           'flex h-full w-full items-center-safe justify-center-safe',
           zoomed ? 'cursor-grab overflow-auto active:cursor-grabbing' : 'overflow-hidden',
         )}
-        // Au doigt : le pincement du navigateur, sans son zoom au double tap.
-        style={{ touchAction: 'pinch-zoom' }}
+        // Au doigt : le pincement du navigateur, sans son zoom au double tap ; agrandie, le
+        // déplacement aussi (lu au début de chaque toucher).
+        style={{ touchAction: pinched || zoomed ? 'manipulation' : 'pinch-zoom' }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
