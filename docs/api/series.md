@@ -78,3 +78,11 @@ Réglages de lecture de la série pour le compte ; `null` revient au défaut.
 ```
 
 `reading_mode` : `rtl`, `ltr`, `vertical` ; `page_layout` : `single`, `double`, `auto` ; `page_turn` : `reading`, `ltr`, `rtl`. **Réponse 200** : les réglages appliqués.
+
+### `PUT /api/series/{id}/read`
+
+« Marquer la série comme lue », pour le compte : chaque tome lisible passe à sa dernière page (un tome déjà lu garde la date de sa première lecture). **Réponse 200** : le détail de la série. **Erreur** : 404 `not_found`.
+
+### `DELETE /api/series/{id}/read`
+
+« Marquer la série comme non lue », pour le compte : la progression de tous ses tomes est effacée. **Réponse 200** : le détail de la série. **Erreur** : 404 `not_found`.

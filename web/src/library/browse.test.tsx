@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Library, SeriesSummary } from '@/api/types'
@@ -101,6 +101,21 @@ describe('séries : recherche, filtres et tri', () => {
     await userEvent.click(within(screen.getByRole('list', { name: 'Tags' })).getByRole('checkbox', { name: /SF/ }))
     expect(router.state.location.search).toBe('')
     expect(grid()).toEqual(['Akira', 'Été en pente', 'Watchmen'])
+  })
+
+  it('marque une série depuis le menu de sa carte', async () => {
+    const fetch = mockApi({
+      '/api/libraries': () => json(libraries),
+      '/api/series': () => json([series[0]]),
+      '/api/series/1/read': () => json({}),
+    })
+    renderAt('/series')
+    // Lue : seulement « non lu », après confirmation.
+    await userEvent.click(await screen.findByRole('button', { name: 'Actions pour Akira' }))
+    expect(screen.queryByRole('menuitem', { name: 'Marquer comme lu' })).toBeNull()
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Marquer comme non lu' }))
+    await userEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Marquer comme non lu' }))
+    await waitFor(() => expect(fetch.mock.calls.some(([url, init]) => url === '/api/series/1/read' && init?.method === 'DELETE')).toBe(true))
   })
 
   it('montre la couverture d’une source quand elle a été choisie', async () => {

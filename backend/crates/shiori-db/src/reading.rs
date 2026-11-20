@@ -417,6 +417,37 @@ impl Db {
         self.volume_visible(viewer, volume).await
     }
 
+    /// « Marquer la série comme lue » (dernière page de chaque tome lisible, « lu » gardé à sa
+    /// première date) ou « non lue » (progression effacée), pour ce compte. La série doit lui être
+    /// visible (vérifié par l'appelant).
+    pub async fn mark_series(&self, viewer: &Viewer, series: i64, read: bool) -> Result<(), Error> {
+        let sql = if read {
+            concat!(
+                "INSERT INTO reading_progress
+                   (user_id, volume_id, page_id, ordinal, finished_at, updated_at)
+                 SELECT ?1, p.volume_id, p.id, p.ordinal, ",
+                now!(),
+                ", ",
+                now!(),
+                " FROM pages p
+                 WHERE p.volume_id IN (SELECT volume_id FROM file_locations WHERE series_id = ?2)
+                   AND p.ordinal = (SELECT MAX(ordinal) FROM pages WHERE volume_id = p.volume_id)
+                 ON CONFLICT (user_id, volume_id) DO UPDATE SET page_id = excluded.page_id,
+                   ordinal = excluded.ordinal, updated_at = excluded.updated_at,
+                   finished_at = COALESCE(reading_progress.finished_at, excluded.finished_at)"
+            )
+        } else {
+            "DELETE FROM reading_progress WHERE user_id = ?1
+               AND volume_id IN (SELECT volume_id FROM file_locations WHERE series_id = ?2)"
+        };
+        sqlx::query(sql)
+            .bind(viewer.user)
+            .bind(series)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
     /// Réglages appliqués à une série pour ce compte ; `None` si elle n'existe pas.
     pub async fn series_settings(
         &self,

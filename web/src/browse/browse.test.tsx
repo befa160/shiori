@@ -282,6 +282,44 @@ describe('page d’une série', () => {
     await waitFor(() => expect(fetch.mock.calls.some(([url, init]) => url === '/api/volumes/a/progress' && init?.method === 'DELETE')).toBe(true))
   })
 
+  it('marque toute la série lue, ou non lue après confirmation, depuis son menu', async () => {
+    const read = { ...detail, volumes: detail.volumes.map((v) => ({ ...v, progress: { page_id: 'z', ordinal: v.page_count - 1, page_count: v.page_count, finished: true, updated_at: '' } })) }
+    let answer: SeriesDetail = read
+    const fetch = mockApi({ '/api/series/7': () => json(detail), '/api/series/7/read': () => json(answer) })
+    renderAt('/series/7')
+    await main().findByRole('heading', { level: 1, name: 'Toriko' })
+    // Commencée : les deux actions.
+    await userEvent.click(main().getByRole('button', { name: 'Actions pour Toriko' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Marquer comme lu' }))
+    await waitFor(() => expect(fetch.mock.calls.some(([url, init]) => url === '/api/series/7/read' && init?.method === 'PUT')).toBe(true))
+    // Lue : seulement « non lu », qui demande confirmation ; annuler ne change rien.
+    await userEvent.click(await main().findByRole('button', { name: 'Actions pour Toriko' }))
+    expect(screen.queryByRole('menuitem', { name: 'Marquer comme lu' })).toBeNull()
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Marquer comme non lu' }))
+    const confirm = await screen.findByRole('alertdialog', { name: 'Marquer « Toriko » comme non lue ?' })
+    expect(confirm).toHaveTextContent('La progression de ses 3 tomes sera effacée, pour votre compte seulement.')
+    await userEvent.click(within(confirm).getByRole('button', { name: 'Annuler' }))
+    expect(fetch.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false)
+    answer = { ...detail, volumes: detail.volumes.map((v) => ({ ...v, progress: undefined })) }
+    await userEvent.click(main().getByRole('button', { name: 'Actions pour Toriko' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Marquer comme non lu' }))
+    await userEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Marquer comme non lu' }))
+    await waitFor(() => expect(fetch.mock.calls.some(([url, init]) => url === '/api/series/7/read' && init?.method === 'DELETE')).toBe(true))
+  })
+
+  it('compte une série lue quand tout ce qui se lit est lu, malgré un tome illisible', async () => {
+    const done = { page_id: 'z', ordinal: 0, page_count: 1, finished: true, updated_at: '' }
+    const volumes = [
+      { ...detail.volumes[0], progress: done },
+      { ...detail.volumes[2], page_count: 0, progress: undefined },
+    ]
+    mockApi({ '/api/series/7': () => json({ ...detail, volumes }) })
+    renderAt('/series/7')
+    await userEvent.click(await main().findByRole('button', { name: 'Actions pour Toriko' }))
+    expect(await screen.findByRole('menuitem', { name: 'Marquer comme non lu' })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Marquer comme lu' })).toBeNull()
+  })
+
   it('le dit quand un tome ne peut pas être modifié', async () => {
     mockApi({ '/api/series/7': () => json(detail), '/api/volumes/a/progress': () => json({ code: 'internal', message: 'x' }, 500) })
     renderAt('/series/7')

@@ -40,7 +40,8 @@ test('un tome téléchargé se lit sans réseau, et la page lue part au retour d
   await page.evaluate(() => navigator.serviceWorker.ready)
   await page.goto(`/series/${series.id}`)
   const main = page.getByRole('main')
-  await main.getByRole('button', { name: /^Actions pour / }).first().click()
+  // Le menu du premier tome (la page a aussi le menu de la série, avant les tomes).
+  await main.getByRole('region', { name: 'Tomes' }).getByRole('button', { name: /^Actions pour / }).first().click()
   await page.getByRole('menuitem', { name: 'Télécharger pour lire hors ligne' }).click()
   await expect(main.getByText('Téléchargé')).toBeVisible()
 

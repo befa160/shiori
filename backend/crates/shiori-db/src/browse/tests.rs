@@ -185,13 +185,11 @@ async fn summaries_follow_the_reading() {
         (s.pages_read, s.page_count)
     );
 
-    // Tout ce qui se lit est lu, sauf le tome en erreur : la série n'est pas « lue ».
+    // Tout ce qui se lit est lu : la série est « lue », le tome en erreur (sans page, illisible)
+    // ne la retient pas (décision du 2026-11-20, lot 10.3) ; il reste signalé par son statut.
     f.read(4, 2).await;
     let s = f.series("Série").await;
-    assert_eq!(
-        (s.read_count, s.reading_status),
-        (3, ReadingStatus::InProgress)
-    );
+    assert_eq!((s.read_count, s.reading_status), (3, ReadingStatus::Read));
 
     // Une série entièrement lue se relit depuis le début.
     f.read(9, 2).await;

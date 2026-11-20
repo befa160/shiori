@@ -8,6 +8,7 @@ import { volumeLabel } from '@/browse/labels'
 import { cn } from '@/lib/utils'
 import { titleHue } from './titleHue'
 import { Skeleton } from '@/components/ui/skeleton'
+import { SeriesReadMenu } from '@/browse/SeriesReadMenu'
 
 // Cartes de couverture (DESIGN_SYSTEM.md, « Carte de couverture », « Couverture de repli »).
 
@@ -202,6 +203,11 @@ export function SeriesCard({ series, eager }: { series: SeriesSummary; eager?: b
       progressLabel={t('library.percentRead', { percent: series.pages_read / Math.max(series.page_count, 1) })}
       badges={series.reading_status === 'read' ? [{ text: t('volume.read') }] : undefined}
       quickRead={resume ? { to: `/read/${resume}`, label: t('library.readNamed', { name: series.name }) } : undefined}
+      actions={
+        series.volume_count > 0 && (
+          <SeriesReadMenu id={series.id} name={series.name} status={series.reading_status} volumes={series.volume_count} card />
+        )
+      }
       eager={eager}
     />
   )

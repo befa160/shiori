@@ -24,7 +24,7 @@ Ce guide décrit Shiori écran par écran. Pour l'installer : [démarrage rapide
 <!-- [ecran_series] -->
 
 
-- **Page d'une série** : couverture, résumé, auteurs, genres et tags (chacun mène aux séries qui l'ont), avancement, bouton pour reprendre ou commencer, liste des tomes. Le menu d'un tome le marque lu ou non lu, le télécharge pour le hors-ligne et montre les problèmes de son dernier scan.
+- **Page d'une série** : couverture, résumé, auteurs, genres et tags (chacun mène aux séries qui l'ont), avancement, bouton pour reprendre ou commencer, liste des tomes. Le menu d'un tome le marque lu ou non lu, le télécharge pour le hors-ligne et montre les problèmes de son dernier scan. Le menu de la série (sur sa page, ou sur sa carte dans les listes) la marque **entière** lue ou non lue, pour votre compte seulement ; « non lu » efface la progression de tous ses tomes et demande donc confirmation. Une série est « Lu » dès que tout ce qui se lit est lu : un tome illisible (en erreur) ne la retient pas, il reste signalé par son badge.
 
 Une barre ambre en bas d'une couverture montre la progression d'un tome commencé.
 
