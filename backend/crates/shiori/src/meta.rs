@@ -10,10 +10,10 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 
 use serde::Serialize;
-use shiori_db::{Db, MatchedBy, Outcome};
+use shiori_db::{Db, Language, MatchedBy, Outcome, Settings};
 use shiori_meta::{
-    ANILIST_URL, Anilist, FetchError, MANGADEX_URL, Mangadex, Source, SourceId, WebMetadata,
-    auto_match,
+    ANILIST_URL, Anilist, FetchError, MANGADEX_URL, Mangadex, Source, SourceId, WIKIPEDIA_URL,
+    WebMetadata, Wikipedia, auto_match,
 };
 use tokio::task::JoinHandle;
 
@@ -60,6 +60,7 @@ pub fn web_sources() -> Vec<Arc<dyn Source>> {
     vec![
         Arc::new(Anilist::new(ANILIST_URL)),
         Arc::new(Mangadex::new(MANGADEX_URL)),
+        Arc::new(Wikipedia::new(WIKIPEDIA_URL)),
     ]
 }
 
@@ -90,17 +91,18 @@ impl Metadata {
     }
 
     /// Fiches d'une source qui ressemblent à `query` ; sans adresse de couverture (le
-    /// navigateur ne contacte jamais les sources).
+    /// navigateur ne contacte jamais les sources). `lang` : langue de celui qui cherche.
     pub async fn search(
         &self,
         source: SourceId,
         query: String,
+        lang: &'static str,
     ) -> Result<Vec<WebMetadata>, MetaError> {
         self.enabled().await?;
         let source = self.source(source)?;
         let id = source.id();
         let adult = self.db.settings().await?.metadata_adult;
-        let mut found = blocking(move || source.search(&query, adult)).await?;
+        let mut found = blocking(move || source.search(&query, adult, lang)).await?;
         let mut covers = self.covers.lock().expect("verrou des couvertures");
         // shortcut: oubli en bloc au-delà de 1 000 adresses (une recherche en ajoute 10) ; un vrai LRU si des vignettes manquent en usage réel.
         if covers.len() > 1000 {
@@ -262,20 +264,29 @@ impl Metadata {
                 let names = series.names.clone();
                 let client = client.clone();
                 let adult = settings.metadata_adult;
-                let found = blocking(move || client.search(&names[0], adult)).await;
-                let outcome = match found {
-                    Ok(found) => {
-                        let names: Vec<&str> = series.names.iter().map(String::as_str).collect();
-                        match auto_match(&names, &found) {
-                            Some(i) => Outcome::Linked {
-                                external_id: found[i].id.clone(),
-                                matched_by: MatchedBy::Auto,
-                                data: Box::new(found[i].clone()),
-                            },
-                            None => {
-                                Outcome::Candidates(found.into_iter().take(CANDIDATES).collect())
-                            }
+                let lang = Settings::code(settings.language.unwrap_or(Language::Fr));
+                let found = blocking(move || {
+                    let found = client.search(&names[0], adult, lang)?;
+                    let names: Vec<&str> = names.iter().map(String::as_str).collect();
+                    Ok(match auto_match(&names, &found) {
+                        // Un résultat de recherche Wikipédia n'a que sa langue : la fiche liée est
+                        // relue entière (l'autre langue par ses liens interlangues).
+                        Some(i) if client.id() == SourceId::Wikipedia => {
+                            Ok(client.fetch(&found[i].id)?)
                         }
+                        Some(i) => Ok(found[i].clone()),
+                        None => Err(found),
+                    })
+                })
+                .await;
+                let outcome = match found {
+                    Ok(Ok(data)) => Outcome::Linked {
+                        external_id: data.id.clone(),
+                        matched_by: MatchedBy::Auto,
+                        data: Box::new(data),
+                    },
+                    Ok(Err(found)) => {
+                        Outcome::Candidates(found.into_iter().take(CANDIDATES).collect())
                     }
                     // La source demande d'attendre ou ne répond plus : on s'arrête là.
                     Err(e @ (FetchError::RateLimited(_) | FetchError::Offline(_))) => {

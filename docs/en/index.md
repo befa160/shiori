@@ -41,7 +41,7 @@ features:
     details: One account per person, libraries opened per account, two-factor authentication, API tokens, automatic backups.
   - icon: 🏷️
     title: Metadata
-    details: ComicInfo.xml, index.json and PDF properties, completed on request by AniList and MangaDex. Your own edits always come first.
+    details: ComicInfo.xml, index.json and PDF properties, completed on request by AniList, MangaDex and Wikipedia. Your own edits always come first.
   - icon: 🏠
     title: Self-hosted
     details: A single Rust binary (Linux, Windows, macOS) or a Docker image. Your files are never modified and nothing leaves your network without your consent.

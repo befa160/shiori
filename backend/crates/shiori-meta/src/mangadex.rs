@@ -207,7 +207,7 @@ impl Source for Mangadex {
         SourceId::Mangadex
     }
 
-    fn search(&self, query: &str, adult: bool) -> Result<Vec<WebMetadata>, FetchError> {
+    fn search(&self, query: &str, adult: bool, _: &str) -> Result<Vec<WebMetadata>, FetchError> {
         let mut params = vec![
             ("title", query),
             ("limit", "10"),

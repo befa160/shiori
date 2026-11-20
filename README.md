@@ -23,7 +23,7 @@
 - **Tous vos formats** : CBZ (zip64 compris), CBR (RAR 4 et 5, solide compris) et PDF, dont la planche s'affiche sans les marges de la page ; images JPEG, PNG, WebP, AVIF, BMP et GIF. Pages redimensionnées en AVIF à la taille de l'écran.
 - **Une bibliothèque qui se tient à jour** : un dossier par série, les numéros de tomes et chapitres reconnus dans les noms, la surveillance des dossiers qui scanne seule ce qui change, un scan complet périodique pour les partages réseau.
 - **Une bibliothèque en bonne santé** : chaque page vérifiée au scan, un tableau de bord des tomes sains, en avertissement ou en erreur, la liste de ce qu'il faut réparer, chaque problème expliqué.
-- **Des fiches complètes** : ComicInfo.xml, `index.json`, propriétés des PDF, et si vous l'autorisez AniList et MangaDex ; vos modifications passent toujours en premier.
+- **Des fiches complètes** : ComicInfo.xml, `index.json`, propriétés des PDF, et si vous l'autorisez AniList, MangaDex et Wikipédia ; vos modifications passent toujours en premier.
 - **Toute la famille** : un compte par personne, bibliothèques ouvertes à la carte, double authentification, jetons d'API, sauvegardes automatiques et restauration depuis l'interface.
 - **Chez vous** : Linux, Windows, macOS ou Docker (amd64, arm64) ; rien ne quitte votre réseau sans votre accord. Interface en français et en anglais, thèmes sombre, clair, noir OLED et sépia.
 

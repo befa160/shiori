@@ -960,7 +960,8 @@ async fn search_metadata(
         ));
     }
     series_or_404(&app, &me, id).await?;
-    Ok(Json(app.metadata.search(q.source, text).await?))
+    let lang = shiori_db::Settings::code(me.language);
+    Ok(Json(app.metadata.search(q.source, text, lang).await?))
 }
 
 #[derive(Deserialize)]

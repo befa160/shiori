@@ -212,7 +212,7 @@ impl Source for Anilist {
         SourceId::Anilist
     }
 
-    fn search(&self, query: &str, adult: bool) -> Result<Vec<WebMetadata>, FetchError> {
+    fn search(&self, query: &str, adult: bool, _: &str) -> Result<Vec<WebMetadata>, FetchError> {
         // Les romans (`NOVEL`) ne sont pas des livres d'images. Fiches pour adultes : l'argument
         // est omis quand elles sont permises (`isAdult: null` ne renvoie rien du tout).
         let filter = if adult { "" } else { ", isAdult: false" };

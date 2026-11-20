@@ -310,11 +310,11 @@ async fn an_edited_field_beats_the_web_and_settings_round_trip() {
     assert!(!settings.metadata_online, "désactivé par défaut");
     assert_eq!(
         settings.source_order(),
-        [SourceId::Mangadex, SourceId::Anilist]
+        [SourceId::Mangadex, SourceId::Anilist, SourceId::Wikipedia]
     );
     assert_eq!(
         settings.order_for(Language::En),
-        [SourceId::Anilist, SourceId::Mangadex]
+        [SourceId::Anilist, SourceId::Mangadex, SourceId::Wikipedia]
     );
     assert!(db.set_metadata_online(true).await.unwrap().metadata_online);
     assert!(
@@ -505,4 +505,39 @@ async fn a_cover_is_visible_through_its_series_library() {
     };
     db.update_user(bob.id, closed).await.unwrap();
     assert!(!db.cover_visible(&reader, "c1").await.unwrap());
+}
+
+/// Migration 22 : un ordre des sources choisi avant Wikipédia la reçoit en dernier, et les liens
+/// déjà enregistrés passent la reconstruction de la table.
+#[tokio::test]
+async fn a_saved_order_gets_wikipedia_last_after_the_migration() {
+    let (dir, db, one, _) = setup().await;
+    db.record_source(one, SourceId::Anilist, linked("30013", "One Piece", "en"))
+        .await
+        .unwrap();
+    db.set_metadata_sources(Some(vec![SourceId::Anilist, SourceId::Mangadex]))
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM _sqlx_migrations WHERE version = 22")
+        .execute(db.pool())
+        .await
+        .unwrap();
+    sqlx::query(r#"UPDATE app_settings SET metadata_sources = '["anilist","mangadex"]'"#)
+        .execute(db.pool())
+        .await
+        .unwrap();
+    db.pool().close().await;
+    let db = Db::open(&dir.path().join("t.db")).await.unwrap();
+    assert_eq!(
+        db.settings().await.unwrap().source_order(),
+        [SourceId::Anilist, SourceId::Mangadex, SourceId::Wikipedia]
+    );
+    assert_eq!(db.linked_sources(one).await.unwrap().len(), 1);
+    db.record_source(
+        one,
+        SourceId::Wikipedia,
+        linked("fr:One Piece", "One Piece", "fr"),
+    )
+    .await
+    .unwrap();
 }

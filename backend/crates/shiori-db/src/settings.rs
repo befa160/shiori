@@ -58,8 +58,9 @@ impl Settings {
         self.metadata_sources
             .clone()
             .unwrap_or_else(|| match language {
-                Language::En => vec![SourceId::Anilist, SourceId::Mangadex],
-                Language::Fr => vec![SourceId::Mangadex, SourceId::Anilist],
+                // Wikipédia en dernier : une source de repli (résumé et lien seulement).
+                Language::En => vec![SourceId::Anilist, SourceId::Mangadex, SourceId::Wikipedia],
+                Language::Fr => vec![SourceId::Mangadex, SourceId::Anilist, SourceId::Wikipedia],
             })
     }
 

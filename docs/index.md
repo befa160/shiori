@@ -41,7 +41,7 @@ features:
     details: Un compte par personne, bibliothèques ouvertes à la carte, double authentification, jetons d'API, sauvegardes automatiques.
   - icon: 🏷️
     title: Métadonnées
-    details: ComicInfo.xml, index.json et propriétés des PDF, complétés à votre demande par AniList et MangaDex. Vos modifications passent toujours en premier.
+    details: ComicInfo.xml, index.json et propriétés des PDF, complétés à votre demande par AniList, MangaDex et Wikipédia. Vos modifications passent toujours en premier.
   - icon: 🏠
     title: Auto-hébergé
     details: Un seul binaire Rust (Linux, Windows, macOS) ou une image Docker. Vos fichiers ne sont jamais modifiés et rien ne quitte votre réseau sans votre accord.
