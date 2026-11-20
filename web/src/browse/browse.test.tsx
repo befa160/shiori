@@ -170,7 +170,8 @@ describe('page d’une série', () => {
     const chips = within(main().getByRole('list', { name: 'Genres et tags' })).getAllByRole('listitem')
     expect(chips.map((li) => li.textContent)).toEqual(['Action', 'Aventure', 'Cuisine'])
     // Chaque tag mène aux séries qui l'ont.
-    expect(within(chips[2]).getByRole('link', { name: 'Cuisine' })).toHaveAttribute('href', '/series?tag=Cuisine')
+    // Le tag affiché en français mène à son mot de source (« Cuisine » → `Cooking`).
+    expect(within(chips[2]).getByRole('link', { name: 'Cuisine' })).toHaveAttribute('href', '/series?tag=Cooking')
     // Les autres titres servent à la recherche, ils ne s'affichent pas (trop nombreux sur les vraies fiches).
     expect(main().queryByText(/トリコ/)).not.toBeInTheDocument()
     const links = main().getAllByRole('link', { name: /example\.org/ })

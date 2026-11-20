@@ -90,17 +90,22 @@ describe('filtres de séries', () => {
     // Le champ de recherche trouve aussi les tags.
     expect(ids(applyFilters(tagged, filters('q=cuisine')))).toEqual([2])
     expect(isFiltered(filters('tag=SF'))).toBe(true)
-    // Une graphie par tag (la première vue), doublons d'une même série comptés une fois.
+    // Un tag déjà traduit retrouve son mot de source : « Comédie » d'un ComicInfo est « Comedy ».
+    expect(ids(applyFilters(tagged, filters('tag=Comedy')))).toEqual([1, 2])
+    expect(ids(applyFilters(tagged, filters('q=comedy')))).toEqual([1, 2])
+    expect(filters('tag=Comedy&tag=com%C3%A9die')).toMatchObject({ tags: ['comédie'] })
+    // Une graphie par tag (le mot de source s'il est connu, sinon la première vue), doublons d'une
+    // même série comptés une fois ; l'ordre est laissé à l'affichage (il dépend de la langue).
     const doubled = [{ ...tagged[0], tags: ['SF', 'sf'] }, ...tagged.slice(1)]
     expect(allTags(doubled)).toEqual([
-      { tag: 'comedie', count: 1 },
-      { tag: 'Cuisine', count: 1 },
       { tag: 'SF', count: 1 },
+      { tag: 'Comedy', count: 1 },
+      { tag: 'Cooking', count: 1 },
     ])
     expect(allTags(tagged)).toEqual([
-      { tag: 'Comédie', count: 2 },
-      { tag: 'Cuisine', count: 1 },
+      { tag: 'Comedy', count: 2 },
       { tag: 'SF', count: 1 },
+      { tag: 'Cooking', count: 1 },
     ])
   })
 

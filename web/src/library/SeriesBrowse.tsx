@@ -11,14 +11,16 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { CoverGrid, CoverSkeletons, SeriesCard } from './covers'
-import { allTags, applyFilters, fold, isFiltered, READ_FILTERS, readFilters, SORTS, STATUS_FILTERS } from './filters'
+import { tagLabel, tagSpellings } from '@/i18n/tags'
+import { allTags, applyFilters, fold, isFiltered, READ_FILTERS, readFilters, SORTS, STATUS_FILTERS, tagKey } from './filters'
 
 const ALL = 'all'
 
 /** Toutes les séries, avec recherche, filtres et tri dans l'adresse. `/search` : le champ de
  * recherche prend le focus à l'ouverture (onglet « Recherche »). */
 export function SeriesBrowse({ search = false }: { search?: boolean }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const lang = i18n.language
   const [params, setParams] = useSearchParams()
   const filters = readFilters(params)
   const series = useAllSeries()
@@ -54,7 +56,10 @@ export function SeriesBrowse({ search = false }: { search?: boolean }) {
       { replace: true },
     )
   // Pas à chaque frappe : des milliers de séries à replier (accents, casse).
-  const tags = useMemo(() => allTags(series.data ?? []), [series.data])
+  const tags = useMemo(
+    () => allTags(series.data ?? []).sort((a, b) => tagLabel(a.tag, lang).localeCompare(tagLabel(b.tag, lang), lang)),
+    [series.data, lang],
+  )
   const clear = () => {
     setQ('')
     setParams(filters.sort === 'name' ? {} : { sort: filters.sort }, { replace: true })
@@ -129,8 +134,8 @@ export function SeriesBrowse({ search = false }: { search?: boolean }) {
       {filters.tags.length > 0 && (
         <ul aria-label={t('browse.tagsChosen')} className="flex flex-wrap gap-2">
           {filters.tags.map((tag) => {
-            // La graphie des séries plutôt que celle de l'adresse (`?tag=seinen` → « Seinen »).
-            const name = tags.find((known) => fold(known.tag) === fold(tag))?.tag ?? tag
+            // La graphie des séries plutôt que celle de l'adresse (`?tag=seinen` → « Seinen »), traduite.
+            const name = tagLabel(tags.find((known) => tagKey(known.tag) === tagKey(tag))?.tag ?? tag, lang)
             return (
               <li key={tag} className="max-w-full">
                 <Button
@@ -196,12 +201,13 @@ function TagFilter({
   selected: string[]
   onChange: (tags: string[]) => void
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [find, setFind] = useState('')
-  const chosen = new Set(selected.map(fold))
-  const shown = tags.filter(({ tag }) => fold(tag).includes(fold(find.trim())))
+  const chosen = new Set(selected.map(tagKey))
+  // Le tag se cherche dans les deux langues : « comédie » trouve « Comedy ».
+  const shown = tags.filter(({ tag }) => tagSpellings(tag).some((s) => fold(s).includes(fold(find.trim()))))
   const toggle = (tag: string) =>
-    onChange(chosen.has(fold(tag)) ? selected.filter((s) => fold(s) !== fold(tag)) : [...selected, tag])
+    onChange(chosen.has(tagKey(tag)) ? selected.filter((s) => tagKey(s) !== tagKey(tag)) : [...selected, tag])
   return (
     <Popover onOpenChange={(open) => open || setFind('')}>
       <PopoverTrigger asChild>
@@ -240,8 +246,8 @@ function TagFilter({
             {shown.map(({ tag, count }) => (
               <li key={tag}>
                 <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 hover:bg-accent">
-                  <Checkbox checked={chosen.has(fold(tag))} onCheckedChange={() => toggle(tag)} />
-                  <span className="min-w-0 flex-1 truncate">{tag}</span>
+                  <Checkbox checked={chosen.has(tagKey(tag))} onCheckedChange={() => toggle(tag)} />
+                  <span className="min-w-0 flex-1 truncate">{tagLabel(tag, i18n.language)}</span>
                   <span className="text-sm text-muted-foreground">{t('browse.tagCount', { count })}</span>
                 </label>
               </li>

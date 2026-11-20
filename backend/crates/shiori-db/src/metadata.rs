@@ -143,10 +143,11 @@ fn from_locals(name: &str, locals: &[(MetadataSource, LocalMetadata)]) -> Series
 /// (Q28 : les fichiers d'abord, puis le web). Titre (Q34) : celui des fichiers, sinon celui
 /// d'une fiche dans la langue de l'interface `lang`, sinon son romaji, sinon la première ; le
 /// nom du dossier ne vient qu'après (à l'affichage). Résumé : celui des fichiers, sinon dans la
-/// langue de l'interface, sinon en anglais, sinon le premier. Les autres titres et les liens
-/// s'additionnent ; les autres champs vides prennent la première fiche qui les a. `main` : la
-/// première fiche est la source principale choisie pour la série ; titre et résumé viennent
-/// d'elle d'abord (la langue ne départage alors qu'en elle), les autres fiches en repli.
+/// langue de l'interface, sinon en anglais, sinon le premier. La langue passe avant la source
+/// (lot 10.2) : un résumé français de la dernière source l'emporte sur l'anglais de la première.
+/// Les autres titres et les liens s'additionnent ; les autres champs vides prennent la première
+/// fiche qui les a. `main` : la première fiche est la source principale choisie pour la série ;
+/// à langue égale, titre et résumé viennent d'elle d'abord.
 fn with_web(
     mut meta: SeriesMetadata,
     name: &str,
@@ -155,19 +156,19 @@ fn with_web(
     main: bool,
 ) -> SeriesMetadata {
     let pick = |texts: fn(&WebMetadata) -> &Vec<Text>, langs: &[&str]| {
-        let search = |pool: &[WebMetadata]| {
-            langs
-                .iter()
-                .find_map(|l| {
-                    pool.iter()
-                        .flat_map(texts)
-                        .find(|t| t.lang.as_deref() == Some(*l))
-                })
-                .or_else(|| pool.iter().flat_map(texts).next())
+        let first = &webs[..webs.len().min(usize::from(main))];
+        // Chaque langue voulue dans toutes les fiches (la principale d'abord), puis n'importe laquelle.
+        let find = |pool: &[WebMetadata], lang: Option<&str>| {
+            pool.iter()
+                .flat_map(texts)
+                .find(|t| lang.is_none_or(|l| t.lang.as_deref() == Some(l)))
                 .map(|t| t.text.clone())
         };
-        let first = &webs[..webs.len().min(usize::from(main))];
-        search(first).or_else(|| search(webs))
+        langs
+            .iter()
+            .map(|l| Some(*l))
+            .chain([None])
+            .find_map(|l| find(first, l).or_else(|| find(webs, l)))
     };
     if meta.title.is_none() {
         meta.title = pick(|w| &w.titles, &[lang, "ja-ro"]);

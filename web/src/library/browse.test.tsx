@@ -74,10 +74,14 @@ describe('séries : recherche, filtres et tri', () => {
       'Comédie1 série',
       'SF2 séries',
     ])
+    // Le tag se cherche aussi par son mot de source, en anglais.
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Chercher un tag' }), 'comedy')
+    expect(list().getAllByRole('checkbox')).toHaveLength(1)
+    await userEvent.clear(screen.getByRole('searchbox', { name: 'Chercher un tag' }))
     await userEvent.type(screen.getByRole('searchbox', { name: 'Chercher un tag' }), 'come')
     expect(list().getAllByRole('checkbox')).toHaveLength(1)
     await userEvent.click(list().getByRole('checkbox', { name: /Comédie/ }))
-    expect(router.state.location.search).toBe('?tag=Com%C3%A9die')
+    expect(router.state.location.search).toBe('?tag=Comedy')
     expect(grid()).toEqual(['Été en pente'])
     await userEvent.clear(screen.getByRole('searchbox', { name: 'Chercher un tag' }))
     await userEvent.type(screen.getByRole('searchbox', { name: 'Chercher un tag' }), 'zzz')

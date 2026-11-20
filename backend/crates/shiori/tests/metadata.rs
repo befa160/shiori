@@ -350,15 +350,17 @@ async fn a_scan_identifies_new_series_then_one_is_confirmed_by_hand() {
         (StatusCode::OK, Some("GIGANT"))
     );
     assert_eq!(detail["sources"][0]["last_error"], "rate_limited");
-    // Délier : la série reprend son nom.
+    // Délier : la série reprend son nom ; la source reste, marquée déliée (plus relue ni reliée
+    // par l'identification automatique).
     let (status, detail) = call(&f.app, "DELETE", &uri, None).await;
     assert_eq!(
         (
             status,
             detail["name"].as_str(),
-            detail["sources"].as_array().map(Vec::len)
+            detail["sources"][0]["unlinked"].as_bool(),
+            detail["sources"][0]["external_id"].as_str()
         ),
-        (StatusCode::OK, Some("Gigant"), Some(0))
+        (StatusCode::OK, Some("Gigant"), Some(true), None)
     );
     assert_eq!(
         f.anilist.calls().last().map(String::as_str),

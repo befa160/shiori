@@ -27,6 +27,8 @@ pub struct SourceState {
     pub checked_at: String,
     /// Code stable de la dernière tentative ratée (`offline`, `rate_limited`…).
     pub last_error: Option<String>,
+    /// Déliée par l'utilisateur : l'identification automatique ne la relie plus.
+    pub unlinked: bool,
     /// Fiches possibles quand le rapprochement n'a pas pu choisir ; vide : rien trouvé ou liée.
     /// Sans adresse de couverture : le navigateur ne contacte jamais les sources.
     pub candidates: Vec<WebMetadata>,
@@ -88,6 +90,7 @@ fn state(row: &SqliteRow) -> Result<SourceState, Error> {
             .transpose()?,
         checked_at: row.get("checked_at"),
         last_error: row.get("last_error"),
+        unlinked: row.get("unlinked"),
         candidates,
     })
 }
@@ -113,7 +116,7 @@ impl Db {
                 now!(),
                 " WHERE EXISTS (SELECT 1 FROM series WHERE id = ?1) ON CONFLICT (series_id, source) DO UPDATE SET external_id = excluded.external_id,
                    matched_by = excluded.matched_by, data = excluded.data, candidates = NULL,
-                   checked_at = excluded.checked_at, last_error = NULL"
+                   checked_at = excluded.checked_at, last_error = NULL, unlinked = 0"
             ))
             .bind(series)
             .bind(source)
@@ -148,13 +151,18 @@ impl Db {
     }
 
     /// Délie une source (sa fiche ne compte plus, et elle cesse d'être la source principale) ;
+    /// la ligne reste, marquée déliée, pour que l'identification automatique ne la relie pas.
     /// `false` si elle n'était pas enregistrée.
     pub async fn unlink_source(&self, series: i64, source: SourceId) -> Result<bool, Error> {
-        let done = sqlx::query("DELETE FROM series_sources WHERE series_id = ? AND source = ?")
-            .bind(series)
-            .bind(to_db(&source))
-            .execute(&self.pool)
-            .await?;
+        let done = sqlx::query(
+            "UPDATE series_sources SET external_id = NULL, matched_by = NULL, data = NULL,
+               candidates = NULL, last_error = NULL, unlinked = 1
+             WHERE series_id = ? AND source = ? AND NOT unlinked",
+        )
+        .bind(series)
+        .bind(to_db(&source))
+        .execute(&self.pool)
+        .await?;
         sqlx::query(
             "UPDATE series_metadata SET edited = json_remove(edited, '$.main_source')
              WHERE series_id = ? AND json_extract(edited, '$.main_source') = ?",
@@ -169,7 +177,7 @@ impl Db {
 
     pub async fn source_states(&self, series: i64) -> Result<Vec<SourceState>, Error> {
         sqlx::query(
-            "SELECT source, external_id, matched_by, checked_at, last_error, candidates
+            "SELECT source, external_id, matched_by, checked_at, last_error, candidates, unlinked
              FROM series_sources WHERE series_id = ? ORDER BY source",
         )
         .bind(series)
@@ -181,7 +189,8 @@ impl Db {
     }
 
     /// Séries à identifier chez `source` : jamais cherchées, ou dont le dernier essai a raté
-    /// sans lien ; `series` restreint à une série (bouton « Identifier »), `None` : toutes.
+    /// sans lien ; jamais une source déliée par l'utilisateur. `series` restreint à une série
+    /// (bouton « Identifier »), `None` : toutes.
     pub async fn to_identify(
         &self,
         source: SourceId,
@@ -192,7 +201,8 @@ impl Db {
              LEFT JOIN series_metadata m ON m.series_id = s.id
              LEFT JOIN series_sources w ON w.series_id = s.id AND w.source = ?1
              WHERE (?2 IS NULL OR s.id = ?2)
-               AND (w.series_id IS NULL OR (w.external_id IS NULL AND w.last_error IS NOT NULL))
+               AND (w.series_id IS NULL
+                    OR (w.external_id IS NULL AND w.last_error IS NOT NULL AND NOT w.unlinked))
              ORDER BY s.id",
         )
         .bind(to_db(&source))

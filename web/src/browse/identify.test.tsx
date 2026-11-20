@@ -39,6 +39,7 @@ const state = (over: Partial<SourceState>): SourceState => ({
   matched_by: null,
   checked_at: '',
   last_error: null,
+  unlinked: false,
   candidates: [],
   ...over,
 })
@@ -87,7 +88,8 @@ describe('identifier une série', () => {
     await userEvent.click(first)
     expect(await screen.findByText('Série liée')).toBeInTheDocument()
     expect(calls('PUT')).toEqual([['/api/series/7/metadata/links/anilist', { external_id: '1' }]])
-    expect(await d.findByText(/Liée à une fiche de AniList · choisie par vous/)).toBeInTheDocument()
+    const sources = within(await d.findByRole('region', { name: 'Sources liées' }))
+    expect(sources.getByRole('listitem')).toHaveTextContent(/AniList · choisie par vous/)
     expect(d.getByRole('link', { name: 'Voir la fiche' })).toHaveAttribute('href', 'https://anilist.co/manga/1')
   })
 
@@ -124,27 +126,44 @@ describe('identifier une série', () => {
   })
 
   it('actualise, prend la couverture ou délie une source liée, et dit un échec', async () => {
-    const linked = { ...base, sources: [state({ source: 'mangadex', external_id: 'abc', matched_by: 'auto', last_error: 'offline' })] }
+    // Les deux sources liées sont en tête, chacune avec ses boutons.
+    const linked = {
+      ...base,
+      sources: [
+        state({ external_id: '1', matched_by: 'user' }),
+        state({ source: 'mangadex', external_id: 'abc', matched_by: 'auto', last_error: 'offline' }),
+      ],
+    }
+    const unlinked = { ...base, sources: [linked.sources[0], state({ source: 'mangadex', unlinked: true })] }
     const after = { ...linked, metadata: { ...NO_METADATA, cover_image_id: 'c1' } }
     let fail = false
     const { calls } = serve(linked, {
       '/api/series/7/metadata/refresh': () => (fail ? json({ code: 'offline', message: 'x' }, 502) : json(linked)),
       '/api/series/7/metadata/cover': () => json(after),
-      '/api/series/7/metadata/links/mangadex': () => json(base),
+      '/api/series/7/metadata/links/mangadex': () => json(unlinked),
     })
     renderAt('/series/7')
     await userEvent.click(await main().findByRole('button', { name: 'Identifier' }))
     const d = await dialog()
-    expect(d.getByText(/Liée à une fiche de MangaDex · trouvée automatiquement/)).toBeInTheDocument()
-    expect(d.getByText('Dernier essai : source injoignable')).toBeInTheDocument()
-    await userEvent.click(d.getByRole('button', { name: 'Actualiser' }))
-    await userEvent.click(d.getByRole('button', { name: 'Utiliser sa couverture' }))
+    const items = () => within(d.getByRole('region', { name: 'Sources liées' })).getAllByRole('listitem')
+    expect(items().map((li) => li.textContent)).toEqual([
+      expect.stringMatching(/^AniList · choisie par vous/),
+      expect.stringMatching(/^MangaDex · trouvée automatiquement/),
+    ])
+    // Les boutons de chaque source sont groupés sous son nom (lecteur d'écran).
+    expect(within(items()[1]).getByRole('group', { name: 'MangaDex' })).toBeInTheDocument()
+    const mangadex = within(items()[1])
+    expect(mangadex.getByText('Dernier essai : source injoignable')).toBeInTheDocument()
+    await userEvent.click(mangadex.getByRole('button', { name: 'Actualiser' }))
+    await userEvent.click(mangadex.getByRole('button', { name: 'Utiliser sa couverture' }))
     expect(await screen.findByText('Couverture changée')).toBeInTheDocument()
     fail = true
-    await userEvent.click(d.getByRole('button', { name: 'Actualiser' }))
+    await userEvent.click(within(items()[1]).getByRole('button', { name: 'Actualiser' }))
     expect(await screen.findByText('Action non faite')).toBeInTheDocument()
-    await userEvent.click(d.getByRole('button', { name: 'Délier' }))
-    await waitFor(() => expect(d.queryByText(/Liée à une fiche/)).not.toBeInTheDocument())
+    await userEvent.click(within(items()[1]).getByRole('button', { name: 'Délier' }))
+    // Déliée : elle quitte la liste, et la fenêtre dit qu'elle ne sera plus reliée seule.
+    await waitFor(() => expect(items()).toHaveLength(1))
+    expect(d.getByText(/MangaDex : déliée par vous/)).toBeInTheDocument()
     expect(calls('POST').map(([url]) => url)).toEqual(['/api/series/7/metadata/refresh', '/api/series/7/metadata/cover', '/api/series/7/metadata/refresh'])
     expect(calls('POST')[1][1]).toEqual({ source: 'mangadex' })
     expect(calls('DELETE')).toEqual([['/api/series/7/metadata/links/mangadex', null]])

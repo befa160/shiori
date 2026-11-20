@@ -1,4 +1,5 @@
 import type { ReadingStatus, SeriesSummary } from '@/api/types'
+import { canonicalTag, tagSpellings } from '@/i18n/tags'
 
 // Recherche, filtres et tris de la liste des séries, côté client (Q26) : la liste complète tient
 // en une requête. Tout l'état vit dans l'adresse (`?q=&read=&status=&library=&tag=&tag=&sort=`).
@@ -31,8 +32,8 @@ export function readFilters(params: URLSearchParams): Filters {
     read: pick(READ_FILTERS, params.get('read')),
     status: pick(STATUS_FILTERS, params.get('status')),
     library: Number.isInteger(library) && library > 0 ? library : null,
-    // Un tag par graphie repliée : `?tag=sf&tag=SF` n'en fait qu'un.
-    tags: [...new Map(params.getAll('tag').filter((t) => t.trim() !== '').map((t) => [fold(t), t])).values()],
+    // Un tag par graphie repliée : `?tag=sf&tag=SF` (ou `Comedy` et `Comédie`) n'en fait qu'un.
+    tags: [...new Map(params.getAll('tag').filter((t) => t.trim() !== '').map((t) => [tagKey(t), t])).values()],
     sort: pick(SORTS, params.get('sort')) ?? 'name',
   }
 }
@@ -42,12 +43,15 @@ export function fold(text: string): string {
   return text.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase()
 }
 
-/** Ce que la recherche parcourt : titre affiché, autres titres, auteurs et tags, sans accents. */
-const searchable = (s: SeriesSummary) => fold([s.name, ...s.alt_titles, ...s.authors, ...s.tags].join('\n'))
-// « Comédie » de MangaDex et « comedie » d'un ComicInfo sont le même tag.
+/** Ce que la recherche parcourt : titre affiché, autres titres, auteurs et tags (en anglais et en
+ * français), sans accents. */
+const searchable = (s: SeriesSummary) =>
+  fold([s.name, ...s.alt_titles, ...s.authors, ...s.tags.flatMap(tagSpellings)].join('\n'))
+/** Clé d'un tag : « Comedy » d'AniList, « Comédie » d'un ComicInfo et « comedie » sont le même. */
+export const tagKey = (tag: string) => fold(canonicalTag(tag))
 const hasTags = (s: SeriesSummary, wanted: string[]) => {
-  const own = new Set(s.tags.map(fold))
-  return wanted.every((t) => own.has(fold(t)))
+  const own = new Set(s.tags.map(tagKey))
+  return wanted.every((t) => own.has(tagKey(t)))
 }
 const statusOf = (s: SeriesSummary): StatusFilter => s.publication_status ?? 'unknown'
 // Dates ISO : l'ordre des chaînes est l'ordre chronologique.
@@ -74,19 +78,20 @@ export function applyFilters(series: SeriesSummary[], f: Filters): SeriesSummary
 export const isFiltered = (f: Filters) =>
   f.q.trim() !== '' || f.read !== null || f.status !== null || f.library !== null || f.tags.length > 0
 
-/** Tags de toutes les séries (une graphie par tag), avec leur nombre de séries, par nom. */
+/** Tags de toutes les séries (une graphie par tag, le mot de la source quand il est connu), avec leur
+ * nombre de séries ; à trier par l'appelant, selon la langue d'affichage. */
 export function allTags(series: SeriesSummary[]): { tag: string; count: number }[] {
   const byKey = new Map<string, { tag: string; count: number }>()
   for (const s of series) {
     const seen = new Set<string>()
     for (const tag of s.tags) {
-      const key = fold(tag)
+      const key = tagKey(tag)
       if (seen.has(key)) continue
       seen.add(key)
       const entry = byKey.get(key)
       if (entry) entry.count++
-      else byKey.set(key, { tag, count: 1 })
+      else byKey.set(key, { tag: canonicalTag(tag), count: 1 })
     }
   }
-  return [...byKey.values()].sort((a, b) => a.tag.localeCompare(b.tag))
+  return [...byKey.values()]
 }

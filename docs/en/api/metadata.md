@@ -5,10 +5,10 @@ Web sources: `anilist`, `mangadex`. All these routes are **admin**; sources must
 State of a source for a series (`sources` in the [series detail](/en/api/series#get-api-series-id)):
 
 ```json
-{ "source": "mangadex", "external_id": "a1c7c817-…", "matched_by": "auto", "checked_at": "…", "last_error": null, "candidates": [] }
+{ "source": "mangadex", "external_id": "a1c7c817-…", "matched_by": "auto", "checked_at": "…", "last_error": null, "unlinked": false, "candidates": [] }
 ```
 
-`matched_by`: `auto` (identification) or `user`; `candidates`: entries to confirm; `last_error`: `offline`, `rate_limited`, `not_found`, `http_error`, `bad_response`.
+`matched_by`: `auto` (identification) or `user`; `unlinked`: unlinked by the user (automatic identification no longer links it); `candidates`: entries to confirm; `last_error`: `offline`, `rate_limited`, `not_found`, `http_error`, `bad_response`.
 
 ### `GET /api/series/{id}/metadata/search`
 
@@ -32,7 +32,7 @@ Links the series to an entry.
 
 ### `DELETE /api/series/{id}/metadata/links/{source}`
 
-Unlinks the source: its data no longer counts. **Response 200**: the series detail.
+Unlinks the source: its data no longer counts, and it stays marked `unlinked` (never linked again by automatic identification; a `PUT` links it). **Response 200**: the series detail.
 
 ### `POST /api/series/{id}/metadata/refresh`
 

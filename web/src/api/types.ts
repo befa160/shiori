@@ -96,6 +96,8 @@ export interface SourceState {
   matched_by: 'auto' | 'user' | null
   checked_at: string
   last_error: string | null
+  /** Déliée par l'utilisateur : l'identification automatique ne la relie plus. */
+  unlinked: boolean
   /** Fiches possibles, à confirmer ; vide : rien trouvé ou liée. */
   candidates: WebMetadata[]
 }
