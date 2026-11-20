@@ -449,6 +449,7 @@ export const fr = {
   },
   // Erreurs de l'API, par code stable (le message du serveur, en français, sert de secours).
   account: {
+    version: 'Shiori, version {{version}}',
     title: 'Compte',
     roles: { admin: 'Administrateur', reader: 'Lecteur' },
     preferences: 'Préférences',

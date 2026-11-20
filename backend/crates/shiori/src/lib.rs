@@ -8,6 +8,13 @@ use anyhow::{Context, Result};
 use directories::ProjectDirs;
 use shiori_db::Db;
 
+/// Numéro de la release installée (`0.5.0-rc.2`), donné par la compilation d'un tag
+/// (`SHIORI_RELEASE`, workflow de release) ; sinon la version du code.
+pub const RELEASE: &str = match option_env!("SHIORI_RELEASE") {
+    Some(release) => release,
+    None => env!("CARGO_PKG_VERSION"),
+};
+
 pub mod backup;
 pub mod cache;
 pub mod job;

@@ -445,6 +445,7 @@ export const en: Translations = {
     failed: 'Download of {{label}} interrupted',
   },
   account: {
+    version: 'Shiori, version {{version}}',
     title: 'Account',
     roles: { admin: 'Administrator', reader: 'Reader' },
     preferences: 'Preferences',

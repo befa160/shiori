@@ -10,7 +10,8 @@ The reader fills the screen. Controls appear with a **tap in the middle** (or Ta
 |---|---|
 | Tap left or right, swipe | previous or next page, depending on the chosen direction |
 | Arrows, Page Down, Space, Home, End | the same on a keyboard |
-| Double tap | 2× zoom where you tapped; turning the page leaves it |
+| Pinch (finger) | the browser's own zoom, gradual; you move around with a finger, and no gesture turns the page while it is enlarged |
+| Double-click in the middle (mouse) | 2× zoom where you clicked; drag to move around, a click does not turn the page; double-click, Escape or turning the page leaves it |
 | Slider in the controls | go to any page |
 
 The **Display** panel sets, for the series:

@@ -10,7 +10,8 @@ Le lecteur occupe tout l'écran. Les commandes s'affichent d'un **tap au centre*
 |---|---|
 | Tap à gauche ou à droite, balayage | page précédente ou suivante, selon le sens choisi |
 | Flèches, Page suivante, Espace, Début, Fin | idem au clavier |
-| Double tap | zoom ×2 à l'endroit touché ; tourner la page le quitte |
+| Pincement (au doigt) | zoom du navigateur, progressif ; on s'y déplace au doigt, et aucun geste ne tourne la page tant qu'elle est agrandie |
+| Double-clic au centre (à la souris) | zoom ×2 à l'endroit cliqué ; on s'y déplace en glissant, un clic ne tourne pas la page ; double-clic, Échap ou page tournée pour en sortir |
 | Curseur des commandes | aller à n'importe quelle page |
 
 Le panneau **Affichage** règle, pour la série :

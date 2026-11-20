@@ -28,6 +28,7 @@ Nom et mot de passe (8 caractères au moins), puis le code de la double authenti
 - **Double authentification** : en plus du mot de passe, un code à 6 chiffres d'une application d'authentification (Aegis, Google Authenticator, 2FAS…). L'activation demande le mot de passe, montre un QR code (ou une clé à saisir), vérifie un premier code et donne **10 codes de secours**, montrés une seule fois, qui remplacent chacun une fois le code du téléphone. Conseillée si Shiori est ouvert sur Internet.
 - **Jetons d'API** : pour qu'un autre logiciel lise les bibliothèques du compte et enregistre sa progression sans le mot de passe. Votre mot de passe est demandé pour en créer un. Un jeton est montré une seule fois, survit au changement de mot de passe (le supprimer, ou « déconnecter tous les appareils »), peut expirer (30 jours, 90 jours, 1 an ou jamais) et ne permet que la lecture et la progression. Voir [l'API](/api/).
 - **Se déconnecter** : ferme la session de cet appareil et efface les pages gardées en cache ; propose aussi d'effacer les tomes téléchargés.
+- En bas de la page, la **version** de Shiori installée (à donner pour signaler un problème).
 
 ## Oublis et pertes
 

@@ -51,8 +51,10 @@ describe('page du compte', () => {
   })
 
   it('un lecteur n’a pas de lien vers l’administration', async () => {
-    mockApi({ '/api/libraries': empty, '/api/me/sessions': () => json(devices) })
+    mockApi({ '/api/libraries': empty, '/api/me/sessions': () => json(devices), '/api/health': () => json({ status: 'ok', version: '0.5.0' }) })
     renderAt('/account', { auth: { setup_required: false, user: READER } })
+    // La version de Shiori, visible de tous les comptes.
+    expect(await screen.findByText('Shiori, version 0.5.0')).toBeInTheDocument()
     const main = within(screen.getByRole('main'))
     expect(main.getByText(/Lecteur/)).toBeInTheDocument()
     expect(main.queryByRole('link', { name: 'Administration' })).toBeNull()
