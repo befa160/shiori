@@ -125,7 +125,7 @@ fn from_locals(name: &str, locals: &[(MetadataSource, LocalMetadata)]) -> Series
         tags: list(|m| &m.tags),
         year: ordered
             .iter()
-            .find_map(|m| m.release_date.as_ref()?.get(..4)?.parse().ok()),
+            .find_map(|m| known_date(&m.release_date)?.get(..4)?.parse().ok()),
         publisher: text(|m| &m.publisher),
         age_rating: text(|m| &m.age_rating),
         publication_status: ordered
@@ -210,6 +210,13 @@ fn with_web(
     meta
 }
 
+/// Une date de fichier, sauf janvier 1970 : la date vide d'un outil de création mal convertie
+/// (horodatage zéro), vue dans les `ComicInfo.xml` de vrais tomes (Cagaster : 1970-01-21). Filtrée
+/// à la fusion, recalculée à chaque démarrage, pour ne pas imposer de rescan.
+fn known_date(date: &Option<String>) -> Option<&str> {
+    date.as_deref().filter(|d| !d.starts_with("1970-01"))
+}
+
 /// Vue d'un tome : son `ComicInfo.xml` ou, pour un PDF, son dictionnaire `Info` (l'`index.json`
 /// décrit la série, pas le tome).
 fn volume_from_locals(locals: &[(MetadataSource, LocalMetadata)]) -> VolumeMetadata {
@@ -223,7 +230,7 @@ fn volume_from_locals(locals: &[(MetadataSource, LocalMetadata)]) -> VolumeMetad
         title: m.title.clone(),
         number: m.number.clone(),
         summary: m.summary.clone(),
-        release_date: m.release_date.clone(),
+        release_date: known_date(&m.release_date).map(str::to_owned),
         authors: m.authors.clone(),
     }
 }

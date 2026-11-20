@@ -9,7 +9,9 @@ Il démarre à la création d'une bibliothèque, quand un fichier change (voir l
 - **Contrôle approfondi** : décode entièrement chaque image (lent, mais trouve les images abîmées) ;
 - **Relire tous les fichiers** : relit même les fichiers que Shiori croit inchangés (d'ordinaire, taille et date suffisent).
 
-Un premier scan lit chaque fichier en entier ; les suivants ne relisent que ce qui a changé. Un seul scan tourne à la fois.
+Un premier scan lit chaque fichier en entier ; les suivants ne relisent que ce qui a changé (taille ou date du fichier). Un seul scan tourne à la fois.
+
+Ordre de grandeur du premier scan, sur une vraie bibliothèque : **4 941 tomes (907 Go) en environ 55 minutes** sur un NAS (Celeron N5105, disques durs), limité par la lecture des disques. Une nouvelle version qui change les règles du scan relit tout une fois ; ses notes de version le disent.
 
 ## Surveillance des dossiers
 
