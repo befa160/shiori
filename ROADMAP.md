@@ -15,6 +15,7 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 | 7 | Authentification et comptes : comptes locaux, rôles, progression et réglages par compte, double authentification, jetons d'API, sauvegarde et restauration | ✅ |
 | 8 | Lecture des PDF sans marges | ✅ |
 | 9 | Maintenance de la bibliothèque (surveillance des dossiers, scan complet périodique, santé) + documentation VitePress bilingue + bilan V1 | ✅ |
+| 10 | Retours de la vraie bibliothèque (NAS) : scan tolérant, sources de métadonnées et Wikipédia FR, série lue/non lue, lecture rapide | ⏳ |
 | V1 | Vérifications sur vrai matériel, audit, captures de la documentation, attestations, promesse de compatibilité (voir « Maturité pour une V1 ») | ❓ |
 
 ## Méthode de travail
@@ -1443,6 +1444,58 @@ Fonctionnellement, Shiori couvre l'usage visé. Ce qui manque pour une V1 n'est 
 
 Plus tard, sans ordre : collections et listes de lecture, relations entre séries (suites, éditions), OPDS (avec les jetons d'API), statistiques de lecture, Comic Vine et MangaUpdates. EPUB : non. PDF : phase 8.
 
+## Phase 10 : retours de la vraie bibliothèque (plan validé le 2026-11-20)
+
+Premier essai sur la vraie bibliothèque de l'utilisateur, servie depuis son NAS (TerraMaster F4-423, Celeron N5105, 16 Go, TOS ; Docker en `user: "0:0"`, le compte de l'utilisateur ayant l'UID 0) et lue sur le Galaxy A55. Bibliothèque « Mangas » : 4 941 tomes, 907 Go. Premier scan : 56 min (environ 270 Mo/s, limité par le disque), 1 021 sains, 3 818 en avertissement, 102 en erreur. Analyse faite sur une sauvegarde de sa base et sur des fichiers d'exemple (`Dofus v01.cbz`, `Gamaran v01.cbz`, `Change 123 v01.cbz`, `Triage X v23.cbr`, dans le dossier personnel de l'utilisateur sous WSL).
+
+### Constats
+
+- **100 tomes entièrement illisibles** (19 452 pages, `image_undecodable`, « dimensions illisibles dans l'en-tête ») : Dofus (toute la série), Gamaran 1 à 21, MÄR 1 à 15, Ah! My Goddess 29 à 44, Reborn 33 à 41, Toriko, Terra Formars… Cause vérifiée sur Dofus et Gamaran : un segment de commentaire JPEG (`FFFE`) déclaré trop court d'un octet. libjpeg (navigateurs) passe outre, `imagesize` refuse (0 page sur 227 et 0 sur 188), alors que `image::ImageReader::into_dimensions()` lit les dimensions et `image` décode toutes les pages.
+- **Pages BMP et GIF ignorées** (839 BMP dans Terra Formars 20 à 22, Change 123 v09, Deadly Hour v01 ; 9 GIF) : la crate `image` n'est compilée qu'avec `jpeg`, `png`, `webp`. Ces tomes s'ouvrent avec des pages en moins.
+- **Triage X 23 et 24** : des archives **7z** nommées `.cbr` (CB7), lues comme des ZIP (« Could not find EOCD »).
+- **Avertissements bénins** : `subdirectories` (3 294 fichiers), `archive_order_differs` (647), `extension_mismatch` (122 fichiers mais 6 745 lignes, une par page : `.jpg` contenant du WebP ou du PNG), `non_image_entry` (36 fichiers : `desktop.ini`, `.nfo`, `.html`/`.xhtml`/`.css` laissés par une conversion Calibre).
+- **`ComicInfo.xml` mal formé** (MMA T17, balise `<Day>` mal placée) : tout le fichier rejeté.
+- **Journal** : `WARN sqlx::query: slow statement` (1,4 s) sur `DELETE FROM scan_issues …` ; ce n'est pas la requête (index présent) mais l'attente du verrou d'écriture (scan parallèle, trois écritures par fichier, disque de NAS).
+- **Métadonnées en anglais** : sur 166 séries liées, 16 seulement ont un résumé français chez MangaDex, aucun chez AniList. Bug en plus : si la source principale n'a pas la langue, son anglais est pris avant le français d'une autre source (`with_web`, `metadata.rs`). Genres et tags : anglais seulement chez les deux sources.
+- **Délier une source ne tient pas** : `unlink_source` efface la ligne, la série redevient « jamais cherchée » et l'identification automatique de fin de scan (surveillance, scan périodique) la relie si le titre correspond. La fenêtre « Identifier » ne montre le lien que de la source choisie dans la liste.
+- **Série lue / non lue** : seulement tome par tome aujourd'hui (menu du tome).
+- **Lecture rapide** : pause au bout de quelques pages en feuilletant vite. Le lecteur précharge 2 pages (`Reader.tsx`), et le NAS encode chaque page en AVIF à sa première lecture (Celeron N5105).
+- **Zoom au double tap sur le A55** : le zoom marche, on ne peut pas se déplacer dans l'image. Non reproduit en émulation (Chromium 412×915, densité 2,6, tactile : déplacement horizontal et vertical corrects, la page ne tourne pas). Réponses attendues : navigateur (Chrome, Samsung Internet, application installée), orientation, page simple ou double, ce qui se passe exactement ; une vidéo d'écran aiderait.
+
+### Décisions (2026-11-20)
+
+- Archives 7z : **signalées** par un code clair, pas lues (l'utilisateur reconvertit ses 2 tomes).
+- Source française : **Wikipédia en français dans le lot 10.2**.
+- Carte d'une série lue : **la pastille « Lu » reste** (pas de coche façon Plex).
+- Le premier scan d'une heure n'est pas un problème en soi ; sa durée sera documentée après le lot 10.1 (nouvelle mesure).
+
+### Lots
+
+- ⏳ **10.1 `fix/scan-real-library`** (backend, scan)
+  - Dimensions d'une page : `imagesize`, puis repli sur `image::ImageReader::into_dimensions()` (en-têtes seulement) avant de déclarer `image_undecodable`. Test avec un JPEG au segment de commentaire trop court, construit dans `shiori-testkit`.
+  - Pages BMP et GIF : features `bmp` et `gif` de `image` (Rust pur), `image/bmp` et `image/gif` reconnus, servis en original et redimensionnés comme les autres (GIF : première image).
+  - Archive 7z (`7z\xBC\xAF\x27\x1C`) : nouveau code d'erreur stable (`unsupported_archive`, « archive 7z (CB7) non prise en charge »), traduit dans l'interface et documenté dans les codes de diagnostic.
+  - Sévérités : `subdirectories` et `archive_order_differs` en information ; `extension_mismatch` en information, une ligne par fichier (avec le nombre de pages) ; `desktop.ini`, `*.nfo`, `.html`/`.xhtml`/`.css`/`.opf`/`.ncx` ajoutés aux entrées ignorées en silence (`is_ignored`).
+  - `ComicInfo.xml` mal formé : lecture champ par champ, les champs lisibles gardés, avertissement maintenu.
+  - Message `slow statement` de sqlx au niveau debug (`log_slow_statements`) ; une seule transaction par fichier pour le rapport, le rattachement et la ligne de journal.
+  - `SCANNER_VERSION` + 1 : le prochain scan relit tout (environ 1 h sur le NAS) et débloque les tomes ; à dire dans la PR et les notes de version.
+  - À mesurer ensuite sur le NAS : durée du scan ; si la double lecture des fichiers (`shortcut:` de `integrity.rs`) pèse, la supprimer ici ou dans un lot à part.
+- ⏳ **10.2 `fix/metadata-sources`** (backend + interface)
+  - Délier tient : la ligne `series_sources` reste, marquée refusée par l'utilisateur ; `to_identify` la saute ; « Identifier » permet toujours un lien manuel.
+  - Fenêtre « Identifier » : toutes les sources liées en tête, chacune avec Actualiser, Couverture et Délier.
+  - Langue : la langue de l'interface cherchée dans **toutes** les sources avant l'anglais (titre et résumé).
+  - Genres et tags traduits dans l'interface (vocabulaire fixe d'AniList et de MangaDex, catalogues `fr.ts` / `en.ts`) ; la recherche et le filtre par tag trouvent les deux langues.
+  - **Wikipédia en français** comme troisième source : recherche de l'article de la série, résumé (introduction), lien ; même réglage réseau que les autres sources (désactivé par défaut, agent générique, débit modéré), licence CC BY-SA créditée dans l'interface comme MangaDex ; ordre des sources réglable (Wikipédia en tête par défaut en français pour le résumé). Conditions d'usage de l'API à relire au moment du lot.
+- ⏳ **10.3 `feat/series-read`** (backend + interface)
+  - Route pour marquer tous les tomes d'une série lus (dernière page) ou non lus (progression effacée), pour le compte connecté.
+  - Menu de la page de la série et de sa carte : « Marquer comme lu », « Marquer comme non lu » (confirmation, puisqu'elle efface la progression de tous les tomes). La pastille « Lu » existante apparaît alors.
+- ⏳ **10.4 `perf/reader-prefetch`** (backend + interface)
+  - Rendu anticipé : à la demande d'une page, le serveur prépare en arrière-plan les 4 à 6 suivantes du tome à la même largeur et au même format (priorité basse, sous le plafond de rendus).
+  - Préchargement : 4 à 5 pages en Wi-Fi, 2 si la connexion est lente ou en économie de données (`navigator.connection`).
+  - Mesurer l'encodage d'une page sur le NAS ; au-delà d'une seconde, envisager une vitesse d'AVIF plus rapide ou l'original quand il est déjà en JPEG à la bonne taille.
+  - Zoom du A55, une fois la cause connue.
+- ⏳ **10.5 `docs/phase10`** : durée du premier scan (ordre de grandeur, exemple réel), codes de diagnostic modifiés, Wikipédia dans les métadonnées, bilan de la phase, version.
+
 ## Fonctionnalités ajoutées en cours de route
 
 ### Menu d'administration des scans (demandé le 2026-11-11)
@@ -1551,3 +1604,4 @@ Audit Ponytail de tout le dépôt après la phase 9 ; corrigé dans `fix/audit-v
 - 2026-11-18 : phase 8 terminée (lecture des PDF sans marges : images incluses servies comme des pages, pages en plusieurs images recomposées, diagnostics et métadonnées du PDF) ; version `v0.3.0`.
 - 2026-11-19 : phase 9 terminée (surveillance des dossiers, scan complet périodique, santé des bibliothèques, documentation VitePress bilingue) ; bilan de maturité pour une V1 proposé.
 - 2026-11-19 : correctifs de l'audit avant la V1 (jetons d'API avec mot de passe, progression hors ligne datée, restauration sans scan concurrent, limites de connexion, `--trusted-proxy`) ; version `v0.4.0`.
+- 2026-11-20 : phase 10 planifiée d'après le premier essai sur la vraie bibliothèque (NAS) : scan tolérant, sources de métadonnées et Wikipédia FR, série lue/non lue, lecture rapide ; 7z signalé seulement, pastille « Lu » gardée.
