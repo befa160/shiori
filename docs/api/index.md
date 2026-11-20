@@ -59,7 +59,7 @@ Les codes propres à une route sont listés sur sa page.
 Sans authentification.
 
 ```json
-{ "status": "ok", "version": "0.4.0" }
+{ "status": "ok", "version": "0.5.0" }
 ```
 
 ## Pages de la référence
