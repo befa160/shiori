@@ -4,7 +4,7 @@ A series' information (title, alternative titles, summary, authors, genres, tags
 
 1. **your edits** (the **Edit** button on the series page): an edited field is locked, and neither a rescan nor a web source replaces it; "Restore" hands it back to the sources;
 2. **your files**: `ComicInfo.xml` and `index.json` in the archives, and for a PDF its properties (author, subject, keywords; its title and date are ignored, they are often those of the conversion tool), read when scanning;
-3. **web sources**, if you allow them: AniList and MangaDex.
+3. **web sources**, if you allow them: AniList, MangaDex and Wikipedia.
 
 ```mermaid
 flowchart LR
@@ -25,7 +25,8 @@ They are **off by default** (**Administration → Web metadata**). Only the seri
 - after each scan, a series is linked on its own if a single result has exactly its title; otherwise it is "to check";
 - **Identify** (series page) shows each linked source first (refresh, use its cover, unlink), then searches a source and offers the results with their cover;
 - an **unlinked** source stays unlinked: automatic identification no longer links it; to link it again, choose an entry in **Identify**;
-- the order of the sources is set in the administration (by default, MangaDex first in French, AniList first in English), and a series can impose its main source;
+- the order of the sources is set in the administration (by default, MangaDex first in French, AniList first in English, Wikipedia last), and a series can impose its main source;
+- **Wikipedia** is a fallback source: the article is searched on the Wikipedia of the interface language, and the linked entry keeps the introduction in French and in English, with the link to each article; it only brings the summary and the link (no title, genres, tags or cover). Texts under the CC BY-SA license;
 - **language comes before source**: the title and summary in the interface language are looked for in every linked source before English; for the same language, the main source, then the set order, decide;
 - genres and tags from the sources (in English there) are shown translated into the interface language; search and the "Tags" filter find them in both languages;
 - adult entries are excluded from searches, unless the administration allows them.

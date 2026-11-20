@@ -49,7 +49,7 @@ impl Source for Fake {
         self.id
     }
 
-    fn search(&self, query: &str, adult: bool) -> Answer<Vec<WebMetadata>> {
+    fn search(&self, query: &str, adult: bool, _: &str) -> Answer<Vec<WebMetadata>> {
         let note = if adult { " (adultes)" } else { "" };
         self.calls
             .lock()
@@ -131,6 +131,11 @@ struct Fixture {
 
 /// Deux séries-dossiers d'un tome : « Blue Lock » et « Gigant ».
 async fn fixture(delay: Duration) -> Fixture {
+    fixture_with(delay, SourceId::Anilist).await
+}
+
+/// Comme [`fixture`], avec une fausse source de cet identifiant (le champ garde son nom).
+async fn fixture_with(delay: Duration, id: SourceId) -> Fixture {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("manga");
     for (i, name) in ["Blue Lock", "Gigant"].iter().enumerate() {
@@ -151,7 +156,7 @@ async fn fixture(delay: Duration) -> Fixture {
         .id;
     let images = Images::open(dir.path().join("cache"), u64::MAX).unwrap();
     let anilist = Arc::new(Fake {
-        id: SourceId::Anilist,
+        id,
         searches: Mutex::default(),
         fetches: Mutex::default(),
         calls: Mutex::default(),
@@ -244,8 +249,11 @@ async fn nothing_leaves_while_the_network_is_off() {
     );
     let (_, overview) = call(&f.app, "GET", "/api/admin/metadata", None).await;
     assert_eq!(overview["online"], false);
-    // Français par défaut : MangaDex d'abord.
-    assert_eq!(overview["sources"], json!(["mangadex", "anilist"]));
+    // Français par défaut : MangaDex d'abord, Wikipédia en repli.
+    assert_eq!(
+        overview["sources"],
+        json!(["mangadex", "anilist", "wikipedia"])
+    );
     assert!(f.anilist.calls().is_empty(), "{:?}", f.anilist.calls());
 
     // Réglages invalides.
@@ -490,7 +498,10 @@ async fn errors_are_explicit_and_a_rate_limit_stops_the_identification() {
     f.state.metadata.identify().unwrap();
     f.state.metadata.wait().await;
     let (_, overview) = call(&f.app, "GET", "/api/admin/metadata", None).await;
-    assert_eq!(overview["sources"], json!(["mangadex", "anilist"]));
+    assert_eq!(
+        overview["sources"],
+        json!(["mangadex", "anilist", "wikipedia"])
+    );
     assert_eq!(
         overview["identify"]["total"], 1,
         "seule la série en échec est retentée"
@@ -676,4 +687,52 @@ async fn raw(app: &Router, uri: &str, etag: Option<&str>) -> axum::response::Res
         .oneshot(request.body(Body::empty()).unwrap())
         .await
         .unwrap()
+}
+
+/// Wikipédia : un résultat de recherche n'a que sa langue, la fiche rapprochée est relue entière
+/// avant d'être liée ; sans titres, elle n'apporte que son résumé et ne renomme pas la série.
+#[tokio::test]
+async fn an_automatic_wikipedia_match_is_read_in_full() {
+    let f = fixture_with(Duration::ZERO, SourceId::Wikipedia).await;
+    let body = json!({ "metadata_online": true, "metadata_sources": ["wikipedia"] });
+    assert_eq!(
+        call(&f.app, "PUT", "/api/settings", Some(body)).await.0,
+        StatusCode::OK
+    );
+    let wiki = &f.anilist;
+    wiki.search_gives(Ok(vec![]));
+    wiki.search_gives(Ok(vec![fiche("fr:Gigant (manga)", "Gigant")]));
+    let full = WebMetadata {
+        id: "fr:Gigant (manga)".into(),
+        summaries: vec![Text {
+            lang: Some("fr".into()),
+            text: "Résumé de Wikipédia.".into(),
+        }],
+        links: vec!["https://fr.wikipedia.org/wiki/Gigant_(manga)".into()],
+        ..WebMetadata::default()
+    };
+    wiki.fetch_gives(Ok(full));
+    scan(&f).await;
+    assert_eq!(
+        wiki.calls(),
+        [
+            "search Blue Lock",
+            "search Gigant",
+            "fetch fr:Gigant (manga)"
+        ]
+    );
+    let gigant = series_id(&f, "Gigant").await;
+    let (_, detail) = call(&f.app, "GET", &format!("/api/series/{gigant}"), None).await;
+    assert_eq!(
+        (
+            detail["name"].as_str(),
+            detail["metadata"]["summary"].as_str(),
+            detail["sources"][0]["source"].as_str()
+        ),
+        (
+            Some("Gigant"),
+            Some("Résumé de Wikipédia."),
+            Some("wikipedia")
+        )
+    );
 }

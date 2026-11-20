@@ -28,4 +28,4 @@ Shiori backs up its database every day (the 7 most recent kept), before each upd
 
 - Accounts are created by the administrator only: no invitation link yet, nor sign-in delegated to an authentication proxy (`Remote-User` header).
 - One address per app installation: to use the local address at home and the public one elsewhere, see [local DNS](/en/installation/network#the-same-address-at-home-and-away).
-- Web metadata comes from AniList and MangaDex only.
+- Web metadata comes from AniList, MangaDex and Wikipedia only.

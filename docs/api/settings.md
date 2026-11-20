@@ -19,7 +19,7 @@ Lisible par tout compte connecté.
 | `page_turn` | `reading`, `ltr`, `rtl` | sens pour tourner les pages par défaut |
 | `theme` | `system`, `dark`, `light`, `oled`, `sepia` | thème par défaut |
 | `metadata_online` | booléen | sources web autorisées (désactivées par défaut) |
-| `metadata_sources` | `["anilist", "mangadex"]`, `null` | ordre des sources ; `null` : d'après la langue |
+| `metadata_sources` | `["anilist", "mangadex", "wikipedia"]`, `null` | ordre des sources ; `null` : d'après la langue |
 | `metadata_adult` | booléen | fiches pour adultes permises dans les recherches |
 | `full_scan_hours` | 0, 1, 6, 24 | scan complet de toutes les bibliothèques toutes les N heures ; 0 : jamais |
 

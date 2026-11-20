@@ -6,7 +6,9 @@ use std::net::TcpListener;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use shiori_meta::{Anilist, Author, FetchError, Mangadex, Source, SourceId, Text, WebMetadata};
+use shiori_meta::{
+    Anilist, Author, FetchError, Mangadex, Source, SourceId, Text, WebMetadata, Wikipedia,
+};
 
 /// Faux serveur : une réponse par connexion, dans l'ordre ; garde chaque requête reçue.
 struct Mock {
@@ -89,7 +91,7 @@ fn assert_discreet(request: &str, query: &str) {
 fn anilist_search_is_normalized() {
     let server = mock(vec![(200, "", fixture("anilist_search.json"))]);
     let found = Anilist::new(&server.url)
-        .search("one piece", false)
+        .search("one piece", false, "fr")
         .unwrap();
     assert_eq!(found.len(), 2);
     assert_eq!(
@@ -186,19 +188,19 @@ fn a_429_is_honoured_without_more_requests() {
     )]);
     let mangadex = Mangadex::new(&server.url);
     assert_eq!(
-        mangadex.search("akira", false),
+        mangadex.search("akira", false, "fr"),
         Err(FetchError::RateLimited(Duration::from_secs(30)))
     );
     // Pendant l'attente demandée, rien ne part : la requête suivante renonce aussitôt.
     assert!(matches!(
-        mangadex.search("akira", false),
+        mangadex.search("akira", false, "fr"),
         Err(FetchError::RateLimited(_))
     ));
     assert_eq!(server.requests.lock().unwrap().len(), 1);
     // Sans `Retry-After`, une minute.
     let server = mock(vec![(429, "", String::new())]);
     assert_eq!(
-        Anilist::new(&server.url).search("x", false),
+        Anilist::new(&server.url).search("x", false, "fr"),
         Err(FetchError::RateLimited(Duration::from_secs(60)))
     );
 }
@@ -213,7 +215,7 @@ fn an_unreachable_source_is_offline() {
         .port();
     let url = format!("http://127.0.0.1:{port}");
     assert!(matches!(
-        Mangadex::new(&url).search("x", false),
+        Mangadex::new(&url).search("x", false, "fr"),
         Err(FetchError::Offline(_))
     ));
     assert!(matches!(
@@ -236,7 +238,7 @@ fn mangadex_search_and_fetch_are_normalized() {
     ]);
     let mangadex = Mangadex::new(&format!("{}/", server.url));
     assert_eq!(mangadex.id(), SourceId::Mangadex);
-    let found = mangadex.search("one piece", false).unwrap();
+    let found = mangadex.search("one piece", false, "fr").unwrap();
     let id = "a1c7c817-4e59-43b7-9365-09675a149a6f";
     let expected = WebMetadata {
         id: id.into(),
@@ -307,7 +309,7 @@ fn redirects_are_never_followed() {
         String::new(),
     )]);
     assert_eq!(
-        Mangadex::new(&server.url).search("x", false),
+        Mangadex::new(&server.url).search("x", false, "fr"),
         Err(FetchError::Http(302))
     );
     assert_eq!(server.requests.lock().unwrap().len(), 1);
@@ -316,13 +318,140 @@ fn redirects_are_never_followed() {
 #[test]
 fn adult_entries_only_when_allowed() {
     let server = mock(vec![(200, "", r#"{"data":{"Page":{"media":[]}}}"#.into())]);
-    Anilist::new(&server.url).search("x", true).unwrap();
+    Anilist::new(&server.url).search("x", true, "fr").unwrap();
     assert!(!server.requests.lock().unwrap()[0].contains("isAdult"));
     let server = mock(vec![(200, "", r#"{"data":[]}"#.into())]);
-    Mangadex::new(&server.url).search("x", true).unwrap();
+    Mangadex::new(&server.url).search("x", true, "fr").unwrap();
     let request = server.requests.lock().unwrap()[0].clone();
     assert!(
         request.contains("pornographic") && request.contains("erotica"),
         "{request}"
     );
+}
+
+#[test]
+fn wikipedia_search_keeps_comics_articles_of_the_interface_language() {
+    let answer = r#"{"batchcomplete":true,"query":{"pages":[
+        {"pageid":2,"title":"Dofus (manga)","index":2,"extract":"Dofus est une série de bandes dessinées.\n","description":"série de bandes dessinées","fullurl":"https://fr.wikipedia.org/wiki/Dofus_(manga)"},
+        {"pageid":1,"title":"Dofus","index":1,"extract":"Dofus est un jeu vidéo.","description":"jeu vidéo de 2004","fullurl":"https://fr.wikipedia.org/wiki/Dofus"},
+        {"pageid":3,"title":"Dofus (homonymie)","index":3,"pageprops":{"disambiguation":""},"fullurl":"https://fr.wikipedia.org/wiki/Dofus_(homonymie)"},
+        {"pageid":4,"title":"Wakfu","index":4,"extract":"","fullurl":"https://fr.wikipedia.org/wiki/Wakfu"}
+    ]}}"#;
+    let server = mock(vec![(200, "", answer.into())]);
+    let found = Wikipedia::new(&server.url)
+        .search("Dofus", false, "fr")
+        .unwrap();
+    assert_eq!(
+        found,
+        [
+            WebMetadata {
+                id: "fr:Dofus (manga)".into(),
+                titles: vec![text(Some("fr"), "Dofus")],
+                summaries: vec![text(Some("fr"), "Dofus est une série de bandes dessinées.")],
+                links: vec!["https://fr.wikipedia.org/wiki/Dofus_(manga)".into()],
+                ..WebMetadata::default()
+            },
+            // Sans description, l'article reste ; une introduction vide ne fait pas de résumé.
+            WebMetadata {
+                id: "fr:Wakfu".into(),
+                titles: vec![text(Some("fr"), "Wakfu")],
+                links: vec!["https://fr.wikipedia.org/wiki/Wakfu".into()],
+                ..WebMetadata::default()
+            },
+        ]
+    );
+    let request = &server.requests.lock().unwrap()[0];
+    assert!(request.starts_with("GET /w/api.php?"), "{request}");
+    assert!(request.contains("maxlag=5"), "{request}");
+    // Wikimedia exige un contact : celui du projet, rien sur l'utilisateur.
+    assert!(
+        request
+            .to_ascii_lowercase()
+            .contains("(https://github.com/befa160/shiori)"),
+        "{request}"
+    );
+    assert_discreet(request, "gsrsearch=Dofus");
+}
+
+#[test]
+fn wikipedia_fetch_keeps_both_languages_and_no_title() {
+    let fr = r#"{"query":{"pages":[{"title":"Dofus (manga)","extract":"Résumé français.","fullurl":"https://fr.wikipedia.org/wiki/Dofus_(manga)","langlinks":[{"lang":"en","title":"Dofus (comics)"}]}]}}"#;
+    let en = r#"{"query":{"pages":[{"title":"Dofus (comics)","extract":"English summary.","fullurl":"https://en.wikipedia.org/wiki/Dofus_(comics)"}]}}"#;
+    let server = mock(vec![(200, "", fr.into()), (200, "", en.into())]);
+    let data = Wikipedia::new(&server.url)
+        .fetch("fr:Dofus (manga)")
+        .unwrap();
+    assert_eq!(
+        data,
+        WebMetadata {
+            id: "fr:Dofus (manga)".into(),
+            summaries: vec![
+                text(Some("fr"), "Résumé français."),
+                text(Some("en"), "English summary.")
+            ],
+            links: vec![
+                "https://fr.wikipedia.org/wiki/Dofus_(manga)".into(),
+                "https://en.wikipedia.org/wiki/Dofus_(comics)".into()
+            ],
+            ..WebMetadata::default()
+        }
+    );
+    let requests = server.requests.lock().unwrap();
+    assert!(requests[0].contains("lllang=en"), "{}", requests[0]);
+    assert!(
+        requests[1].contains("titles=Dofus%20(comics)"),
+        "{}",
+        requests[1]
+    );
+}
+
+#[test]
+fn wikipedia_reports_unknown_articles_and_waits_on_maxlag() {
+    // Identifiant d'une autre langue (ou d'un autre hôte) : rien ne part.
+    let wiki = Wikipedia::new("http://127.0.0.1:1");
+    for id in ["de:Dofus", "evil.example/x:Dofus", "fr:", "Dofus"] {
+        assert_eq!(wiki.fetch(id), Err(FetchError::NotFound), "{id}");
+    }
+    assert_eq!(wiki.image("https://x"), Err(FetchError::NotFound));
+    let missing = r#"{"query":{"pages":[{"title":"Inconnu","missing":true}]}}"#;
+    let lagging = r#"{"error":{"code":"maxlag","info":"Waiting for a database server"}}"#;
+    let other = r#"{"error":{"code":"badvalue","info":"x"}}"#;
+    let server = mock(vec![
+        (200, "", missing.into()),
+        (200, "", lagging.into()),
+        (200, "", other.into()),
+        (200, "", "{}".into()),
+    ]);
+    let wiki = Wikipedia::new(&server.url);
+    assert_eq!(wiki.fetch("en:Inconnu"), Err(FetchError::NotFound));
+    assert!(matches!(
+        wiki.search("x", false, "fr"),
+        Err(FetchError::RateLimited(_))
+    ));
+    assert_eq!(
+        wiki.search("x", false, "fr"),
+        Err(FetchError::BadResponse("badvalue".into()))
+    );
+    // Rien trouvé ; une langue inconnue cherche en anglais.
+    assert_eq!(wiki.search("x", false, "de"), Ok(vec![]));
+    assert_eq!(wiki.id(), SourceId::Wikipedia);
+}
+
+#[test]
+fn a_wikipedia_article_in_one_language_only_still_links() {
+    // Pas d'article anglais (cas courant pour la BD franco-belge) : une seule requête.
+    let alone = r#"{"query":{"pages":[{"title":"Dofus (manfra)","extract":"Résumé.","fullurl":"https://fr.wikipedia.org/wiki/Dofus_(manfra)"}]}}"#;
+    let server = mock(vec![(200, "", alone.into())]);
+    let data = Wikipedia::new(&server.url)
+        .fetch("fr:Dofus (manfra)")
+        .unwrap();
+    assert_eq!(data.summaries, [text(Some("fr"), "Résumé.")]);
+    assert_eq!(data.links, ["https://fr.wikipedia.org/wiki/Dofus_(manfra)"]);
+    assert_eq!(server.requests.lock().unwrap().len(), 1);
+    // Un lien interlangue vers une page disparue : la fiche garde sa seule langue.
+    let linked = r#"{"query":{"pages":[{"title":"Akira","extract":"Résumé.","langlinks":[{"lang":"en","title":"Akira (gone)"}]}]}}"#;
+    let gone = r#"{"query":{"pages":[{"title":"Akira (gone)","missing":true}]}}"#;
+    let server = mock(vec![(200, "", linked.into()), (200, "", gone.into())]);
+    let data = Wikipedia::new(&server.url).fetch("fr:Akira").unwrap();
+    assert_eq!((data.summaries.len(), data.links.len()), (1, 0));
 }

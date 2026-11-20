@@ -28,4 +28,4 @@ Shiori sauvegarde sa base chaque jour (les 7 plus récentes gardées), avant cha
 
 - Les comptes se créent par l'administrateur seulement : pas encore de lien d'invitation, ni de connexion déléguée à un proxy d'authentification (en-tête `Remote-User`).
 - Une seule adresse par installation de l'application : pour passer par l'adresse locale à la maison et l'adresse publique ailleurs, voir le [DNS local](/installation/network#la-meme-adresse-a-la-maison-et-dehors).
-- Les métadonnées web viennent d'AniList et de MangaDex seulement.
+- Les métadonnées web viennent d'AniList, de MangaDex et de Wikipédia seulement.

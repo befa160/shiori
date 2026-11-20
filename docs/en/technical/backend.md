@@ -96,7 +96,7 @@ sequenceDiagram
 
 **Field-by-field** merging (`shiori-db::metadata`): edited field (locked) > files (`index.json`, then `ComicInfo.xml`, then a PDF's `Info`) > web sources in the chosen order. A series' merged view is recomputed and stored on each change, once per interface language, each account reading the one of its language.
 
-Web sources (`shiori-meta`, off by default): AniList (GraphQL) and MangaDex (REST), called outside the async runtime, rate below published limits, `Retry-After` honored, generic client name, only the series title sent. Automatic identification after each scan: a link only if a single candidate has exactly the same normalized title. Covers downloaded only from each source's known hosts, without following redirects (SSRF protection), 4,096 px per side at most.
+Web sources (`shiori-meta`, off by default): AniList (GraphQL), MangaDex (REST) and Wikipedia (Action API, summary and link only), called outside the async runtime, serially, rate below published limits, `Retry-After` and `maxlag` honored, generic client name (for Wikipedia, which requires a contact: the repository address, never anything about the user), only the series title sent. Automatic identification after each scan: a link only if a single candidate has exactly the same normalized title. Covers downloaded only from each source's known hosts, without following redirects (SSRF protection), 4,096 px per side at most.
 
 ## Backups
 

@@ -12,10 +12,32 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Progress } from '@/components/ui/progress'
 import { errorText, sourceErrorText } from '@/i18n/errors'
 
-const CREDITS: [string, string][] = [
-  ['AniList', 'https://anilist.co'],
-  ['MangaDex', 'https://mangadex.org'],
+const CREDITS: [SourceId, string][] = [
+  ['anilist', 'https://anilist.co'],
+  ['mangadex', 'https://mangadex.org'],
+  ['wikipedia', 'https://www.wikipedia.org'],
 ]
+
+/** Les sources créditées, comme leurs conditions le demandent ; Wikipédia avec la licence de ses
+ * textes (CC BY-SA), le lien vers l'article étant dans les liens de la série. */
+export function Credits() {
+  const { t } = useTranslation()
+  return (
+    <p className="text-sm text-muted-foreground">
+      {t('admin.credits')}{' '}
+      {CREDITS.map(([source, href], i) => (
+        <span key={source}>
+          {i > 0 && ', '}
+          <a href={href} target="_blank" rel="noreferrer noopener" className="underline underline-offset-4">
+            {t(`admin.sourceNames.${source}`)}
+          </a>
+          {source === 'wikipedia' && ` (${t('admin.license')})`}
+        </span>
+      ))}
+      .
+    </p>
+  )
+}
 
 /** Métadonnées web (lot 5.7a) : activation expliquée, ordre des sources, identification et ce
  * qui reste à vérifier ; crédits des sources (MangaDex l'exige). */
@@ -178,18 +200,7 @@ export function AdminMetadata() {
           )
         }}
       </QueryState>
-      <p className="text-sm text-muted-foreground">
-        {t('admin.credits')}{' '}
-        {CREDITS.map(([label, href], i) => (
-          <span key={href}>
-            {i > 0 && ', '}
-            <a href={href} target="_blank" rel="noreferrer noopener" className="underline underline-offset-4">
-              {label}
-            </a>
-          </span>
-        ))}
-        .
-      </p>
+      <Credits />
     </section>
   )
 }

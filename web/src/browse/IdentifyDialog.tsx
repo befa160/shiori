@@ -9,14 +9,17 @@ import { Button } from '@/components/ui/button'
 import { DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Credits } from '@/admin/Metadata'
 import { errorText, sourceErrorText } from '@/i18n/errors'
 import { FallbackCover } from '@/library/covers'
 import { useSeriesAction } from './series'
 
-const SOURCES: SourceId[] = ['mangadex', 'anilist']
-const PAGES: Record<SourceId, string> = {
-  anilist: 'https://anilist.co/manga/',
-  mangadex: 'https://mangadex.org/title/',
+const SOURCES: SourceId[] = ['mangadex', 'anilist', 'wikipedia']
+/** Page de la fiche chez sa source ; un identifiant Wikipédia est `langue:Titre de l'article`. */
+const page = (source: SourceId, id: string) => {
+  if (source !== 'wikipedia') return `${source === 'anilist' ? 'https://anilist.co/manga/' : 'https://mangadex.org/title/'}${encodeURIComponent(id)}`
+  const [lang, ...title] = id.split(':')
+  return `https://${lang === 'en' ? 'en' : 'fr'}.wikipedia.org/wiki/${encodeURIComponent(title.join(':').replaceAll(' ', '_'))}`
 }
 
 /** Fenêtre « Identifier » façon Plex (lot 5.7b) : en tête, chaque source liée, à actualiser, dont
@@ -67,7 +70,7 @@ export function IdentifyDialog({ series }: { series: SeriesDetail }) {
                   <span className="font-medium">{t(`admin.sourceNames.${s.source}`)}</span> ·{' '}
                   {t(s.matched_by === 'user' ? 'series.identifyUser' : 'series.identifyAuto')}{' '}
                   <a
-                    href={`${PAGES[s.source]}${encodeURIComponent(s.external_id ?? '')}`}
+                    href={page(s.source, s.external_id ?? '')}
                     target="_blank"
                     rel="noreferrer noopener"
                     className="inline-flex min-h-11 items-center gap-1 underline underline-offset-4"
@@ -84,15 +87,18 @@ export function IdentifyDialog({ series }: { series: SeriesDetail }) {
                   <Button variant="secondary" disabled={busy} onClick={() => refresh.mutate(undefined, { onError: failed })}>
                     {t('series.identifyRefresh')}
                   </Button>
-                  <Button
-                    variant="secondary"
-                    disabled={busy}
-                    onClick={() =>
-                      cover.mutate(s.source, { onSuccess: () => toast.success(t('series.identifyCoverDone')), onError: failed })
-                    }
-                  >
-                    {t('series.identifyUseCover')}
-                  </Button>
+                  {/* Wikipédia n'a pas de couverture. */}
+                  {s.source !== 'wikipedia' && (
+                    <Button
+                      variant="secondary"
+                      disabled={busy}
+                      onClick={() =>
+                        cover.mutate(s.source, { onSuccess: () => toast.success(t('series.identifyCoverDone')), onError: failed })
+                      }
+                    >
+                      {t('series.identifyUseCover')}
+                    </Button>
+                  )}
                   <Button variant="ghost" disabled={busy} onClick={() => unlink.mutate(s.source, { onError: failed })}>
                     {t('series.identifyUnlink')}
                   </Button>
@@ -183,17 +189,7 @@ export function IdentifyDialog({ series }: { series: SeriesDetail }) {
         </section>
       )}
 
-      <p className="text-sm text-muted-foreground">
-        {t('admin.credits')}{' '}
-        <a href="https://anilist.co" target="_blank" rel="noreferrer noopener" className="underline underline-offset-4">
-          AniList
-        </a>
-        ,{' '}
-        <a href="https://mangadex.org" target="_blank" rel="noreferrer noopener" className="underline underline-offset-4">
-          MangaDex
-        </a>
-        .
-      </p>
+      <Credits />
     </DialogContent>
   )
 }

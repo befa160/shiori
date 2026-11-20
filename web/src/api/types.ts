@@ -66,7 +66,7 @@ export interface Settings {
 export type FullScanHours = 0 | 1 | 6 | 24
 
 /** Sources de métadonnées web. */
-export type SourceId = 'anilist' | 'mangadex'
+export type SourceId = 'anilist' | 'mangadex' | 'wikipedia'
 
 /** Un texte et sa langue (`en`, `fr`, `ja`, `ja-ro`…). */
 export interface LangText {

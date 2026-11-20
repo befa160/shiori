@@ -1,7 +1,8 @@
-//! Métadonnées web (lot 5.5) : AniList et MangaDex, normalisées dans [`WebMetadata`].
+//! Métadonnées web (lot 5.5) : AniList, MangaDex et Wikipédia (lot 10.2b), normalisées dans
+//! [`WebMetadata`].
 //!
 //! Rien de personnel ne part : seul le titre cherché (ou l'identifiant d'une fiche) est envoyé,
-//! avec un agent générique `Shiori/<version>`. Chaque source a son débit (AniList : 30 requêtes
+//! avec un agent générique `Shiori/<version>` (Wikipédia exige un contact : l'adresse du projet). Chaque source a son débit (AniList : 30 requêtes
 //! par minute en ce moment, MangaDex : 5 par seconde) ; une source injoignable est une erreur
 //! typée, jamais une panique. Clients synchrones : à appeler hors du runtime asynchrone.
 
@@ -13,15 +14,18 @@ pub use shiori_core::Author;
 
 mod anilist;
 mod mangadex;
+mod wikipedia;
 
 pub use anilist::{ANILIST_URL, Anilist};
 pub use mangadex::{MANGADEX_URL, Mangadex};
+pub use wikipedia::{WIKIPEDIA_URL, Wikipedia};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SourceId {
     Anilist,
     Mangadex,
+    Wikipedia,
 }
 
 /// Un texte et sa langue (`en`, `fr`, `ja`, `ja-ro` pour le romaji…) ; `None` : inconnue.
@@ -82,8 +86,9 @@ impl FetchError {
 pub trait Source: Send + Sync {
     fn id(&self) -> SourceId;
     /// Séries dont un titre ressemble à `query`, les plus pertinentes d'abord ; les fiches pour
-    /// adultes seulement si `adult` (exclues par défaut, réglage de l'administration).
-    fn search(&self, query: &str, adult: bool) -> Result<Vec<WebMetadata>, FetchError>;
+    /// adultes seulement si `adult` (exclues par défaut, réglage de l'administration). `lang` :
+    /// langue de l'interface (`fr`, `en`), pour une source qui en dépend (Wikipédia).
+    fn search(&self, query: &str, adult: bool, lang: &str) -> Result<Vec<WebMetadata>, FetchError>;
     fn fetch(&self, id: &str) -> Result<WebMetadata, FetchError>;
     /// Image d'une fiche (couverture), depuis les seuls hôtes de la source.
     fn image(&self, url: &str) -> Result<Vec<u8>, FetchError>;
@@ -104,8 +109,12 @@ struct Http {
 
 impl Http {
     fn new(gap: Duration) -> Self {
+        Self::with_agent(gap, concat!("Shiori/", env!("CARGO_PKG_VERSION")))
+    }
+
+    fn with_agent(gap: Duration, user_agent: &str) -> Self {
         let agent = ureq::Agent::config_builder()
-            .user_agent(concat!("Shiori/", env!("CARGO_PKG_VERSION")))
+            .user_agent(user_agent)
             .timeout_global(Some(Duration::from_secs(15)))
             .http_status_as_error(false)
             // Aucune redirection suivie : une image redirigée vers le réseau local contournerait

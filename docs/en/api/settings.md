@@ -19,7 +19,7 @@ Readable by any signed-in account.
 | `page_turn` | `reading`, `ltr`, `rtl` | default page-turn direction |
 | `theme` | `system`, `dark`, `light`, `oled`, `sepia` | default theme |
 | `metadata_online` | boolean | web sources allowed (off by default) |
-| `metadata_sources` | `["anilist", "mangadex"]`, `null` | order of sources; `null`: from the language |
+| `metadata_sources` | `["anilist", "mangadex", "wikipedia"]`, `null` | order of sources; `null`: from the language |
 | `metadata_adult` | boolean | adult entries allowed in searches |
 | `full_scan_hours` | 0, 1, 6, 24 | full scan of all libraries every N hours; 0: never |
 

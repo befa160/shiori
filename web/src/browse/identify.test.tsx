@@ -168,6 +168,19 @@ describe('identifier une série', () => {
     expect(calls('POST')[1][1]).toEqual({ source: 'mangadex' })
     expect(calls('DELETE')).toEqual([['/api/series/7/metadata/links/mangadex', null]])
   })
+
+  it('montre une source Wikipédia : lien vers l’article, pas de couverture, licence créditée', async () => {
+    serve({ ...base, sources: [state({ source: 'wikipedia', external_id: 'fr:Toriko (manga)', matched_by: 'auto' })] })
+    renderAt('/series/7')
+    await userEvent.click(await main().findByRole('button', { name: 'Identifier' }))
+    const d = await dialog()
+    const item = within(within(d.getByRole('region', { name: 'Sources liées' })).getByRole('listitem'))
+    expect(item.getByRole('link', { name: 'Voir la fiche' })).toHaveAttribute('href', 'https://fr.wikipedia.org/wiki/Toriko_(manga)')
+    expect(item.queryByRole('button', { name: 'Utiliser sa couverture' })).not.toBeInTheDocument()
+    expect(item.getByRole('button', { name: 'Délier' })).toBeInTheDocument()
+    expect(d.getByText(/textes sous licence CC BY-SA/)).toBeInTheDocument()
+    expect(d.getByRole('link', { name: 'Wikipédia' })).toHaveAttribute('href', 'https://www.wikipedia.org')
+  })
 })
 
 describe('source principale', () => {
