@@ -3,7 +3,7 @@
 A series' information (title, alternative titles, summary, authors, genres, tags, year, publisher, publication status, cover, links) comes from three sources. The first one that answers wins, **field by field**:
 
 1. **your edits** (the **Edit** button on the series page): an edited field is locked, and neither a rescan nor a web source replaces it; "Restore" hands it back to the sources;
-2. **your files**: `ComicInfo.xml` and `index.json` in the archives, and for a PDF its properties (author, subject, keywords; its title and date are ignored, they are often those of the conversion tool), read when scanning;
+2. **your files**: `ComicInfo.xml` and `index.json` in the archives, and for a PDF its properties (author, subject, keywords; its title and date are ignored, they are often those of the conversion tool), read when scanning; a January 1970 date is ignored too (a creation tool's blank date, badly converted);
 3. **web sources**, if you allow them: AniList, MangaDex and Wikipedia.
 
 ```mermaid

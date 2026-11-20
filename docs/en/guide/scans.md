@@ -9,7 +9,9 @@ It starts when a library is created, when a file changes (see watching below), a
 - **Deep check**: fully decodes every image (slow, but finds damaged images);
 - **Read every file again**: reads even the files Shiori believes unchanged (usually, size and date are enough).
 
-A first scan reads every file in full; the next ones only read what changed. Only one scan runs at a time.
+A first scan reads every file in full; the next ones only read what changed (file size or date). Only one scan runs at a time.
+
+Order of magnitude for a first scan, on a real library: **4,941 volumes (907 GB) in about 55 minutes** on a NAS (Celeron N5105, hard drives), limited by disk reads. A new version that changes the scan rules reads everything once; its release notes say so.
 
 ## Folder watching
 

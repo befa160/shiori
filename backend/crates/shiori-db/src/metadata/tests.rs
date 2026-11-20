@@ -620,3 +620,40 @@ fn the_language_comes_before_the_main_source() {
         (Some("Silent"), Some("Un garçon."))
     );
 }
+
+/// Cagaster (vu sur une vraie bibliothèque) : chaque `ComicInfo.xml` date les tomes du
+/// 1970-01-21, date vide d'un outil mal convertie. Ni la série ni le tome ne la gardent :
+/// l'année vient alors des sources web, et une vraie date de 1970 hors janvier reste.
+#[test]
+fn a_january_1970_date_is_a_blank_and_is_ignored() {
+    let mut blank = comic("Cagaster", "Tome 1", "1970");
+    blank.1.release_date = Some("1970-01-21".into());
+    assert_eq!(
+        from_locals("Cagaster", std::slice::from_ref(&blank)).year,
+        None
+    );
+    assert_eq!(volume_from_locals(&[blank]).release_date, None);
+    let real = comic("Ashita no Joe", "Tome 1", "1970");
+    assert_eq!(
+        from_locals("x", std::slice::from_ref(&real)).year,
+        Some(1970)
+    );
+    assert_eq!(
+        volume_from_locals(&[real]).release_date.as_deref(),
+        Some("1970-07")
+    );
+    let web = WebMetadata {
+        year: Some(2014),
+        ..WebMetadata::default()
+    };
+    let mut blank = comic("Cagaster", "Tome 1", "1970");
+    blank.1.release_date = Some("1970-01".into());
+    let meta = with_web(
+        from_locals("Cagaster", &[blank]),
+        "Cagaster",
+        &[web],
+        "fr",
+        false,
+    );
+    assert_eq!(meta.year, Some(2014));
+}
