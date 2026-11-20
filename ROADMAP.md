@@ -1446,7 +1446,15 @@ Plus tard, sans ordre : collections et listes de lecture, relations entre série
 
 ## Phase 10 : retours de la vraie bibliothèque (plan validé le 2026-11-20)
 
-Premier essai sur la vraie bibliothèque de l'utilisateur, servie depuis son NAS (TerraMaster F4-423, Celeron N5105, 16 Go, TOS ; Docker en `user: "0:0"`, le compte de l'utilisateur ayant l'UID 0) et lue sur le Galaxy A55. Bibliothèque « Mangas » : 4 941 tomes, 907 Go. Premier scan : 56 min (environ 270 Mo/s, limité par le disque), 1 021 sains, 3 818 en avertissement, 102 en erreur. Analyse faite sur une sauvegarde de sa base et sur des fichiers d'exemple (`Dofus v01.cbz`, `Gamaran v01.cbz`, `Change 123 v01.cbz`, `Triage X v23.cbr`, dans le dossier personnel de l'utilisateur sous WSL).
+Premier essai sur la vraie bibliothèque de l'utilisateur, servie depuis son NAS (TerraMaster F4-423, Celeron N5105, 16 Go, TOS ; Docker en `user: "0:0"`, le compte de l'utilisateur ayant l'UID 0) et lue sur le Galaxy A55. Bibliothèque « Mangas » : 4 941 tomes, 907 Go. Premier scan : 56 min (environ 270 Mo/s, limité par le disque), 1 021 sains, 3 818 en avertissement, 102 en erreur. Analyse faite sur une sauvegarde de sa base (`/home/fabrice/shiori-20261119-225327.db`, à copier avant de l'ouvrir : elle migre à l'ouverture) et sur des fichiers d'exemple, à ne jamais modifier :
+
+- `/home/fabrice/Dofus v01.cbz` : JPEG au segment de commentaire trop court (tome entier refusé) ;
+- `/home/fabrice/Gamaran v01.cbz` : même défaut, pages dans un sous-dossier ;
+- `/home/fabrice/Change 123 v01.cbz` : JPEG sains, pages dans un sous-dossier (les BMP sont dans le tome 9, absent) ;
+- `/home/fabrice/Triage X v23.cbr` : archive 7z nommée `.cbr` ;
+- `/home/fabrice/Screen_Recording_20261120_083906_Chrome.mp4` : vidéo du zoom sur le A55 (pas de ffmpeg dans WSL : images extraites avec le Chromium de Playwright, `<video>` puis capture à chaque instant).
+
+**Méthode, à respecter dans chaque lot** (oubliée plusieurs fois) : `graphify query` / `explain` / `path` **avant** tout grep ou lecture de fichier pour une question de code (un grep trop étroit a déjà raté un test e2e) ; le mode Ponytail (le plus petit changement complet) et **la review Ponytail avant chaque PR**, corrections faites et mentionnées dans la PR.
 
 ### Constats
 
@@ -1460,7 +1468,8 @@ Premier essai sur la vraie bibliothèque de l'utilisateur, servie depuis son NAS
 - **Délier une source ne tient pas** : `unlink_source` efface la ligne, la série redevient « jamais cherchée » et l'identification automatique de fin de scan (surveillance, scan périodique) la relie si le titre correspond. La fenêtre « Identifier » ne montre le lien que de la source choisie dans la liste.
 - **Série lue / non lue** : seulement tome par tome aujourd'hui (menu du tome).
 - **Lecture rapide** : pause au bout de quelques pages en feuilletant vite. Le lecteur précharge 2 pages (`Reader.tsx`), et le NAS encode chaque page en AVIF à sa première lecture (Celeron N5105).
-- **Zoom au double tap sur le A55** : le zoom marche, on ne peut pas se déplacer dans l'image. Non reproduit en émulation (Chromium 412×915, densité 2,6, tactile : déplacement horizontal et vertical corrects, la page ne tourne pas). Réponses attendues : navigateur (Chrome, Samsung Internet, application installée), orientation, page simple ou double, ce qui se passe exactement ; une vidéo d'écran aiderait.
+- **Zoom au double tap** : le zoom marche, on ne peut pas se déplacer dans l'image, ni sur le A55 (Chrome) ni dans Edge sur PC ; page simple d'une BD. La vidéo montre le zoom ×2, puis le doigt qui glisse sans que la vue bouge, puis un retour à la page entière. Non reproduit en émulation (Chromium 412×915, densité 2,6, tactile : déplacement correct). Sur PC, c'est attendu : une souris ne fait pas défiler un bloc en le glissant ; le déplacement repose aujourd'hui sur le défilement natif du `<main>` (`overflow-auto`, `touch-action: manipulation`).
+- **WebP** : déjà lu (JPEG, PNG, WebP, AVIF ; 3 236 pages `.jpg` contenant du WebP s'affichent chez l'utilisateur), mais le README ne liste aucun format.
 
 ### Décisions (2026-11-20)
 
@@ -1474,6 +1483,8 @@ Premier essai sur la vraie bibliothèque de l'utilisateur, servie depuis son NAS
 - ⏳ **10.1 `fix/scan-real-library`** (backend, scan)
   - Dimensions d'une page : `imagesize`, puis repli sur `image::ImageReader::into_dimensions()` (en-têtes seulement) avant de déclarer `image_undecodable`. Test avec un JPEG au segment de commentaire trop court, construit dans `shiori-testkit`.
   - Pages BMP et GIF : features `bmp` et `gif` de `image` (Rust pur), `image/bmp` et `image/gif` reconnus, servis en original et redimensionnés comme les autres (GIF : première image).
+  - Formats lus listés partout : README et accueil de la documentation (archives CBZ, CBR, PDF ; images JPEG, PNG, WebP, AVIF, BMP, GIF), guide « Bibliothèques » et `unsupported_image` des codes de diagnostic mis à jour (fr, en).
+  - Vérifier sur les fichiers d'exemple : Dofus et Gamaran entièrement lisibles, Triage X avec le nouveau code, et les compteurs d'un scan de la base de l'utilisateur.
   - Archive 7z (`7z\xBC\xAF\x27\x1C`) : nouveau code d'erreur stable (`unsupported_archive`, « archive 7z (CB7) non prise en charge »), traduit dans l'interface et documenté dans les codes de diagnostic.
   - Sévérités : `subdirectories` et `archive_order_differs` en information ; `extension_mismatch` en information, une ligne par fichier (avec le nombre de pages) ; `desktop.ini`, `*.nfo`, `.html`/`.xhtml`/`.css`/`.opf`/`.ncx` ajoutés aux entrées ignorées en silence (`is_ignored`).
   - `ComicInfo.xml` mal formé : lecture champ par champ, les champs lisibles gardés, avertissement maintenu.
@@ -1493,7 +1504,7 @@ Premier essai sur la vraie bibliothèque de l'utilisateur, servie depuis son NAS
   - Rendu anticipé : à la demande d'une page, le serveur prépare en arrière-plan les 4 à 6 suivantes du tome à la même largeur et au même format (priorité basse, sous le plafond de rendus).
   - Préchargement : 4 à 5 pages en Wi-Fi, 2 si la connexion est lente ou en économie de données (`navigator.connection`).
   - Mesurer l'encodage d'une page sur le NAS ; au-delà d'une seconde, envisager une vitesse d'AVIF plus rapide ou l'original quand il est déjà en JPEG à la bonne taille.
-  - Zoom du A55, une fois la cause connue.
+  - Zoom : déplacement géré par le lecteur lui-même (glisser au doigt **et** à la souris, `pointermove` sur `scrollLeft`/`scrollTop`, capture du pointeur), au lieu du seul défilement natif ; test e2e à la souris (Edge, Chrome) et au doigt ; essai de l'utilisateur sur le A55 et dans Edge avant fusion.
 - ⏳ **10.5 `docs/phase10`** : durée du premier scan (ordre de grandeur, exemple réel), codes de diagnostic modifiés, Wikipédia dans les métadonnées, bilan de la phase, version.
 
 ## Fonctionnalités ajoutées en cours de route
