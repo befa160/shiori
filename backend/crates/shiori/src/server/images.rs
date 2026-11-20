@@ -177,8 +177,10 @@ async fn resized(
     format: Format,
     original: impl Future<Output = Result<Vec<u8>, ApiError>>,
 ) -> Result<Vec<u8>, ApiError> {
-    let rendered = render_cached(app, id, width, format, original, true).await?;
-    Ok(rendered.expect("un rendu demandé attend son tour"))
+    match render_cached(app, id, width, format, original, true).await? {
+        Render::Done(bytes) => Ok(bytes),
+        Render::NoSlot | Render::Elsewhere => unreachable!("un rendu demandé attend son tour"),
+    }
 }
 
 /// Rendu anticipé (lot 10.4) : les [`PREFETCH`] pages lisibles suivantes du tome, à la même
@@ -199,15 +201,6 @@ fn prefetch(app: Arc<App>, me: Viewer, id: PageId, width: u32, format: Format) {
             else {
                 continue;
             };
-            let key = (next, w, f);
-            if !app
-                .prefetching
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .insert(key)
-            {
-                continue;
-            }
             let (path, stamp) = (path.clone(), *stamp);
             let reader = app.clone();
             let original = async move {
@@ -215,21 +208,41 @@ fn prefetch(app: Arc<App>, me: Viewer, id: PageId, width: u32, format: Format) {
                     .await
                     .map_err(|_| corrupt("lecture interrompue"))?
             };
-            let done = render_cached(&app, next, w, f, original, false).await;
-            app.prefetching
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .remove(&key);
-            // Plus de jeton libre : les pages suivantes attendront leur vraie demande.
-            if matches!(done, Ok(None)) {
+            // Plus de jeton libre : les pages suivantes attendront leur vraie demande. Une page déjà
+            // en cours (demandée par le lecteur) est simplement passée.
+            if let Ok(Render::NoSlot) = render_cached(&app, next, w, f, original, false).await {
                 break;
             }
         }
     });
 }
 
-/// Comme [`resized`] ; sans `wait`, rien n'est rendu (`None`) s'il ne reste pas au moins un jeton
-/// libre après celui-ci : l'anticipation ne retarde jamais une page demandée.
+/// Issue d'un rendu en cache.
+enum Render {
+    Done(Vec<u8>),
+    /// Anticipation seulement : pas de jeton libre pour elle.
+    NoSlot,
+    /// Anticipation seulement : cette page est déjà en cours de rendu.
+    Elsewhere,
+}
+
+/// Retire une page du registre des rendus en cours quand son rendu s'arrête, erreur comprise.
+struct InFlight<'a>(&'a App, (PageId, u32, Format));
+
+impl Drop for InFlight<'_> {
+    fn drop(&mut self) {
+        let mut set = self
+            .0
+            .rendering
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        set.remove(&self.1);
+    }
+}
+
+/// Comme [`resized`]. Une page n'est jamais rendue deux fois à la fois : déjà en cours, une vraie
+/// demande (`wait`) l'attend, une anticipation la passe. Sans `wait`, rien n'est rendu s'il ne reste
+/// pas au moins un jeton libre après celui-ci : l'anticipation ne retarde jamais une page demandée.
 async fn render_cached(
     app: &Arc<App>,
     id: PageId,
@@ -237,23 +250,28 @@ async fn render_cached(
     format: Format,
     original: impl Future<Output = Result<Vec<u8>, ApiError>>,
     wait: bool,
-) -> Result<Option<Vec<u8>>, ApiError> {
-    // Cette page est déjà en cours d'anticipation : l'attendre plutôt que la rendre deux fois.
-    let anticipated = || {
-        let set = app
-            .prefetching
+) -> Result<Render, ApiError> {
+    let key = (id, width, format);
+    let _in_flight = loop {
+        let cache = app.clone();
+        let hit = tokio::task::spawn_blocking(move || cache.images.get(&id, width, format)).await;
+        if let Ok(Some(bytes)) = hit {
+            return Ok(Render::Done(bytes));
+        }
+        // Vérifier et s'inscrire d'un seul geste : deux demandes ne démarrent pas ensemble.
+        if app
+            .rendering
             .lock()
-            .unwrap_or_else(PoisonError::into_inner);
-        set.contains(&(id, width, format))
-    };
-    while wait && anticipated() {
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(key)
+        {
+            break InFlight(app, key);
+        }
+        if !wait {
+            return Ok(Render::Elsewhere);
+        }
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-    }
-    let cache = app.clone();
-    let hit = tokio::task::spawn_blocking(move || cache.images.get(&id, width, format)).await;
-    if let Ok(Some(bytes)) = hit {
-        return Ok(Some(bytes));
-    }
+    };
     // Jeton d'abord : au plus `renders` originales en mémoire à la fois, pas une par requête.
     let _permit = if wait {
         app.renders.acquire().await.expect("sémaphore jamais fermé")
@@ -262,7 +280,7 @@ async fn render_cached(
     {
         permit
     } else {
-        return Ok(None);
+        return Ok(Render::NoSlot);
     };
     let original = original.await?;
     let cache = app.clone();
@@ -277,7 +295,7 @@ async fn render_cached(
         if let Err(e) = cache.images.put(&id, width, format, &bytes) {
             tracing::warn!("cache d'images : {e}");
         }
-        Ok(Some(bytes))
+        Ok(Render::Done(bytes))
     })
     .await
     .map_err(|_| failed("rendu interrompu".into()))?

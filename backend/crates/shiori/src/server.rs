@@ -134,8 +134,8 @@ pub struct App {
     pub backups: Backups,
     /// Décoder et encoder coûte du CPU et de la mémoire : nombre de rendus simultanés borné.
     renders: Semaphore,
-    /// Rendus anticipés en cours (page, largeur, format) : jamais deux fois le même à la fois.
-    prefetching: std::sync::Mutex<std::collections::HashSet<(PageId, u32, crate::render::Format)>>,
+    /// Rendus en cours, demandés ou anticipés (page, largeur, format) : jamais deux fois à la fois.
+    rendering: std::sync::Mutex<std::collections::HashSet<(PageId, u32, crate::render::Format)>>,
     auth: auth::Guard,
 }
 
@@ -169,7 +169,7 @@ impl App {
             scanner: Scanner::new(jobs, log_days).with_metadata(metadata.clone()),
             metadata,
             renders: Semaphore::new(cores.min(4)),
-            prefetching: Default::default(),
+            rendering: Default::default(),
             auth: auth::Guard::new(),
         }
     }
