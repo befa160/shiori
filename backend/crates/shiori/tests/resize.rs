@@ -295,3 +295,42 @@ async fn a_bmp_page_is_reencoded_even_when_not_shrunk() {
     let original = f.get(&format!("/api/pages/{id}/image"), None).await;
     assert_eq!(original.headers()[header::CONTENT_TYPE], "image/bmp");
 }
+
+/// Rendu anticipé (lot 10.4) : une page demandée par le lecteur (AVIF) fait préparer les 5
+/// suivantes du tome, dans l'ordre de lecture, à la même largeur et au même format ; pas au-delà.
+/// Une couverture (JPEG) ne fait rien préparer.
+#[tokio::test]
+async fn the_next_pages_are_rendered_ahead() {
+    let f = Fixture::new().await;
+    let pages = f.pages(&f.unordered()).await;
+    let ids: Vec<String> = pages
+        .iter()
+        .map(|p| p["id"].as_str().unwrap().to_owned())
+        .collect();
+    let file = |i: usize, ext: &str| f.cached(&ids[i], &format!("{}-w320-v1.{ext}", ids[i]));
+
+    let cover = f
+        .get(&format!("/api/pages/{}/image?w=320&f=jpeg", ids[0]), None)
+        .await;
+    assert_eq!(cover.status(), StatusCode::OK);
+    let response = f
+        .get(&format!("/api/pages/{}/image?w=320&f=avif", ids[2]), None)
+        .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let ahead = || (3..=7).all(|i| file(i, "avif").exists());
+    for _ in 0..200 {
+        if ahead() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    assert!(ahead(), "les 5 pages suivantes sont en cache");
+    assert!(
+        !file(8, "avif").exists() && !file(1, "avif").exists(),
+        "ni au-delà, ni avant"
+    );
+    assert!(
+        (1..PAGES).all(|i| !file(i, "jpg").exists()),
+        "une couverture ne prépare rien"
+    );
+}

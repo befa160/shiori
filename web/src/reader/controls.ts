@@ -114,3 +114,16 @@ export function moveIndex(index: number, move: Move, count: number): number {
       return last
   }
 }
+
+/** État du réseau d'après le navigateur (`navigator.connection`, Chrome et Edge) ; absent ailleurs. */
+export interface Connection {
+  saveData?: boolean
+  effectiveType?: string
+}
+
+/** Vues préchargées après la vue affichée (lot 10.4) : 4 sur une bonne connexion, 2 sur une
+ * connexion lente ou en économie de données (2 a été mesuré suffisant en 4G lente, lot 6.5a). */
+export function preloadAhead(connection: Connection | undefined = (navigator as { connection?: Connection }).connection): number {
+  const slow = connection?.saveData || ['slow-2g', '2g', '3g'].includes(connection?.effectiveType ?? '')
+  return slow ? 2 : 4
+}

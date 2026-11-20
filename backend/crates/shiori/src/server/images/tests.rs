@@ -1,0 +1,21 @@
+use super::*;
+
+/// L'anticipation ne prend jamais le dernier jeton de rendu : elle renonce sans lire l'originale,
+/// et une vraie demande passe quand même.
+#[tokio::test]
+async fn rendering_ahead_never_takes_the_last_render_slot() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = Arc::new(shiori_db::Db::open(&dir.path().join("t.db")).await.unwrap());
+    let images = Images::open(dir.path().join("cache"), u64::MAX).unwrap();
+    let app = Arc::new(App::new(db, images));
+    let id: PageId = "00".repeat(16).parse().unwrap();
+    let free = app.renders.available_permits();
+    let _held = app.renders.acquire_many(free as u32 - 1).await.unwrap();
+    // Lue, l'originale donnerait une erreur : `Ok(None)` prouve qu'elle ne l'a pas été.
+    let never = async { Err(corrupt("l'originale ne doit pas être lue")) };
+    let ahead = render_cached(&app, id, 320, Format::Jpeg, never, false).await;
+    assert!(matches!(ahead, Ok(None)));
+    let page = shiori_testkit::png(640, 960, [1, 2, 3]);
+    let now = render_cached(&app, id, 320, Format::Jpeg, async { Ok(page) }, true).await;
+    assert!(matches!(now, Ok(Some(_))));
+}
