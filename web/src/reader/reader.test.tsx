@@ -125,9 +125,8 @@ describe('lecteur', () => {
     const toolbar = screen.getByRole('toolbar', { hidden: true })
     expect(toolbar).toHaveClass('invisible')
     tap(450)
-    // Au centre, le tap attend un éventuel second tap (zoom) avant de montrer les commandes.
-    expect(toolbar).toHaveClass('invisible')
-    await waitFor(() => expect(toolbar).not.toHaveClass('invisible'))
+    // Au doigt, le tap au centre montre les commandes tout de suite (plus de double tap à attendre).
+    expect(toolbar).not.toHaveClass('invisible')
     expect(within(toolbar).getByRole('link', { name: 'Retour' })).toHaveAttribute('href', '/series/7')
     await userEvent.click(within(toolbar).getByRole('button', { name: 'Page suivante' }))
     expect(screen.getByRole('img', { name: /^Page 2 sur 3/ })).toBeInTheDocument()
@@ -517,42 +516,71 @@ describe('progression, réglages de la série, tome suivant', () => {
   })
 })
 
-describe('zoom au double tap', () => {
-  it('double, puis simple : le point touché reste visible, tourner la page ou un double tap le quitte', async () => {
+describe('zoom', () => {
+  it('à la souris : double-clic au centre, clic sans effet, sortie par double-clic, Échap ou page tournée', async () => {
+    // jsdom n'a pas la capture du pointeur (glisser pour se déplacer, vérifié en e2e).
+    Element.prototype.setPointerCapture = () => {}
     api('ltr')
     renderAt(`/read/${VOLUME}`)
     await screen.findByRole('img', { name: 'Page 1 sur 3' })
-    const tap = (x: number) => {
-      fireEvent.pointerDown(main(), { clientX: x, clientY: 300 })
-      fireEvent.pointerUp(main(), { clientX: x, clientY: 300 })
+    const click = (x: number) => {
+      fireEvent.pointerDown(main(), { clientX: x, clientY: 300, pointerType: 'mouse', button: 0 })
+      fireEvent.pointerUp(main(), { clientX: x, clientY: 300, pointerType: 'mouse', button: 0 })
     }
+    const doubleClick = (x: number) => fireEvent.doubleClick(main(), { clientX: x, clientY: 300 })
     const wait = () => act(() => new Promise((done) => setTimeout(done, 350)))
-    tap(450)
-    tap(460)
+    // Sur un côté, le double-clic ne zoome pas (chaque clic y tourne déjà la page).
+    doubleClick(850)
+    expect(main()).toHaveClass('overflow-hidden')
+    click(450)
+    click(460)
+    doubleClick(460)
     // Deux fois la place de l'écran (2048×1536) : page de 1 024 px, demandée en 1 080.
     expect(img()).toHaveAttribute('src', '/api/pages/p1/image?w=1080&f=avif')
     expect(img()).toHaveStyle({ width: '1024px' })
     expect(main()).toHaveClass('overflow-auto')
-    // On s'y déplace et on y pince comme d'habitude ; seul notre double tap zoome.
-    expect(main()).toHaveStyle({ touchAction: 'manipulation' })
-    // Le premier tap n'a pas montré les commandes.
+    expect(main()).toHaveStyle({ touchAction: 'pinch-zoom' })
+    // Le double-clic n'a pas montré les commandes.
     await wait()
     expect(screen.getByRole('toolbar', { hidden: true })).toHaveClass('invisible')
-    // Zoomé, un tap sur le côté ne tourne pas la page ; un double tap revient à l'écran.
+    // Zoomé, un clic sur le côté ne tourne pas la page ; un double-clic, n'importe où, en sort.
+    click(850)
+    expect(img()).toHaveAccessibleName('Page 1 sur 3')
+    doubleClick(850)
+    expect(main()).toHaveClass('overflow-hidden')
+    // Échap en sort aussi.
+    doubleClick(450)
+    expect(main()).toHaveClass('overflow-auto')
+    await userEvent.keyboard('{Escape}')
+    expect(main()).toHaveClass('overflow-hidden')
+    // Tourner la page quitte le zoom.
+    doubleClick(450)
+    await userEvent.keyboard('{ArrowRight}')
+    expect(screen.getByRole('img', { name: /^Page 2 sur 3/ })).toBeInTheDocument()
+    expect(main()).toHaveClass('overflow-hidden')
+  })
+
+  it('au doigt : plus de zoom au double tap, le pincement du navigateur seul', async () => {
+    api('ltr')
+    renderAt(`/read/${VOLUME}`)
+    await screen.findByRole('img', { name: 'Page 1 sur 3' })
+    const tap = (x: number) => {
+      fireEvent.pointerDown(main(), { clientX: x, clientY: 300, pointerType: 'touch' })
+      fireEvent.pointerUp(main(), { clientX: x, clientY: 300, pointerType: 'touch' })
+    }
+    tap(450)
+    tap(450)
+    // Chrome sur Android fait de ces deux taps un `dblclick` : il ne zoome pas pour autant.
+    fireEvent.doubleClick(main(), { clientX: 450, clientY: 300 })
+    expect(main()).toHaveClass('overflow-hidden')
+    expect(main()).toHaveStyle({ touchAction: 'pinch-zoom' })
+    // Pincée par le navigateur, la page se déplace au doigt : un tap sur le côté ne la tourne pas.
+    vi.stubGlobal('visualViewport', { scale: 2 })
     tap(850)
     expect(img()).toHaveAccessibleName('Page 1 sur 3')
-    tap(850)
-    expect(main()).toHaveClass('overflow-hidden')
-    await wait()
+    vi.stubGlobal('visualViewport', { scale: 1 })
     tap(850)
     expect(screen.getByRole('img', { name: /^Page 2 sur 3/ })).toBeInTheDocument()
-    // Tourner la page quitte le zoom.
-    tap(450)
-    tap(450)
-    expect(main()).toHaveClass('overflow-auto')
-    await userEvent.keyboard('{ArrowRight}')
-    expect(img()).toHaveAccessibleName('Page 3 sur 3')
-    expect(main()).toHaveClass('overflow-hidden')
   })
 })
 

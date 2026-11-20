@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { type PointerEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { type MouseEvent, type PointerEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { toast } from 'sonner'
@@ -145,8 +145,8 @@ function Reader({ volumeId }: { volumeId: string }) {
   )
 }
 
-/** Délai sous lequel deux taps proches font un double tap (zoom). */
-const DOUBLE_TAP = 300
+/** Délai sous lequel deux clics font un double-clic (zoom à la souris). */
+const DOUBLE_CLICK = 300
 
 function Pages({
   volumeId,
@@ -225,8 +225,9 @@ function Pages({
     }
   }, [index, views, view])
 
-  // Zoom ×2 au double tap, sur la vue affichée seulement (tourner la page le quitte) ; on s'y
-  // déplace par le défilement natif. Le point touché (fraction de l'écran) reste sous le doigt.
+  // Zoom (lot 10.4b) : au doigt, le pincement natif du navigateur seul ; à la souris, ×2 au
+  // double-clic sur la vue affichée seulement (tourner la page le quitte), et l'on s'y déplace en
+  // glissant. Le point cliqué (fraction de l'écran) reste sous le curseur.
   const [zoom, setZoom] = useState<{ index: number; x: number; y: number } | null>(null)
   const zoomed = zoom?.index === index
   const mainRef = useRef<HTMLElement>(null)
@@ -236,14 +237,27 @@ function Pages({
     el.scrollLeft = (el.scrollWidth - el.clientWidth) * zoom.x
     el.scrollTop = (el.scrollHeight - el.clientHeight) * zoom.y
   }, [zoom, index])
-  // Un tap au centre attend de savoir s'il est suivi d'un second (double tap) avant d'agir.
-  const lastTap = useRef<{ time: number; x: number; y: number } | null>(null)
+  useEffect(() => {
+    if (!zoomed) return
+    const leave = (event: KeyboardEvent) => event.key === 'Escape' && setZoom(null)
+    window.addEventListener('keydown', leave)
+    return () => window.removeEventListener('keydown', leave)
+  }, [zoomed])
+  // À la souris, un clic au centre attend de savoir s'il devient un double-clic (zoom).
   const toggleTimer = useRef<number | undefined>(undefined)
   useEffect(() => () => window.clearTimeout(toggleTimer.current), [])
+  // Glisser à la souris dans la page zoomée : point de départ et défilement d'alors.
+  const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null)
+  // Type du dernier pointeur posé : Chrome sur Android fait un `dblclick` de deux taps quand son
+  // zoom au double tap est coupé ; seul un double-clic de souris zoome.
+  const pointerType = useRef('mouse')
+  // Pincée par le navigateur, la page se déplace au doigt : aucun geste ne la tourne.
+  const pinchZoomed = () => (window.visualViewport?.scale ?? 1) > 1.01
 
   // Clic droit ou molette (enregistrer l'image…) : jamais un changement de page.
   const ignored = (event: PointerEvent) => event.pointerType === 'mouse' && event.button !== 0
   const onPointerDown = (event: PointerEvent) => {
+    pointerType.current = event.pointerType
     if (ignored(event)) return
     // Panneau Affichage ouvert : ce toucher ne sert qu'à le fermer, jamais à tourner la page.
     if (document.querySelector('[data-radix-popper-content-wrapper]')) {
@@ -253,43 +267,59 @@ function Pages({
     pointers.current.add(event.pointerId)
     if (pointers.current.size > 1) pinching.current = true
     else start.current = { x: event.clientX, y: event.clientY }
+    const el = mainRef.current
+    if (zoomed && event.pointerType === 'mouse' && el) {
+      drag.current = { x: event.clientX, y: event.clientY, left: el.scrollLeft, top: el.scrollTop }
+      event.currentTarget.setPointerCapture(event.pointerId)
+    }
+  }
+  const onPointerMove = (event: PointerEvent) => {
+    const from = drag.current
+    const el = mainRef.current
+    if (!from || !el) return
+    el.scrollLeft = from.left - (event.clientX - from.x)
+    el.scrollTop = from.top - (event.clientY - from.y)
   }
   const onPointerCancel = (event: PointerEvent) => {
     pointers.current.delete(event.pointerId)
     start.current = null
+    drag.current = null
   }
   const onPointerUp = (event: PointerEvent) => {
     if (ignored(event)) return
     pointers.current.delete(event.pointerId)
+    drag.current = null
     const from = start.current
     start.current = null
     if (pinching.current) {
       if (pointers.current.size === 0) pinching.current = false
       return
     }
-    if (!from) return
+    // Zoomée (à la souris ou par pincement) : glisser déplace, cliquer ne tourne pas la page.
+    if (!from || zoomed || pinchZoomed()) return
     const to = { x: event.clientX, y: event.clientY }
     const width = event.currentTarget.clientWidth
     if (Math.hypot(to.x - from.x, to.y - from.y) > 10) {
-      // Zoomé, glisser déplace la page (défilement natif) : jamais un changement de page.
-      const swipe = zoomed ? null : swipeAction(from, to, width, turn)
+      const swipe = swipeAction(from, to, width, turn)
       if (swipe) go(swipe)
       return
     }
-    const now = Date.now()
-    const before = lastTap.current
-    lastTap.current = null
-    if (before && now - before.time < DOUBLE_TAP && Math.hypot(to.x - before.x, to.y - before.y) < 40) {
-      window.clearTimeout(toggleTimer.current)
-      const height = event.currentTarget.clientHeight || 1
-      setZoom(zoomed ? null : { index, x: to.x / (width || 1), y: to.y / height })
-      return
-    }
     const tap = tapAction(to.x, width, turn)
-    // Sur les côtés, la page tourne sans attendre ; le double tap ne s'y amorce que zoomé.
-    if (tap === 'toggle' || zoomed) lastTap.current = { time: now, ...to }
-    if (tap === 'toggle') toggleTimer.current = window.setTimeout(() => setChrome((shown) => !shown), DOUBLE_TAP)
-    else if (!zoomed) go(tap)
+    if (tap !== 'toggle') return go(tap)
+    // Au doigt, les commandes s'ouvrent tout de suite : il n'y a plus de double tap à attendre.
+    if (event.pointerType !== 'mouse') return setChrome((shown) => !shown)
+    window.clearTimeout(toggleTimer.current)
+    toggleTimer.current = window.setTimeout(() => setChrome((shown) => !shown), DOUBLE_CLICK)
+  }
+  // Double-clic au centre : zoom ×2 au point cliqué ; zoomée, n'importe où : retour à la page
+  // entière. Sur les côtés, chaque clic a déjà tourné la page.
+  const onDoubleClick = (event: MouseEvent<HTMLElement>) => {
+    if (pointerType.current !== 'mouse') return
+    const width = event.currentTarget.clientWidth || 1
+    if (!zoomed && tapAction(event.clientX, width, turn) !== 'toggle') return
+    window.clearTimeout(toggleTimer.current)
+    const height = event.currentTarget.clientHeight || 1
+    setZoom(zoomed ? null : { index, x: event.clientX / width, y: event.clientY / height })
   }
 
   const total = pages.length
@@ -307,13 +337,15 @@ function Pages({
         // « safe » : zoomée, la page déborde des deux côtés et reste atteignable en entier.
         className={cn(
           'flex h-full w-full items-center-safe justify-center-safe',
-          zoomed ? 'overflow-auto' : 'overflow-hidden',
+          zoomed ? 'cursor-grab overflow-auto active:cursor-grabbing' : 'overflow-hidden',
         )}
-        // Zoomée : déplacement et pincement natifs, sans le zoom natif au double tap (le nôtre).
-        style={{ touchAction: zoomed ? 'manipulation' : 'pinch-zoom' }}
+        // Au doigt : le pincement du navigateur, sans son zoom au double tap.
+        style={{ touchAction: 'pinch-zoom' }}
         onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
+        onDoubleClick={onDoubleClick}
       >
         <ViewDisplay
           key={`${first.id}-${current.kind === 'half' ? current.half : viewPages(current).length}`}
