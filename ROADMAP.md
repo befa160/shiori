@@ -1452,6 +1452,7 @@ Premier essai sur la vraie bibliothèque de l'utilisateur, servie depuis son NAS
 - `/home/fabrice/Gamaran v01.cbz` : même défaut, pages dans un sous-dossier ;
 - `/home/fabrice/Change 123 v01.cbz` : 95 JPEG sains, pages dans un sous-dossier ; seul avertissement : `subdirectories`. Ce n'est **pas** un exemple de BMP : dans cette série, les 2 pages BMP sont dans le tome 9. Pour tester BMP, demander `Terra Formars v20.cbz` (418 pages BMP) ou `Change 123 v09.cbz` ;
 - `/home/fabrice/Triage X v23.cbr` : archive 7z nommée `.cbr` ;
+- `/home/fabrice/Terra Formars v20.cbz` : en réalité une archive **RAR** nommée `.cbz` (820 Mo) ; 418 pages BMP ignorées d'après la base : l'exemple pour BMP, et pour une extension qui ment sur le type d'archive ;
 - `/home/fabrice/Screen_Recording_20261120_083906_Chrome.mp4` : vidéo du zoom sur le A55 (pas de ffmpeg dans WSL : images extraites avec le Chromium de Playwright, `<video>` puis capture à chaque instant).
 
 **Méthode, à respecter dans chaque lot** (oubliée plusieurs fois) : `graphify query` / `explain` / `path` **avant** tout grep ou lecture de fichier pour une question de code (un grep trop étroit a déjà raté un test e2e) ; le mode Ponytail (le plus petit changement complet) et **la review Ponytail avant chaque PR**, corrections faites et mentionnées dans la PR.
@@ -1476,6 +1477,7 @@ Premier essai sur la vraie bibliothèque de l'utilisateur, servie depuis son NAS
 - Archives 7z : **signalées** par un code clair, pas lues (l'utilisateur reconvertit ses 2 tomes).
 - Source française : **Wikipédia en français dans le lot 10.2**.
 - Carte d'une série lue : **la pastille « Lu » reste** (pas de coche façon Plex).
+- Zoom : **pincement natif au doigt, double-clic à la souris**. Sur le A55, le pincement du navigateur marche (zoom progressif, déplacement libre) alors que le double tap zoome sans permettre de se déplacer : le double tap disparaît au doigt ; à la souris (PC, sans pincement), le double-clic zoome ×2 et on se déplace en glissant.
 - Le premier scan d'une heure n'est pas un problème en soi ; sa durée sera documentée après le lot 10.1 (nouvelle mesure).
 
 ### Lots
@@ -1504,7 +1506,7 @@ Premier essai sur la vraie bibliothèque de l'utilisateur, servie depuis son NAS
   - Rendu anticipé : à la demande d'une page, le serveur prépare en arrière-plan les 4 à 6 suivantes du tome à la même largeur et au même format (priorité basse, sous le plafond de rendus).
   - Préchargement : 4 à 5 pages en Wi-Fi, 2 si la connexion est lente ou en économie de données (`navigator.connection`).
   - Mesurer l'encodage d'une page sur le NAS ; au-delà d'une seconde, envisager une vitesse d'AVIF plus rapide ou l'original quand il est déjà en JPEG à la bonne taille.
-  - Zoom : déplacement géré par le lecteur lui-même (glisser au doigt **et** à la souris, `pointermove` sur `scrollLeft`/`scrollTop`, capture du pointeur), au lieu du seul défilement natif ; test e2e à la souris (Edge, Chrome) et au doigt ; essai de l'utilisateur sur le A55 et dans Edge avant fusion.
+  - Zoom (décision du 2026-11-20) : au doigt, plus de double tap, le pincement natif seul (`touch-action: pinch-zoom` gardé ; un tap au centre ouvre les commandes tout de suite, sans attendre un éventuel second tap) ; à la souris, double-clic ×2 au point cliqué et déplacement en glissant (`pointermove` sur `scrollLeft`/`scrollTop`, capture du pointeur), Échap ou nouveau double-clic pour sortir. Test e2e tactile (le double tap ne zoome plus, le tap au centre est immédiat) et à la souris (zoom, glisser déplace, la page ne tourne pas) ; essai de l'utilisateur sur le A55 et dans Edge avant fusion ; guide « Lire » mis à jour (fr, en).
 - ⏳ **10.5 `docs/phase10`** : durée du premier scan (ordre de grandeur, exemple réel), codes de diagnostic modifiés, Wikipédia dans les métadonnées, bilan de la phase, version.
 
 ## Fonctionnalités ajoutées en cours de route
