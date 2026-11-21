@@ -14,7 +14,7 @@ flowchart LR
   V --> A["What is shown"]
 ```
 
-The **displayed title** is the edited title, otherwise the files' one, otherwise the web sources' one (in the interface language, or in romaji), otherwise the folder name. The other titles stay searchable.
+The **displayed title** is the edited title, otherwise the files' one (`ComicInfo.xml`, `index.json`), otherwise the series name taken from your file and folder names. Web sources' titles are not used for it: a Japanese title in romaji or a word-for-word translation is not the title of your edition. They stay alternative titles, which search finds. One exception: an all-lowercase name (`one-piece`) takes the spelling of an entry with the same name ("One Piece").
 
 A volume also has its own metadata (title, summary, date, authors), editable from its menu.
 

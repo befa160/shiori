@@ -330,8 +330,8 @@ async fn a_scan_identifies_new_series_then_one_is_confirmed_by_hand() {
     let uri = format!("/api/series/{gigant}/metadata/links/anilist");
     let (status, detail) = call(&f.app, "PUT", &uri, Some(json!({ "external_id": "4" }))).await;
     assert_eq!(
-        (status, detail["name"].as_str()),
-        (StatusCode::OK, Some("GIGANT"))
+        (status, detail["metadata"]["summary"].as_str()),
+        (StatusCode::OK, Some("About GIGANT."))
     );
     assert_eq!(
         (
@@ -354,8 +354,8 @@ async fn a_scan_identifies_new_series_then_one_is_confirmed_by_hand() {
     )
     .await;
     assert_eq!(
-        (status, detail["name"].as_str()),
-        (StatusCode::OK, Some("GIGANT"))
+        (status, detail["metadata"]["summary"].as_str()),
+        (StatusCode::OK, Some("About GIGANT."))
     );
     assert_eq!(detail["sources"][0]["last_error"], "rate_limited");
     // Délier : la série reprend son nom ; la source reste, marquée déliée (plus relue ni reliée

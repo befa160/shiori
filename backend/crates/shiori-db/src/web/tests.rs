@@ -78,6 +78,7 @@ fn linked(id: &str, title: &str, lang: &str) -> Outcome {
 
 #[tokio::test]
 async fn linked_sources_feed_the_merged_view_in_the_chosen_order() {
+    // L'ordre se lit dans le résumé : le titre reste celui du dossier (retour du 2026-11-21).
     let (_dir, db, one, _) = setup().await;
     db.record_source(
         one,
@@ -97,7 +98,10 @@ async fn linked_sources_feed_the_merged_view_in_the_chosen_order() {
     .unwrap();
     // Français par défaut : MangaDex d'abord.
     let detail = series(&db, one).await;
-    assert_eq!(detail.name, "One Piece (MangaDex)");
+    assert_eq!(
+        detail.metadata.summary.as_deref(),
+        Some("Résumé de One Piece (MangaDex)")
+    );
     assert_eq!(
         detail.metadata.summary.as_deref(),
         Some("Résumé de One Piece (MangaDex)")
@@ -106,13 +110,19 @@ async fn linked_sources_feed_the_merged_view_in_the_chosen_order() {
     assert_eq!(detail.sources[0].matched_by, Some(MatchedBy::Auto));
     // En anglais : AniList d'abord, recalculé aussitôt.
     db.set_language(Some(Language::En)).await.unwrap();
-    assert_eq!(series(&db, one).await.name, "One Piece (AniList)");
+    assert_eq!(
+        series(&db, one).await.metadata.summary.as_deref(),
+        Some("Résumé de One Piece (AniList)")
+    );
     // Ordre choisi : seulement MangaDex ; la fiche AniList ne compte plus.
     db.set_metadata_sources(Some(vec![SourceId::Mangadex]))
         .await
         .unwrap();
     let detail = series(&db, one).await;
-    assert_eq!(detail.name, "One Piece (MangaDex)");
+    assert_eq!(
+        detail.metadata.summary.as_deref(),
+        Some("Résumé de One Piece (MangaDex)")
+    );
     assert!(
         !detail
             .metadata
@@ -128,7 +138,10 @@ async fn linked_sources_feed_the_merged_view_in_the_chosen_order() {
         .clone();
     db.edit_series(one, main).await.unwrap();
     let detail = series(&db, one).await;
-    assert_eq!(detail.name, "One Piece (AniList)");
+    assert_eq!(
+        detail.metadata.summary.as_deref(),
+        Some("Résumé de One Piece (AniList)")
+    );
     assert_eq!(detail.metadata.main_source, Some(SourceId::Anilist));
     let bad = json!({ "main_source": "kitsu" })
         .as_object()
@@ -142,8 +155,11 @@ async fn linked_sources_feed_the_merged_view_in_the_chosen_order() {
     db.unlink_source(one, SourceId::Anilist).await.unwrap();
     let detail = series(&db, one).await;
     assert_eq!(
-        (detail.name.as_str(), detail.metadata.main_source),
-        ("One Piece (MangaDex)", None)
+        (
+            detail.metadata.summary.as_deref(),
+            detail.metadata.main_source
+        ),
+        (Some("Résumé de One Piece (MangaDex)"), None)
     );
     db.record_source(
         one,
@@ -163,7 +179,10 @@ async fn linked_sources_feed_the_merged_view_in_the_chosen_order() {
         .await
         .unwrap();
     db.refresh_metadata(None).await.unwrap();
-    assert_eq!(series(&db, one).await.name, "One Piece (MangaDex)");
+    assert_eq!(
+        series(&db, one).await.metadata.summary.as_deref(),
+        Some("Résumé de One Piece (MangaDex)")
+    );
     db.record_source(
         one,
         SourceId::Anilist,
@@ -176,13 +195,19 @@ async fn linked_sources_feed_the_merged_view_in_the_chosen_order() {
         .unwrap()
         .clone();
     db.edit_series(one, auto).await.unwrap();
-    assert_eq!(series(&db, one).await.name, "One Piece (MangaDex)");
+    assert_eq!(
+        series(&db, one).await.metadata.summary.as_deref(),
+        Some("Résumé de One Piece (MangaDex)")
+    );
     // Délier rend la place : AniList, puis le nom du dossier.
     assert!(db.unlink_source(one, SourceId::Mangadex).await.unwrap());
     assert!(!db.unlink_source(one, SourceId::Mangadex).await.unwrap());
-    assert_eq!(series(&db, one).await.name, "One Piece (AniList)");
+    assert_eq!(
+        series(&db, one).await.metadata.summary.as_deref(),
+        Some("Résumé de One Piece (AniList)")
+    );
     db.unlink_source(one, SourceId::Anilist).await.unwrap();
-    assert_eq!(series(&db, one).await.name, "one-piece");
+    assert_eq!(series(&db, one).await.metadata.summary, None);
 
     // Délier tient : la série n'est plus à identifier chez ces sources (l'identification
     // automatique de fin de scan ne la relie pas), et un lien choisi à la main efface le refus.
@@ -267,7 +292,8 @@ async fn candidates_failures_and_what_is_left_to_identify() {
         .await
         .unwrap();
     let detail = series(&db, akira).await;
-    assert_eq!(detail.name, "AKIRA");
+    // L'échec garde la fiche d'avant (son résumé) ; le titre reste le nom du dossier.
+    assert_eq!(detail.metadata.summary.as_deref(), Some("Résumé de AKIRA"));
     assert_eq!(
         detail.sources[0].last_error.as_deref(),
         Some("rate_limited")
@@ -465,10 +491,8 @@ async fn each_language_has_its_own_merged_view() {
     let name = |d: crate::SeriesDetail| (d.name, d.metadata.summary);
     assert_eq!(
         name(db.series_detail(&fr, one).await.unwrap().unwrap()),
-        (
-            "One Piece (VF)".into(),
-            Some("Résumé de One Piece (VF)".into())
-        )
+        // Titre : l'écriture du dossier « one-piece » donnée par la fiche de même nom.
+        ("One Piece".into(), Some("Résumé de One Piece (VF)".into()))
     );
     assert_eq!(
         name(db.series_detail(&en, one).await.unwrap().unwrap()),
@@ -476,7 +500,7 @@ async fn each_language_has_its_own_merged_view() {
     );
     let listed =
         |all: Vec<crate::SeriesSummary>| all.into_iter().find(|s| s.id == one).unwrap().name;
-    assert_eq!(listed(db.all_series(&fr).await.unwrap()), "One Piece (VF)");
+    assert_eq!(listed(db.all_series(&fr).await.unwrap()), "One Piece");
     assert_eq!(listed(db.all_series(&en).await.unwrap()), "One Piece");
 }
 
