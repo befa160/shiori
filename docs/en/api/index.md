@@ -59,7 +59,7 @@ Route-specific codes are listed on each page.
 No authentication.
 
 ```json
-{ "status": "ok", "version": "0.5.0" }
+{ "status": "ok", "version": "0.5.1" }
 ```
 
 `version`: the installed release number (`0.5.0-rc.2` for a pre-release), otherwise the code version.
