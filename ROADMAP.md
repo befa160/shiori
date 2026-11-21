@@ -1649,3 +1649,4 @@ Audit Ponytail de tout le dépôt après la phase 9 ; corrigé dans `fix/audit-v
 - 2026-11-20 : phase 10 planifiée d'après le premier essai sur la vraie bibliothèque (NAS) : scan tolérant, sources de métadonnées et Wikipédia FR, série lue/non lue, lecture rapide ; 7z signalé seulement, pastille « Lu » gardée.
 - 2026-11-20 : phase 10 terminée (scan tolérant, Wikipédia et métadonnées, série lue, rendu anticipé, zoom au pincement et à la souris) ; version `v0.5.0`.
 - 2026-11-21 : titre affiché tiré des fichiers puis des noms de fichiers et de dossiers, plus jamais d'un titre web (remplace Q34) ; retours d'usage de la v0.5.0.
+- 2026-11-21 : version `v0.5.1` : titres des séries et « Continuer la lecture » d'un appareil à l'autre (sans rescan).
