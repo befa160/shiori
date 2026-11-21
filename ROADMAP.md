@@ -1533,6 +1533,11 @@ Premier essai sur la vraie bibliothèque de l'utilisateur, servie depuis son NAS
   - les deux tomes 7z de Triage X, à reconvertir par l'utilisateur ;
   - captures d'écran de la documentation (repères `ecran_…`).
 
+## Retours d'usage de la v0.5.0 (2026-11-21)
+
+- ✅ **Titre affiché** (`fix/series-title`) : « Appurushīdo » pour le dossier Appleseed, une traduction mot à mot de MangaDex (« Âme d'argent ») pour Gintama. Décision du 2026-11-21, remplace Q34 : titre modifié > titre des fichiers > nom de la série tiré des noms de fichiers et de dossiers ; les titres web restent des titres alternatifs (cherchables) ; seul un nom tout en minuscules (`one-piece`) prend l'écriture d'une fiche de même nom. Appliqué à la fusion, recalculée au démarrage : pas de rescan. Sur la base de l'utilisateur : 82 séries changent de titre (Appleseed, Gintama, Captain Tsubasa au lieu d'« Olive et Tom », City Hunter au lieu de « Nicky Larson », Goldorak…).
+- ✅ **« Continuer la lecture »** : un tome commencé sur un appareil, la série marquée lue sur un autre, le tome restait dans « Continuer la lecture » de l'autre appareil. Cause (piste de l'utilisateur, reproduite avec deux navigateurs) : le cache du front, qui gardait la liste 30 s (`staleTime` par défaut) ; le serveur avait raison. La liste est redemandée à chaque affichage de l'accueil et à chaque retour sur l'application (`staleTime: 0`). Tests : `a_series_marked_read_leaves_continue_reading` (serveur) et un test de l'accueil qui échoue sans le correctif.
+
 ## Fonctionnalités ajoutées en cours de route
 
 ### Menu d'administration des scans (demandé le 2026-11-11)
@@ -1643,3 +1648,4 @@ Audit Ponytail de tout le dépôt après la phase 9 ; corrigé dans `fix/audit-v
 - 2026-11-19 : correctifs de l'audit avant la V1 (jetons d'API avec mot de passe, progression hors ligne datée, restauration sans scan concurrent, limites de connexion, `--trusted-proxy`) ; version `v0.4.0`.
 - 2026-11-20 : phase 10 planifiée d'après le premier essai sur la vraie bibliothèque (NAS) : scan tolérant, sources de métadonnées et Wikipédia FR, série lue/non lue, lecture rapide ; 7z signalé seulement, pastille « Lu » gardée.
 - 2026-11-20 : phase 10 terminée (scan tolérant, Wikipédia et métadonnées, série lue, rendu anticipé, zoom au pincement et à la souris) ; version `v0.5.0`.
+- 2026-11-21 : titre affiché tiré des fichiers puis des noms de fichiers et de dossiers, plus jamais d'un titre web (remplace Q34) ; retours d'usage de la v0.5.0.

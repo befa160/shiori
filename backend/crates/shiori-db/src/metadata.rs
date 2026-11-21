@@ -8,7 +8,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use shiori_core::{Author, LocalMetadata, MetadataSource, VolumeId};
-use shiori_meta::{SourceId, Text, WebMetadata};
+use shiori_meta::{SourceId, Text, WebMetadata, normalize};
 use sqlx::Row;
 
 use crate::{Db, Error, Language, PublicationStatus, Settings, from_db, to_db};
@@ -140,9 +140,12 @@ fn from_locals(name: &str, locals: &[(MetadataSource, LocalMetadata)]) -> Series
 }
 
 /// Complète la vue des fichiers avec les fiches web liées, `webs` dans l'ordre des sources
-/// (Q28 : les fichiers d'abord, puis le web). Titre (Q34) : celui des fichiers, sinon celui
-/// d'une fiche dans la langue de l'interface `lang`, sinon son romaji, sinon la première ; le
-/// nom du dossier ne vient qu'après (à l'affichage). Résumé : celui des fichiers, sinon dans la
+/// (Q28 : les fichiers d'abord, puis le web). Titre (retour d'usage du 2026-11-21, remplace Q34) :
+/// celui des fichiers, sinon le nom du dossier `name` (à l'affichage) ; une fiche ne donne que
+/// l'écriture de ce même nom s'il est tout en minuscules (« one-piece » → « One Piece »), jamais un
+/// autre titre : le romaji
+/// (« Appurushīdo » pour Appleseed) ou une traduction mot à mot de MangaDex n'est pas le titre
+/// français. Ses autres titres restent des titres alternatifs, que la recherche trouve. Résumé : celui des fichiers, sinon dans la
 /// langue de l'interface, sinon en anglais, sinon le premier. La langue passe avant la source
 /// (lot 10.2) : un résumé français de la dernière source l'emporte sur l'anglais de la première.
 /// Les autres titres et les liens s'additionnent ; les autres champs vides prennent la première
@@ -170,8 +173,15 @@ fn with_web(
             .chain([None])
             .find_map(|l| find(first, l).or_else(|| find(webs, l)))
     };
-    if meta.title.is_none() {
-        meta.title = pick(|w| &w.titles, &[lang, "ja-ro"]);
+    // Un nom écrit avec des majuscules est gardé tel quel (« City Hunter », pas « CITY HUNTER ») ;
+    // seul un nom tout en minuscules (« one-piece ») prend l'écriture d'une fiche.
+    if meta.title.is_none() && !name.chars().any(char::is_uppercase) {
+        let same = normalize(name);
+        meta.title = webs
+            .iter()
+            .flat_map(|w| &w.titles)
+            .find(|t| normalize(&t.text) == same)
+            .map(|t| t.text.clone());
     }
     let shown = meta.title.clone().unwrap_or_else(|| name.to_owned());
     for t in webs.iter().flat_map(|w| &w.titles) {

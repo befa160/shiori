@@ -389,3 +389,23 @@ async fn a_reader_sees_only_the_libraries_opened_to_him() {
     assert!(f.db.series_detail(&bob, hidden).await.unwrap().is_some());
     assert!(f.db.page_source(&bob, &page).await.unwrap().is_some());
 }
+
+/// Retour d'usage (2026-11-21) : un tome commencé, puis toute la série marquée lue ; elle doit
+/// quitter « Continuer la lecture ».
+#[tokio::test]
+async fn a_series_marked_read_leaves_continue_reading() {
+    let f = fixture().await;
+    let me = crate::tests::viewer(&f.db).await;
+    f.read(2, 1).await;
+    let id = f.series("Série").await.id;
+    assert_eq!(f.db.continue_reading(&me, 20).await.unwrap().len(), 1);
+    f.db.mark_series(&me, id, true).await.unwrap();
+    let left: Vec<_> =
+        f.db.continue_reading(&me, 20)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|c| (c.series_name, c.volume.progress))
+            .collect();
+    assert!(left.is_empty(), "{left:?}");
+}

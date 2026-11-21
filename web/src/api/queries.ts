@@ -11,8 +11,11 @@ export const useLibrarySeries = (id: number) =>
 export const useAllSeries = () =>
   useQuery({ queryKey: ['series'], queryFn: ({ signal }) => api.allSeries({ signal }) })
 
+// Redemandée à chaque affichage de l'accueil et à chaque retour sur l'application (`staleTime: 0`) :
+// une lecture ou une série marquée lue sur un autre appareil s'y voit tout de suite (retour du
+// 2026-11-21 : un tome restait affiché jusqu'à 30 s, le délai par défaut).
 export const useContinue = () =>
-  useQuery({ queryKey: ['continue'], queryFn: ({ signal }) => api.continueReading({ signal }) })
+  useQuery({ queryKey: ['continue'], queryFn: ({ signal }) => api.continueReading({ signal }), staleTime: 0 })
 
 export const useSeries = (id: number | null) =>
   useQuery({

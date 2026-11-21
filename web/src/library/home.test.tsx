@@ -1,4 +1,4 @@
-import { fireEvent, screen, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ContinueItem, Library, SeriesSummary, SeriesVolume } from '@/api/types'
@@ -71,6 +71,20 @@ describe('accueil', () => {
     expect(next).toHaveAttribute('href', '/read/v3')
     expect(next).toHaveTextContent('Suivant')
     expect(within(next).queryByRole('progressbar')).toBeNull()
+  })
+
+  it('redemande « Continuer la lecture » à chaque affichage : une série lue ailleurs en disparaît', async () => {
+    let items = reading
+    mockApi({ ...api(), '/api/continue': () => json(items) })
+    // Délai de la production (30 s) : sans `staleTime: 0` sur cette liste, l'accueil la garderait.
+    const { router } = renderAt('/', { staleTime: 30_000 })
+    expect(await screen.findByRole('region', { name: 'Continuer la lecture' })).toBeInTheDocument()
+    // Marquée lue sur un autre appareil, puis retour à l'accueil quelques secondes après.
+    items = []
+    await act(() => router.navigate('/series'))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Séries' })).toBeInTheDocument()
+    await act(() => router.navigate('/'))
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Continuer la lecture' })).toBeNull())
   })
 
   it('montre les derniers ajouts de chaque bibliothèque et mène à la grille', async () => {

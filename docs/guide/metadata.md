@@ -14,7 +14,7 @@ flowchart LR
   V --> A["Ce qui s'affiche"]
 ```
 
-Le **titre affiché** est le titre modifié, sinon celui des fichiers, sinon celui des sources web (dans la langue de l'interface, ou en romaji), sinon le nom du dossier. Les autres titres restent cherchables.
+Le **titre affiché** est le titre modifié, sinon celui des fichiers (`ComicInfo.xml`, `index.json`), sinon le nom de la série tiré de vos noms de fichiers et de dossiers. Les titres des sources web n'y passent pas : un titre japonais en romaji ou une traduction mot à mot n'est pas le titre français. Ils restent des titres alternatifs, que la recherche trouve. Seule exception : un nom tout en minuscules (`one-piece`) prend l'écriture d'une fiche qui porte le même nom (« One Piece »).
 
 Un tome a aussi ses métadonnées (titre, résumé, date, auteurs), modifiables depuis son menu.
 

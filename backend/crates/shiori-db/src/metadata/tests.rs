@@ -509,7 +509,8 @@ fn web_fills_what_the_files_do_not_say() {
         (Some(1997), Some(PublicationStatus::Ongoing))
     );
     assert_eq!(meta.links.len(), 2);
-    // En anglais, AniList d'abord : son titre anglais, son résumé.
+    // En anglais, AniList d'abord : son résumé ; le titre reste celui du dossier (aucune fiche ne
+    // donne le même nom).
     let meta = with_web(
         SeriesMetadata::default(),
         "x",
@@ -519,7 +520,7 @@ fn web_fills_what_the_files_do_not_say() {
     );
     assert_eq!(
         (meta.title.as_deref(), meta.summary.as_deref()),
-        (Some("One Piece"), Some("A boy (AniList)."))
+        (None, Some("A boy (AniList)."))
     );
     // Les fichiers l'emportent ; le titre du web reste cherchable.
     let local = SeriesMetadata {
@@ -548,7 +549,7 @@ fn web_fills_what_the_files_do_not_say() {
     );
     assert_eq!(
         (odd.title.as_deref(), odd.summary.as_deref()),
-        (Some("Titre"), Some("Resumen."))
+        (None, Some("Resumen."))
     );
 }
 
@@ -574,7 +575,7 @@ fn the_language_comes_before_the_main_source() {
     // Le français de MangaDex passe avant l'anglais de la source principale (lot 10.2).
     assert_eq!(
         (meta.title.as_deref(), meta.summary.as_deref()),
-        (Some("One Piece (fr)"), Some("Un garçon."))
+        (None, Some("Un garçon."))
     );
     // À langue égale, la source principale l'emporte.
     let english = web(
@@ -591,7 +592,7 @@ fn the_language_comes_before_the_main_source() {
     );
     assert_eq!(
         (meta.title.as_deref(), meta.summary.as_deref()),
-        (Some("One Piece"), Some("A boy (AniList)."))
+        (None, Some("A boy (AniList)."))
     );
     // Sans source principale, la langue de l'interface l'emporte aussi.
     let meta = with_web(
@@ -603,7 +604,7 @@ fn the_language_comes_before_the_main_source() {
     );
     assert_eq!(
         (meta.title.as_deref(), meta.summary.as_deref()),
-        (Some("One Piece (fr)"), Some("Un garçon."))
+        (None, Some("Un garçon."))
     );
     // La source principale sans résumé (interface en anglais) : son titre, et le résumé d'une autre
     // fiche en repli, faute d'anglais nulle part.
@@ -617,7 +618,7 @@ fn the_language_comes_before_the_main_source() {
     );
     assert_eq!(
         (meta.title.as_deref(), meta.summary.as_deref()),
-        (Some("Silent"), Some("Un garçon."))
+        (None, Some("Un garçon."))
     );
 }
 
@@ -656,4 +657,54 @@ fn a_january_1970_date_is_a_blank_and_is_ignored() {
         false,
     );
     assert_eq!(meta.year, Some(2014));
+}
+
+/// Retour d'usage (2026-11-21) : le titre affiché est celui du dossier, jamais un autre titre du
+/// web (romaji « Appurushīdo » pour le dossier Appleseed, traduction mot à mot de MangaDex pour
+/// Gintama) ; une fiche n'en donne que l'écriture, quand elle a le même nom.
+#[test]
+fn the_folder_name_beats_the_web_titles() {
+    let fiche = web(
+        "1",
+        &[
+            (Some("ja-ro"), "Appurushīdo"),
+            (Some("en"), "Appleseed"),
+            (Some("fr"), "Graine de pomme"),
+        ],
+        &[("fr", "Résumé.")],
+    );
+    let meta = with_web(
+        SeriesMetadata::default(),
+        "Appleseed",
+        std::slice::from_ref(&fiche),
+        "fr",
+        false,
+    );
+    // Pas de titre : le nom du dossier s'affiche ; les titres de la fiche restent cherchables.
+    assert_eq!(meta.title, None);
+    assert!(meta.alt_titles.contains(&"Appurushīdo".to_owned()));
+    assert!(meta.alt_titles.contains(&"Graine de pomme".to_owned()));
+    // Dossier en minuscules avec tirets : la fiche corrige l'écriture.
+    let one = web("2", &[(Some("en"), "One Piece")], &[]);
+    let meta = with_web(SeriesMetadata::default(), "one-piece", &[one], "fr", false);
+    assert_eq!(meta.title.as_deref(), Some("One Piece"));
+    // Un nom écrit avec des majuscules est gardé, même si une fiche l'écrit autrement.
+    let city = web("4", &[(Some("en"), "CITY HUNTER")], &[]);
+    let meta = with_web(
+        SeriesMetadata::default(),
+        "City Hunter",
+        &[city],
+        "fr",
+        false,
+    );
+    assert_eq!(meta.title, None);
+    // Aucun titre de même nom : pas de titre (le dossier s'affiche), même avec un titre français.
+    let meta = with_web(
+        SeriesMetadata::default(),
+        "Gintama",
+        &[web("3", &[(Some("fr"), "L'Âme d'argent")], &[])],
+        "fr",
+        false,
+    );
+    assert_eq!(meta.title, None);
 }
