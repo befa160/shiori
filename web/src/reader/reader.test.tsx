@@ -514,6 +514,14 @@ describe('progression, réglages de la série, tome suivant', () => {
     await userEvent.click(within(toolbar).getByRole('link', { name: 'Tome suivant' }))
     expect(router.state.location.pathname).toBe(`/read/${NEXT}`)
   })
+
+  it('un tome suivant en erreur reste proposé, mais signalé', async () => {
+    serve({}, { '/api/series/7': () => json({ ...twoVolumes, volumes: [series.volumes[0], { ...twoVolumes.volumes[1], status: 'error' }] }) })
+    renderAt(`/read/${VOLUME}?page=p3`)
+    await screen.findByRole('img', { name: 'Page 3 sur 3' })
+    const toolbar = screen.getByRole('toolbar', { hidden: true })
+    expect(await within(toolbar).findByRole('link', { name: 'Tome suivant (en erreur)' })).toHaveAttribute('href', `/read/${NEXT}`)
+  })
 })
 
 describe('zoom', () => {

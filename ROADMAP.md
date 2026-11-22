@@ -1440,7 +1440,7 @@ Fonctionnellement, Shiori couvre l'usage visé. Ce qui manque pour une V1 n'est 
 - **Sources de métadonnées** : MangaUpdates, Comic Vine, actualisation périodique des fiches liées.
 - **Accès** : OPDS (sur les jetons d'API), liens d'invitation (conception notée en phase 7), en-tête `Remote-User` d'un proxy d'authentification (Q42).
 - **Distribution** : signature Windows (Authenticode) et macOS (Developer ID, notarisation), payantes ; application native (bascule d'adresse locale / publique), icône dans la zone de notification.
-- **Limites connues** (17 `shortcut:` dans le code, aucune bloquante pour l'usage visé) : liste des séries sans pagination (quelques milliers de séries), PDF lu en entier en mémoire, CRC zip64 au-delà de 4 Gio, 4 rendus d'image en parallèle, chiffres pleine chasse et majuscules accentuées (`NOCASE`) non repliés, noms de compte sans normalisation Unicode, couvertures rendues sans cache disque, caches du service worker bornés en nombre d'entrées ; et, des phases précédentes : pas de redimensionnement des pages AVIF d'origine, CBR multivolume refusé, décalage des doubles pages non retenu, « Tome suivant » qui peut mener à un tome en erreur.
+- **Limites connues** (17 `shortcut:` dans le code, aucune bloquante pour l'usage visé) : liste des séries sans pagination (quelques milliers de séries), PDF lu en entier en mémoire, CRC zip64 au-delà de 4 Gio, 4 rendus d'image en parallèle, chiffres pleine chasse et majuscules accentuées (`NOCASE`) non repliés, noms de compte sans normalisation Unicode, couvertures rendues sans cache disque, caches du service worker bornés en nombre d'entrées ; et, des phases précédentes : pas de redimensionnement des pages AVIF d'origine, CBR multivolume refusé, décalage des doubles pages non retenu (« Tome suivant » vers un tome en erreur : signalé depuis le lot 11.2).
 - **À surveiller** : test e2e « tome suivant » instable vu une fois en CI (phase 4), `:root:has()` sur un vrai Safari iOS.
 - **Idées notées le 2026-11-22** (pour reprendre plus tard, à trier) :
   - **OPDS** en priorité : lire depuis Mihon, Panels, KOReader ou une liseuse, sur les jetons d'API (lecture et progression seulement) ; candidat pour une 1.1.
@@ -1561,12 +1561,12 @@ D'après les retours d'usage de la v0.5.1 (hors ligne sur la Tab A9) et le bilan
 
 ### Lots
 
-- ⏳ **11.1 `fix/offline-guard`** (interface + documentation)
+- ✅ **11.1 `fix/offline-guard`** (interface + documentation ; #119, avec `url` 2.5.9 pour RUSTSEC-2026-0592)
   - Pas de téléchargement quand aucun service worker ne contrôle la page (`navigator.serviceWorker.controller` nul, ou pas de `caches`) : téléchargement refusé avec sa raison (message), et la page Téléchargements le dit en tête, avec un lien vers la documentation.
   - Même alerte si des tomes sont déjà téléchargés : ils restent listés, mais « non lisibles hors ligne sur cette installation ».
   - Guide « Lire » (`docs/guide/reading.md` et `docs/en/guide/reading.md`, partie hors ligne) : installer la PWA depuis le navigateur qui sert à lire, à l'adresse habituelle, et l'ouvrir une fois en ligne avant de partir ; une autre adresse ou un autre navigateur, c'est une autre application (déjà expliqué pour le split DNS).
   - Tests Vitest (avec et sans contrôleur) ; e2e existants inchangés.
-- ⏳ **11.2 `fix/next-volume`** (interface) : le bouton « Tome suivant » (barre d'outils et fin de tome, paginé et vertical) mène toujours au tome qui suit, mais dit quand il est en erreur (« Tome suivant (illisible) », statut `error` du tome dans la série) ; le lecteur de ce tome affiche déjà son erreur explicite. Tests Vitest (tome suivant sain, en erreur, absent) ; catalogues fr et en.
+- ✅ **11.2 `fix/next-volume`** (interface) : le bouton « Tome suivant » (barre d'outils et fin de tome, paginé et vertical) mène toujours au tome qui suit, mais dit quand il est en erreur (« Tome suivant (en erreur) », statut `error` du tome dans la série) ; le lecteur de ce tome affiche déjà son erreur explicite. Tests Vitest (tome suivant sain, en erreur, absent) ; catalogues fr et en.
 - ⏳ **11.3 `docs/v1`** : promesse de compatibilité dans la documentation (fr, en), attestations de provenance (`actions/attest-build-provenance`) sur les archives et l'image, bilan de la phase, puis `v1.0.0-rc.1`.
 
 ### Décisions (2026-11-22)

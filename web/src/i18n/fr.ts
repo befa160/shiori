@@ -305,6 +305,7 @@ export const fr = {
     pageTurn: 'Tourner les pages',
     pageTurns: { reading: 'Comme le sens de lecture', ltr: 'Toucher à droite avance', rtl: 'Toucher à gauche avance' },
     nextVolume: 'Tome suivant',
+    nextVolumeBroken: 'Tome suivant (en erreur)',
     endOfVolume: 'Fin du tome',
     progressNotSaved: "La page lue n'a pas pu être enregistrée",
     settingsNotSaved: "Le réglage n'a pas pu être enregistré pour la série",

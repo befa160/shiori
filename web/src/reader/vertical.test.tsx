@@ -157,6 +157,21 @@ describe('mode webtoon', () => {
     )
   })
 
+  it('en fin de tome, le tome suivant en erreur reste proposé, mais signalé', async () => {
+    const entry = (volume_id: string, status: string) => ({ volume_id, kind: 'volume', number: 1, number_end: null, status, page_count: 100, cover_page_id: null, file_name: `${volume_id}.cbz` })
+    const NEXT = 'd'.repeat(64)
+    const series = { id: 7, library_id: 1, name: 'Leviathan', folder: 'Leviathan', publication_status: null, metadata: NO_METADATA, locked: [], sources: [], settings: volume.settings, resume_volume_id: null, page_count: 200, pages_read: 0, volumes: [entry(VOLUME, 'ok'), entry(NEXT, 'error')] }
+    mockApi({
+      [`/api/volumes/${VOLUME}`]: () => json({ ...volume, locations: [{ ...volume.locations[0], series_id: 7 }] }),
+      [`/api/volumes/${VOLUME}/pages`]: () => json(strips),
+      [`/api/volumes/${VOLUME}/progress`]: () => json({}),
+      '/api/series/7': () => json(series),
+    })
+    renderAt(`/read/${VOLUME}`)
+    const end = await screen.findByRole('navigation', { name: 'Fin du tome' })
+    expect(await within(end).findByRole('link', { name: 'Tome suivant (en erreur)' })).toHaveAttribute('href', `/read/${NEXT}`)
+  })
+
   it('en fin de tome, un tome sans série propose le retour', async () => {
     renderAt(`/read/${VOLUME}`)
     const end = await screen.findByRole('navigation', { name: 'Fin du tome' })

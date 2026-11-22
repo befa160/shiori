@@ -84,7 +84,7 @@ export function VerticalPages({ volumeId, pages, title, back, resume, next, onMo
       <nav aria-label={t('reader.endOfVolume')} className="flex flex-col items-center gap-3 px-4 pt-10 pb-[max(2.5rem,env(safe-area-inset-bottom))]">
         <p className="text-muted-foreground">{t('reader.endOfVolume')}</p>
         <Button asChild variant={next ? 'default' : 'secondary'}>
-          <Link to={next ? `/read/${next}` : back}>{t(next ? 'reader.nextVolume' : 'reader.back')}</Link>
+          <Link to={next ? `/read/${next.id}` : back}>{next ? next.label : t('reader.back')}</Link>
         </Button>
       </nav>
       {/* La bande retenue dans l'adresse (écrite à l'arrêt du défilement), pas la bande visible

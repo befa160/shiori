@@ -304,6 +304,7 @@ export const en: Translations = {
     pageTurn: 'Turn pages',
     pageTurns: { reading: 'Like the reading direction', ltr: 'Tap right to go forward', rtl: 'Tap left to go forward' },
     nextVolume: 'Next volume',
+    nextVolumeBroken: 'Next volume (has errors)',
     endOfVolume: 'End of volume',
     progressNotSaved: 'The current page could not be saved',
     settingsNotSaved: 'The setting could not be saved for the series',

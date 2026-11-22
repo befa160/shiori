@@ -22,7 +22,7 @@ The **Display** panel sets, for the series:
 
 <!-- [ecran_lecteur_affichage] -->
 
-The page you read is saved on the server and follows you from one device to another. At the end of a volume, Shiori offers the next one.
+The page you read is saved on the server and follows you from one device to another. At the end of a volume, Shiori offers the next one; if it had errors at the last scan, the button says so ("Next volume (has errors)"), and that volume shows its unreadable pages as errors.
 
 A damaged page in the archive shows an **explicit error in its place**, never another image. If the file changed since the scan, the reader says so and asks for a new scan.
 
