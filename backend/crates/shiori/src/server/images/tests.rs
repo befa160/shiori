@@ -30,10 +30,9 @@ async fn a_page_in_flight_is_never_rendered_twice() {
     let images = Images::open(dir.path().join("cache"), u64::MAX).unwrap();
     let app = Arc::new(App::new(db, images));
     let id: PageId = "11".repeat(16).parse().unwrap();
-    app.rendering
-        .lock()
-        .unwrap()
-        .insert((id, 320, Format::Jpeg));
+    let key = (id, 320, Format::Jpeg);
+    app.rendering.lock().unwrap().insert(key, Arc::default());
+    let first = InFlight(&app, key);
     // Lue, l'originale donnerait une erreur : elle ne doit l'être par aucun des deux.
     let unread = || async { Err(corrupt("l'originale ne doit pas être relue")) };
     let ahead = render_cached(&app, id, 320, Format::Jpeg, unread(), false).await;
@@ -47,13 +46,12 @@ async fn a_page_in_flight_is_never_rendered_twice() {
         !waiting.is_finished(),
         "la vraie demande attend le rendu en cours"
     );
-    // Le premier rendu se termine : son résultat est en cache, la demande le sert.
+    // Le premier rendu se termine : son résultat est en cache, la demande est réveillée et le sert
+    // (sans attendre une vérification périodique : une seconde suffit largement).
     app.images.put(&id, 320, Format::Jpeg, b"rendu").unwrap();
-    app.rendering
-        .lock()
-        .unwrap()
-        .remove(&(id, 320, Format::Jpeg));
-    match waiting.await.unwrap() {
+    drop(first);
+    let served = tokio::time::timeout(std::time::Duration::from_secs(1), waiting).await;
+    match served.expect("la demande est réveillée").unwrap() {
         Ok(Render::Done(bytes)) => assert_eq!(bytes, b"rendu"),
         _ => panic!("la demande sert le rendu déjà fait"),
     }

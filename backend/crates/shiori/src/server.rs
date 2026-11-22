@@ -135,7 +135,9 @@ pub struct App {
     /// Décoder et encoder coûte du CPU et de la mémoire : nombre de rendus simultanés borné.
     renders: Semaphore,
     /// Rendus en cours, demandés ou anticipés (page, largeur, format) : jamais deux fois à la fois.
-    rendering: std::sync::Mutex<std::collections::HashSet<(PageId, u32, crate::render::Format)>>,
+    rendering: std::sync::Mutex<
+        std::collections::HashMap<(PageId, u32, crate::render::Format), Arc<tokio::sync::Notify>>,
+    >,
     auth: auth::Guard,
 }
 
