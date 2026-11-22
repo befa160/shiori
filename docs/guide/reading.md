@@ -4,7 +4,7 @@
 
 Le lecteur occupe tout l'écran. Les commandes s'affichent d'un **tap au centre** (ou avec Tab au clavier).
 
-<!-- [ecran_lecteur] -->
+![Lecteur plein écran, commandes affichées : retour, titre, Affichage et curseur des pages](/screens/fr/ecran_lecteur.jpg)
 
 | Geste | Effet |
 |---|---|
@@ -20,7 +20,7 @@ Le panneau **Affichage** règle, pour la série :
 - la **disposition** : page simple, double page, ou automatique (double en paysage) ; en page simple, une double page est coupée en deux moitiés lues dans l'ordre ;
 - le sens pour **tourner les pages** (« comme le sens de lecture », ou toucher à droite / à gauche pour avancer), avec un défaut général dans l'administration et dans les préférences du compte.
 
-<!-- [ecran_lecteur_affichage] -->
+![Panneau Affichage du lecteur : sens de lecture, tourner les pages, disposition, doubles pages](/screens/fr/ecran_lecteur_affichage.jpg)
 
 
 La page lue est enregistrée sur le serveur et suit d'un appareil à l'autre. En fin de tome, Shiori propose le tome suivant ; s'il est en erreur au dernier scan, le bouton le dit (« Tome suivant (en erreur) »), et le tome affiche ses pages illisibles en erreur.
@@ -41,7 +41,7 @@ Un tome peut être **gardé sur l'appareil** pour lire sans réseau. Depuis la p
 - Un téléchargement interrompu (application fermée) reprend au lancement suivant ; une coupure de réseau l'arrête, à relancer.
 - Installez l'application **depuis le navigateur où vous lisez, à l'adresse habituelle**, et ouvrez-la une fois en ligne avant de partir. Une autre adresse ou un autre navigateur (Samsung Internet au lieu de Chrome, par exemple), c'est une autre application, avec son propre stockage. Si la lecture hors ligne ne peut pas marcher sur cette installation, **Tomes téléchargés** le dit et le téléchargement est refusé.
 
-<!-- [ecran_telecharges] -->
+![Page Tomes téléchargés : place utilisée, téléchargement en cours et tome gardé](/screens/fr/ecran_telecharges.jpg)
 
 
 Hors téléchargements, l'application garde aussi les pages déjà vues : revenir en arrière ou une courte coupure ne redemandent rien au réseau.

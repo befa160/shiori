@@ -4,7 +4,7 @@
 
 The reader fills the screen. Controls appear with a **tap in the middle** (or Tab on a keyboard).
 
-<!-- [ecran_lecteur] -->
+![Full-screen reader with its controls shown: back, title, Display and page slider](/screens/en/ecran_lecteur.jpg)
 
 | Gesture | Effect |
 |---|---|
@@ -20,7 +20,7 @@ The **Display** panel sets, for the series:
 - the **layout**: single page, double page, or automatic (double in landscape); in single page, a double-page spread is split into two halves read in order;
 - the direction to **turn pages** ("like the reading direction", or tap right / left to go forward), with a general default in the administration and in the account preferences.
 
-<!-- [ecran_lecteur_affichage] -->
+![Reader Display panel: reading direction, turning pages, layout, spreads](/screens/en/ecran_lecteur_affichage.jpg)
 
 The page you read is saved on the server and follows you from one device to another. At the end of a volume, Shiori offers the next one; if it had errors at the last scan, the button says so ("Next volume (has errors)"), and that volume shows its unreadable pages as errors.
 
@@ -40,7 +40,7 @@ A volume can be **kept on the device** to read without a network. From a series 
 - An interrupted download (app closed) resumes at the next launch; a network outage stops it, to be restarted.
 - Install the app **from the browser you read in, at your usual address**, and open it once online before leaving. Another address or another browser (Samsung Internet instead of Chrome, for example) is another app, with its own storage. If offline reading cannot work on this installation, **Downloaded volumes** says so and downloads are refused.
 
-<!-- [ecran_telecharges] -->
+![Downloaded volumes page: space used, a download in progress and a kept volume](/screens/en/ecran_telecharges.jpg)
 
 Outside downloads, the app also keeps the pages already seen: going back or a short outage asks nothing from the network.
 

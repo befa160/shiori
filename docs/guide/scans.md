@@ -21,20 +21,20 @@ Les dossiers de chaque bibliothèque sont **surveillés** : un fichier ajouté, 
 - Un **scan complet** de toutes les bibliothèques passe en plus une fois par jour (réglable : toutes les heures, toutes les 6 heures, jamais). Sur un partage réseau (SMB, NFS) ou avec Docker Desktop, les changements faits depuis une autre machine ne sont pas signalés ; ce scan les rattrape.
 - Si le dossier d'une bibliothèque disparaît (disque débranché, partage démonté), rien n'est retiré de la bibliothèque.
 
-<!-- [ecran_admin_bibliotheques] -->
+![Administration : scan en cours, comptes, bibliothèques, surveillance des dossiers et scan complet](/screens/fr/ecran_admin_bibliotheques.jpg)
 
 
 La surveillance se coupe par bibliothèque (**Administration → Bibliothèques**, interrupteur « Surveiller les dossiers ») ; l'intervalle du scan complet se règle au même endroit.
 
 ## Historique et journaux
 
-<!-- [ecran_scans] -->
+![Page Scans : lancer un scan, contrôle approfondi, historique des passes](/screens/fr/ecran_scans.jpg)
 
 **Administration → Historique et options** montre le scan en cours (avancement, fichier lu, annulation) et l'historique des passes, filtrable par statut et par bibliothèque. Chaque passe garde son journal (fichiers lus, problèmes, erreurs) avec un lien vers chaque tome concerné, et dit d'où elle vient : vous, la surveillance des dossiers ou le scan complet périodique. Les passes sont gardées 30 jours (option `--scan-log-days`).
 
 ## Santé des bibliothèques
 
-<!-- [ecran_sante] -->
+![Santé des bibliothèques : compteurs par bibliothèque et tomes à réparer](/screens/fr/ecran_sante.jpg)
 
 **Administration → Santé des bibliothèques** fait le point :
 

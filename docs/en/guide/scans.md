@@ -21,19 +21,19 @@ The folders of every library are **watched**: a file added, replaced or removed 
 - A **full scan** of all libraries also runs once a day (configurable: every hour, every 6 hours, never). On a network share (SMB, NFS) or with Docker Desktop, changes made from another machine are not reported; this scan catches up with them.
 - If a library's folder disappears (unplugged drive, unmounted share), nothing is removed from the library.
 
-<!-- [ecran_admin_bibliotheques] -->
+![Administration: current scan, accounts, libraries, folder watching and full scan](/screens/en/ecran_admin_bibliotheques.jpg)
 
 Watching is turned off per library (**Administration → Libraries**, "Watch folders" switch); the full scan interval is set in the same place.
 
 ## History and logs
 
-<!-- [ecran_scans] -->
+![Scans page: start a scan, deep check, run history](/screens/en/ecran_scans.jpg)
 
 **Administration → History and options** shows the current scan (progress, file being read, cancellation) and the history of passes, filtered by status and library. Each pass keeps its log (files read, problems, errors) with a link to each volume concerned, and says where it came from: you, folder watching or the periodic full scan. Passes are kept for 30 days (option `--scan-log-days`).
 
 ## Library health
 
-<!-- [ecran_sante] -->
+![Library health: counts per library and volumes to repair](/screens/en/ecran_sante.jpg)
 
 **Administration → Library health** gives the overview:
 
