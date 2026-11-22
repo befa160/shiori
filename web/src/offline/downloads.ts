@@ -7,6 +7,7 @@ import { useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
 import { ApiError } from '@/api/client'
 import type { PageInfo } from '@/api/types'
+import { type VolumeName, volumeLabel } from '@/browse/labels'
 import i18n from '@/i18n'
 import { errorText } from '@/i18n/errors'
 import { pageUrl } from '@/reader/controls'
@@ -23,12 +24,20 @@ export interface Download {
   volumeId: string
   seriesId: number
   series: string
+  /** Nom du tome au moment du téléchargement : celui des tomes gardés avant `volume`. */
   label: string
+  /** De quoi le nommer dans la langue affichée, même si elle a changé depuis. */
+  volume?: VolumeName
   pages: number
   bytes: number
 }
 
-export type Request = Pick<Download, 'volumeId' | 'seriesId' | 'series' | 'label'>
+export type Request = Pick<Download, 'volumeId' | 'seriesId' | 'series' | 'label' | 'volume'>
+
+/** Nom d'un tome téléchargé ou en attente, dans la langue affichée. */
+export function downloadLabel(d: Pick<Download, 'label' | 'volume'>, t = i18n.t, language = i18n.language): string {
+  return d.volume ? volumeLabel(d.volume, t, language) : d.label
+}
 
 export interface Job extends Request {
   done: number
@@ -159,7 +168,7 @@ async function run() {
     } catch (error) {
       await deleteVolume(job.volumeId)
       if (!running.signal.aborted) {
-        toast.error(i18n.t('offline.failed', { label: job.label }), { description: errorText(error as Error, i18n.t) })
+        toast.error(i18n.t('offline.failed', { label: downloadLabel(job) }), { description: errorText(error as Error, i18n.t) })
       }
     }
     if (mine !== generation) return

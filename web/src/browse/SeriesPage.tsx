@@ -173,7 +173,8 @@ function resumeAction(volume: SeriesVolume, allRead: boolean) {
 
 /** Demande de téléchargement d'un tome, avec ce qu'il faut pour le retrouver hors ligne. */
 function offlineRequest(series: SeriesDetail, volume: SeriesVolume, label: string) {
-  return { volumeId: volume.volume_id, seriesId: series.id, series: series.name, label }
+  const { kind, number, number_end, file_name } = volume
+  return { volumeId: volume.volume_id, seriesId: series.id, series: series.name, label, volume: { kind, number, number_end, file_name } }
 }
 
 /** Tous les tomes lisibles de la série pas encore gardés, dans l'ordre de la série. */

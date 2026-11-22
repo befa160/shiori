@@ -6,7 +6,7 @@ import { formatSize } from '@/admin/format'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { docsUrl } from '@/lib/docs'
-import { cancel, remove, useOffline, useOfflineReady } from './downloads'
+import { cancel, downloadLabel, remove, useOffline, useOfflineReady } from './downloads'
 import { pendingPage } from './progress'
 
 /** Tomes gardés sur l'appareil pour lire hors ligne : la page ne demande rien au serveur, elle
@@ -21,6 +21,7 @@ export function DownloadsPage() {
     queryFn: async () => (await navigator.storage?.estimate?.()) ?? null,
   })
   const size = (bytes: number) => formatSize(bytes, i18n.language)
+  const name = (d: Parameters<typeof downloadLabel>[0]) => downloadLabel(d, t, i18n.language)
   return (
     <section className="max-w-3xl space-y-6">
       <title>{`${t('offline.title')} · Shiori`}</title>
@@ -63,11 +64,11 @@ export function DownloadsPage() {
               <li key={job.volumeId} className="flex items-center gap-3 rounded-md bg-card p-3">
                 <div className="min-w-0 flex-1 space-y-2">
                   <p className="truncate font-medium">
-                    {job.series} · {job.label}
+                    {job.series} · {name(job)}
                   </p>
                   {i === 0 ? (
                     <Progress
-                      aria-label={t('offline.progress', { label: job.label, done: job.done, total: job.total })}
+                      aria-label={t('offline.progress', { label: name(job), done: job.done, total: job.total })}
                       value={job.total ? (job.done / job.total) * 100 : 0}
                       className="h-1"
                     />
@@ -75,7 +76,7 @@ export function DownloadsPage() {
                     <p className="text-sm text-muted-foreground">{t('offline.waiting')}</p>
                   )}
                 </div>
-                <Button variant="ghost" size="icon" aria-label={t('offline.cancelNamed', { label: job.label })} onClick={() => cancel(job.volumeId)}>
+                <Button variant="ghost" size="icon" aria-label={t('offline.cancelNamed', { label: name(job) })} onClick={() => cancel(job.volumeId)}>
                   <X aria-hidden />
                 </Button>
               </li>
@@ -95,17 +96,17 @@ export function DownloadsPage() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium">{d.series}</p>
                   <p className="text-sm text-muted-foreground">
-                    {d.label} · {t('counts.pages', { count: d.pages })} · {size(d.bytes)}
+                    {name(d)} · {t('counts.pages', { count: d.pages })} · {size(d.bytes)}
                   </p>
                 </div>
-                <Button asChild variant="secondary" aria-label={t('offline.openNamed', { label: `${d.series} · ${d.label}` })}>
+                <Button asChild variant="secondary" aria-label={t('offline.openNamed', { label: `${d.series} · ${name(d)}` })}>
                   {/* Reprise à la page lue hors ligne, que le serveur ne connaît pas encore. */}
                   <Link to={`/read/${d.volumeId}${page ? `?page=${page}` : ''}`}>
                     <BookOpen aria-hidden />
                     <span className="max-sm:sr-only">{t('offline.open')}</span>
                   </Link>
                 </Button>
-                <Button variant="ghost" size="icon" aria-label={t('offline.removeNamed', { label: `${d.series} · ${d.label}` })} onClick={() => void remove(d.volumeId)}>
+                <Button variant="ghost" size="icon" aria-label={t('offline.removeNamed', { label: `${d.series} · ${name(d)}` })} onClick={() => void remove(d.volumeId)}>
                   <Trash2 aria-hidden />
                 </Button>
               </li>
