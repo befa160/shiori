@@ -109,6 +109,15 @@ describe('tomes téléchargés, dans l’interface', () => {
     expect(await page.findByText(/Aucun tome téléchargé/)).toBeInTheDocument()
   })
 
+  it('prévient quand la lecture hors ligne ne marchera pas sur cette installation', async () => {
+    serve()
+    Object.defineProperty(navigator, 'serviceWorker', { configurable: true, value: undefined })
+    renderAt('/downloads')
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('Lecture hors ligne indisponible ici')
+    expect(within(alert).getByRole('link', { name: /Voir la documentation/ })).toHaveAttribute('href', 'https://befa160.github.io/shiori/guide/reading#lire-hors-ligne')
+  })
+
   it('hors ligne, l’avis mène aux tomes téléchargés', async () => {
     serve()
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)

@@ -446,6 +446,11 @@ export const fr = {
     open: 'Lire',
     openNamed: 'Lire {{label}}',
     failed: 'Téléchargement de {{label}} interrompu',
+    unavailable: 'Lecture hors ligne indisponible ici',
+    unavailableHelp:
+      "Cette installation n'a pas de service worker actif : un tome téléchargé ne s'ouvrirait pas sans réseau. Installez l'application depuis le navigateur où vous lisez, à la même adresse, puis ouvrez-la une fois en ligne.",
+    unavailableDocs: 'Voir la documentation',
+    unavailableDocsPage: 'guide/reading#lire-hors-ligne',
   },
   // Erreurs de l'API, par code stable (le message du serveur, en français, sert de secours).
   account: {

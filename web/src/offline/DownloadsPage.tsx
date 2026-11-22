@@ -1,11 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
-import { BookOpen, Trash2, X } from 'lucide-react'
+import { BookOpen, Trash2, TriangleAlert, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { formatSize } from '@/admin/format'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
-import { cancel, remove, useOffline } from './downloads'
+import { docsUrl } from '@/lib/docs'
+import { cancel, remove, useOffline, useOfflineReady } from './downloads'
 import { pendingPage } from './progress'
 
 /** Tomes gardés sur l'appareil pour lire hors ligne : la page ne demande rien au serveur, elle
@@ -13,6 +14,7 @@ import { pendingPage } from './progress'
 export function DownloadsPage() {
   const { t, i18n } = useTranslation()
   const { downloads, queue } = useOffline()
+  const ready = useOfflineReady()
   // Place prise par l'application et place disponible, d'après le navigateur.
   const storage = useQuery({
     queryKey: ['storage', downloads.length],
@@ -31,6 +33,25 @@ export function DownloadsPage() {
           </p>
         ) : null}
       </div>
+
+      {!ready && (
+        <div role="alert" className="flex gap-3 rounded-md bg-card p-4 text-sm">
+          <TriangleAlert aria-hidden className="size-5 shrink-0 text-destructive" />
+          <div className="space-y-1">
+            <p className="font-medium">{t('offline.unavailable')}</p>
+            <p className="text-muted-foreground">{t('offline.unavailableHelp')}</p>
+            <a
+              href={docsUrl(i18n.language, t('offline.unavailableDocsPage'))}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-foreground underline underline-offset-4"
+            >
+              {t('offline.unavailableDocs')}
+              <span className="sr-only"> {t('layout.newTab')}</span>
+            </a>
+          </div>
+        </div>
+      )}
 
       {queue.length > 0 && (
         <section aria-labelledby="offline-queue" className="space-y-2">

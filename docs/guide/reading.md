@@ -39,6 +39,7 @@ Un tome peut être **gardé sur l'appareil** pour lire sans réseau. Depuis la p
 - **Tomes téléchargés** (barre latérale, administration, ou le lien de l'avis « Hors ligne ») liste les tomes gardés, leur taille et la place disponible ; c'est par là qu'on les ouvre sans réseau.
 - La page lue hors ligne est envoyée au serveur dès le retour du réseau, avec son heure : elle ne remplace pas une page lue depuis sur un autre appareil.
 - Un téléchargement interrompu (application fermée) reprend au lancement suivant ; une coupure de réseau l'arrête, à relancer.
+- Installez l'application **depuis le navigateur où vous lisez, à l'adresse habituelle**, et ouvrez-la une fois en ligne avant de partir. Une autre adresse ou un autre navigateur (Samsung Internet au lieu de Chrome, par exemple), c'est une autre application, avec son propre stockage. Si la lecture hors ligne ne peut pas marcher sur cette installation, **Tomes téléchargés** le dit et le téléchargement est refusé.
 
 <!-- [ecran_telecharges] -->
 

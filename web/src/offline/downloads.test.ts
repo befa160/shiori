@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PageInfo } from '@/api/types'
 import { fakeCaches } from '@/test/caches'
 import { json } from '@/test/render'
-import { OFFLINE_CACHE, cancel, enqueue, remove, resetForTests, resumeDownloads, useOffline } from './downloads'
+import { OFFLINE_CACHE, cancel, enqueue, remove, resetForTests, resumeDownloads, useOffline, useOfflineReady } from './downloads'
 
 const toast = vi.hoisted(() => ({ error: vi.fn() }))
 vi.mock('sonner', () => ({ toast }))
@@ -57,6 +57,24 @@ describe('tomes téléchargés', () => {
     // Déjà téléchargé : rien de plus.
     act(() => enqueue([request('a')]))
     expect(result.current.queue).toEqual([])
+  })
+
+  it('sans service worker qui contrôle la page, refuse de télécharger et le dit', async () => {
+    const fetch = serve()
+    let changed = () => {}
+    const worker = { controller: null as object | null, addEventListener: (_: string, f: () => void) => (changed = f), removeEventListener() {} }
+    Object.defineProperty(navigator, 'serviceWorker', { configurable: true, value: worker })
+    const result = state()
+    const ready = renderHook(() => useOfflineReady()).result
+    expect(ready.current).toBe(false)
+    act(() => enqueue([request('a')]))
+    expect(result.current.queue).toEqual([])
+    expect(fetch).not.toHaveBeenCalled()
+    expect(toast.error).toHaveBeenCalledWith('Lecture hors ligne indisponible ici', { description: expect.stringMatching(/service worker/) })
+    // Le service worker prend la main (après l'installation) : l'interface le voit aussitôt.
+    worker.controller = {}
+    act(() => changed())
+    expect(ready.current).toBe(true)
   })
 
   it('suit l’avancement page par page, un tome après l’autre', async () => {

@@ -38,6 +38,7 @@ A volume can be **kept on the device** to read without a network. From a series 
 - **Downloaded volumes** (sidebar, administration, or the link in the "Offline" notice) lists the kept volumes, their size and the space available; that is where you open them without a network.
 - The page read offline is sent to the server as soon as the network is back, with its time: it does not replace a page read since on another device.
 - An interrupted download (app closed) resumes at the next launch; a network outage stops it, to be restarted.
+- Install the app **from the browser you read in, at your usual address**, and open it once online before leaving. Another address or another browser (Samsung Internet instead of Chrome, for example) is another app, with its own storage. If offline reading cannot work on this installation, **Downloaded volumes** says so and downloads are refused.
 
 <!-- [ecran_telecharges] -->
 

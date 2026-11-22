@@ -90,6 +90,23 @@ export async function resumeDownloads() {
   else addEventListener('online', resume, { once: true })
 }
 
+/** Un tome téléchargé ne se lit sans réseau que si le service worker contrôle la page : lui seul
+ * sert le cache hors ligne. Sans lui (PWA installée depuis un autre navigateur ou à une autre
+ * adresse, version de développement), le téléchargement réussirait pour rien. */
+export function offlineReady(): boolean {
+  return 'caches' in window && Boolean(navigator.serviceWorker?.controller)
+}
+
+function onControllerChange(onChange: () => void) {
+  navigator.serviceWorker?.addEventListener('controllerchange', onChange)
+  return () => navigator.serviceWorker?.removeEventListener('controllerchange', onChange)
+}
+
+/** `offlineReady`, suivi en direct (le service worker prend la main après l'installation). */
+export function useOfflineReady(): boolean {
+  return useSyncExternalStore(onControllerChange, offlineReady)
+}
+
 /** Tomes téléchargés et file d'attente, suivis en direct. */
 export function useOffline(): State {
   return useSyncExternalStore(
@@ -106,6 +123,10 @@ export function enqueue(requests: Request[]) {
   const known = new Set([...state.downloads, ...state.queue].map((d) => d.volumeId))
   const fresh = requests.filter((r) => !known.has(r.volumeId)).map((r) => ({ ...r, done: 0, total: 0 }))
   if (fresh.length === 0) return
+  if (!offlineReady()) {
+    toast.error(i18n.t('offline.unavailable'), { description: i18n.t('offline.unavailableHelp') })
+    return
+  }
   update({ queue: [...state.queue, ...fresh] })
   // Le navigateur pourrait sinon vider le stockage de lui-même quand la place manque.
   void navigator.storage?.persist?.()

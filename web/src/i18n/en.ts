@@ -443,6 +443,11 @@ export const en: Translations = {
     open: 'Read',
     openNamed: 'Read {{label}}',
     failed: 'Download of {{label}} interrupted',
+    unavailable: 'Offline reading unavailable here',
+    unavailableHelp:
+      'This installation has no active service worker: a downloaded volume would not open without a network. Install the app from the browser you read in, at the same address, then open it once online.',
+    unavailableDocs: 'See the documentation',
+    unavailableDocsPage: 'guide/reading#reading-offline',
   },
   account: {
     version: 'Shiori, version {{version}}',
