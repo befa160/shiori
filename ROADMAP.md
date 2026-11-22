@@ -1586,7 +1586,7 @@ D'après les retours d'usage de la v0.5.1 (hors ligne sur la Tab A9) et le bilan
   - ✅ Audit fait le 2026-11-22 : rien de bloquant ; seul constat corrigé, l'attente d'un rendu en cours par notification au lieu d'une vérification toutes les 50 ms (#122).
   - ✅ `v1.0.0-rc.1` publiée le 2026-11-22 : binaires, `SHA256SUMS`, image `1.0.0-rc.1` (pas `latest`), attestations vérifiées avec `gh attestation verify` sur l'archive Linux et l'image.
   - ✅ Captures d'écran (2026-11-22) : 12 par langue dans `docs/public/screens/{fr,en}/`, prises par l'utilisateur sur sa vraie bibliothèque (tablette et PC) ; installation en anglais générée sur une instance jetable ; métadonnées EXIF retirées ; hauteur bornée par `custom.css`.
-  - Défauts vus sur les captures, à corriger : tags d'AniList affichés en anglais sur une page de série en français (« Sci-Fi », « Supernatural »…), alors que le lot 10.2a les traduit ; libellé d'un tome téléchargé figé dans la langue du moment du téléchargement (« Volume 8 » dans l'interface française).
+  - Vu sur les captures : libellé d'un tome téléchargé figé dans la langue du moment du téléchargement (« Volume 8 » dans l'interface française), corrigé dans #124. Les tags en anglais de la page de série française ne sont pas un défaut : la capture vient d'une ancienne interface restée en cache (pas de bouton « ⋮ » du lot 10.3) ; à refaire.
   - Reste : l'essai de la rc.1 sur les appareils.
 
 ## Fonctionnalités ajoutées en cours de route
