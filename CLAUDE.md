@@ -90,7 +90,7 @@ Le lecteur est plein écran et immersif (barre d'outils masquée, tap au centre 
 
 ## Méthode de travail
 
-- `ROADMAP.md` est la roadmap vivante : la lire avant de commencer, la mettre à jour dans chaque PR qui fait avancer une phase (cases, décisions, questions).
+- `ROADMAP.md` est la roadmap vivante : la lire avant de commencer, la mettre à jour dans chaque PR qui fait avancer une phase (cases, décisions, questions). Une phase terminée part avec son bilan dans `ROADMAP-HISTORIQUE.md` ; les idées pour plus tard vont dans le backlog de `ROADMAP.md`.
 - Une branche de travail et une PR par lot (`feat/…`, `fix/…`, `chore/…`, `ci/…`, `docs/…`, `test/…`), jamais de commit direct sur `main`.
 - Le graphe Graphify (`graphify-out/`, non versionné) est construit : l'interroger (`graphify query`, `path`, `explain`) avant d'explorer le code pour une question de structure ou d'impact. Les hooks git le tiennent à jour (AST) ; après un changement important des docs, relancer `/graphify . --update`.
 - Pour chaque phase : plan détaillé (crates, schéma SQLite, routes API, tâches) validé avant de coder.

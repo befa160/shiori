@@ -1,4 +1,4 @@
-//! PDF lu comme une archive (phase 8, voir ROADMAP.md) : au lieu d'afficher la page PDF
+//! PDF lu comme une archive (phase 8, voir ROADMAP-HISTORIQUE.md) : au lieu d'afficher la page PDF
 //! avec ses marges, Shiori sert l'image incluse dans la page, comme une page de CBZ.
 //!
 //! Chaque page du PDF dont les images couvrent au moins la moitié de la surface donne une
