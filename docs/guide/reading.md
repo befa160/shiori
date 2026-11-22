@@ -23,7 +23,7 @@ Le panneau **Affichage** règle, pour la série :
 <!-- [ecran_lecteur_affichage] -->
 
 
-La page lue est enregistrée sur le serveur et suit d'un appareil à l'autre. En fin de tome, Shiori propose le tome suivant.
+La page lue est enregistrée sur le serveur et suit d'un appareil à l'autre. En fin de tome, Shiori propose le tome suivant ; s'il est en erreur au dernier scan, le bouton le dit (« Tome suivant (en erreur) »), et le tome affiche ses pages illisibles en erreur.
 
 Une page abîmée dans l'archive affiche une **erreur explicite à sa place**, jamais une autre image. Si le fichier a changé depuis le scan, le lecteur le dit et demande un nouveau scan.
 

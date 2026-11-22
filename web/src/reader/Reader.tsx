@@ -47,8 +47,9 @@ export interface ReaderProps {
   back: string
   /** Page où reprendre sans `?page=` dans l'adresse : la dernière lue, sauf un tome terminé. */
   resume: string | null
-  /** Tome suivant de la série, dans son ordre de lecture. */
-  next: string | undefined
+  /** Tome suivant de la série, dans son ordre de lecture, et le texte de son bouton : un tome en
+   * erreur au dernier scan est proposé quand même mais signalé (jamais sauté, principe 4). */
+  next: { id: string; label: string } | undefined
   onMode: (mode: ReadingMode) => void
   /** Fait d'une page la couverture de la série ; absent si le tome n'est dans aucune série. */
   onCover?: (pageId: string) => void
@@ -66,7 +67,11 @@ function Reader({ volumeId }: { volumeId: string }) {
   const series = useSeries(seriesId)
   const position = series.data?.volumes.findIndex((v) => v.volume_id === volumeId) ?? -1
   const entry = series.data?.volumes[position]
-  const next = position >= 0 ? series.data?.volumes[position + 1]?.volume_id : undefined
+  const following = position >= 0 ? series.data?.volumes[position + 1] : undefined
+  const next = following && {
+    id: following.volume_id,
+    label: t(following.status === 'error' ? 'reader.nextVolumeBroken' : 'reader.nextVolume'),
+  }
   const title = [series.data?.name, entry && volumeLabel(entry, t, i18next.language)].filter(Boolean).join(' · ')
   const back = seriesId === null ? '/' : `/series/${seriesId}`
   const cover = usePatchSeries(seriesId ?? 0)
@@ -378,7 +383,7 @@ function Pages({
           atEnd &&
           next && (
             <Button asChild className="shadow-lg">
-              <Link to={`/read/${next}`}>{t('reader.nextVolume')}</Link>
+              <Link to={`/read/${next.id}`}>{next.label}</Link>
             </Button>
           )
         }
