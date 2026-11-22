@@ -16,8 +16,8 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 | 8 | Lecture des PDF sans marges | ✅ |
 | 9 | Maintenance de la bibliothèque (surveillance des dossiers, scan complet périodique, santé) + documentation VitePress bilingue + bilan V1 | ✅ |
 | 10 | Retours de la vraie bibliothèque (NAS) : scan tolérant, sources de métadonnées et Wikipédia FR, série lue/non lue, lecture rapide | ✅ |
-| 11 | Avant la V1 : hors ligne qui prévient quand il ne marchera pas, « Tome suivant » vers un tome en erreur, promesse de compatibilité et attestations, `v1.0.0-rc.1` | ⏳ |
-| V1 | Vérifications sur vrai matériel, audit, captures de la documentation, attestations, promesse de compatibilité (voir « Maturité pour une V1 ») | ❓ |
+| 11 | Avant la V1 : hors ligne qui prévient quand il ne marchera pas, « Tome suivant » vers un tome en erreur, promesse de compatibilité et attestations, `v1.0.0-rc.1` | ✅ |
+| V1 | Vérifications sur vrai matériel, audit, captures de la documentation, attestations, promesse de compatibilité (voir « Maturité pour une V1 ») | 🚧 |
 
 ## Méthode de travail
 
@@ -1430,8 +1430,8 @@ Fonctionnellement, Shiori couvre l'usage visé. Ce qui manque pour une V1 n'est 
 1. **Vérifications sur vrai matériel** (par toi ; jamais faites, c'est pourtant l'usage principal) : PWA installée, session longue et hors-ligne sur la Tab A9 et le A55 ; derrière le vrai reverse proxy HTTPS (cookie `Secure`, split DNS, `--allowed-host`) ; image arm64 si un NAS ou un Pi est prévu ; Backrest réel sur le dossier des sauvegardes, avec une restauration d'essai. Chaque défaut trouvé devient un correctif avant la V1.
 2. **Audit complet** (`ponytail-audit`) : le dernier date d'avant la phase 7, et les phases 7 à 9 ont ajouté l'authentification, la restauration et la surveillance.
 3. **Captures d'écran** de la documentation (repères `ecran_…`), aux couleurs du thème sombre.
-4. **Attestations de provenance** (`actions/attest-build-provenance`) sur les archives et l'image : gratuites, sans secret (voir « Signature des binaires »).
-5. **Promesse de compatibilité**, écrite dans la documentation : à partir de 1.0, une mise à jour garde la base (migrations sans perte, sauvegarde avant migration déjà faite), les IDs de tomes et de pages ne changent pas, l'API `/api` n'évolue que par ajouts dans une même version majeure, toute rupture passe par une version majeure.
+4. ✅ (lot 11.3) **Attestations de provenance** (`actions/attest-build-provenance`) sur les archives et l'image : gratuites, sans secret (voir « Signature des binaires »).
+5. ✅ (lot 11.3) **Promesse de compatibilité**, écrite dans la documentation : à partir de 1.0, une mise à jour garde la base (migrations sans perte, sauvegarde avant migration déjà faite), les IDs de tomes et de pages ne changent pas, l'API `/api` n'évolue que par ajouts dans une même version majeure, toute rupture passe par une version majeure.
 6. **Versions** : `v0.4.0` dès maintenant (phase 9), puis `v1.0.0-rc.1` après les points 1 à 5, essayée quelques jours sur les appareils, puis `v1.0.0`.
 
 ### Après la V1 (fonctionnalités restantes, sans ordre)
@@ -1567,13 +1567,22 @@ D'après les retours d'usage de la v0.5.1 (hors ligne sur la Tab A9) et le bilan
   - Guide « Lire » (`docs/guide/reading.md` et `docs/en/guide/reading.md`, partie hors ligne) : installer la PWA depuis le navigateur qui sert à lire, à l'adresse habituelle, et l'ouvrir une fois en ligne avant de partir ; une autre adresse ou un autre navigateur, c'est une autre application (déjà expliqué pour le split DNS).
   - Tests Vitest (avec et sans contrôleur) ; e2e existants inchangés.
 - ✅ **11.2 `fix/next-volume`** (interface) : le bouton « Tome suivant » (barre d'outils et fin de tome, paginé et vertical) mène toujours au tome qui suit, mais dit quand il est en erreur (« Tome suivant (en erreur) », statut `error` du tome dans la série) ; le lecteur de ce tome affiche déjà son erreur explicite. Tests Vitest (tome suivant sain, en erreur, absent) ; catalogues fr et en.
-- ⏳ **11.3 `docs/v1`** : promesse de compatibilité dans la documentation (fr, en), attestations de provenance (`actions/attest-build-provenance`) sur les archives et l'image, bilan de la phase, puis `v1.0.0-rc.1`.
+- ✅ **11.3 `docs/v1`** : promesse de compatibilité dans la documentation (fr, en), attestations de provenance (`actions/attest-build-provenance`) sur les archives et l'image, bilan de la phase, puis `v1.0.0-rc.1`.
+  - Fait : section « Ce qu'une mise à jour garantit (à partir de la 1.0) » dans le démarrage rapide (fr, en), reprise dans les conventions de l'API : base gardée (migrations sans perte, sauvegarde avant chacune, pas de retour arrière autrement que par la sauvegarde), identifiants de tomes et de pages stables, API qui ne fait que s'enrichir (un client ignore les champs inconnus), options et variables d'environnement gardées ; toute rupture attend une majeure.
+  - Fait : `actions/attest` v4.2.2 (que `attest-build-provenance` enveloppe depuis sa v4, épinglé par SHA) dans `release.yml`, sur les archives (job `publish`) et sur l'image multi-architecture par son empreinte (job `docker`), seulement sur un tag ; vérification avec `gh attestation verify` documentée à côté de `SHA256SUMS`. Rien à essayer avant le premier tag : la PR ne construit que (déclenchée par `release.yml`), sans rien publier ni attester.
+  - Fait : version `1.0.0` dans le code (un tag `v1.0.0-rc.1` publie le code de la 1.0.0, vérifié par la release).
 
 ### Décisions (2026-11-22)
 
 - **Q53 « Tome suivant » vers un tome en erreur** : **marqué, jamais sauté** (rien de masqué, principe 4).
 - **Q54 `Remote-User`** : **après la V1**. Aucun proxy d'authentification chez l'utilisateur (Nginx Proxy Manager sans connexion, celle de Shiori suffit). Quand il viendra : compte inconnu du proxy **refusé** (page de connexion), jamais créé d'office ; en-tête cru seulement d'un `--trusted-proxy`.
 - **Q55 Format des pages** : **AVIF gardé**, plus de pauses depuis la fin du rescan ; option JPEG seulement si elles reviennent.
+
+### Bilan de la phase 11
+
+- Livré : téléchargement refusé et alerte quand la lecture hors ligne ne peut pas marcher (#119, avec `url` 2.5.9 pour RUSTSEC-2026-0592), « Tome suivant » signalé quand le tome est en erreur (#120), promesse de compatibilité, attestations de provenance, version 1.0.0 (lot 11.3).
+- Routine cloud hebdomadaire (mardi 10 h, heure d'hiver) : regroupe les PR Dependabot dans une seule PR vérifiée, sans rien fusionner ni publier.
+- **Reste avant `v1.0.0`** (bilan V1, points 1 à 3) : essai de `v1.0.0-rc.1` sur la Tab A9 et le A55 (PWA installée depuis Chrome, hors ligne, session longue) ; audit complet (`ponytail-audit`, le dernier date d'avant la phase 10) ; captures d'écran de la documentation (repères `ecran_…`). Proposition : l'audit avant de poser le tag `v1.0.0-rc.1`, les captures pendant l'essai.
 
 ## Fonctionnalités ajoutées en cours de route
 
@@ -1688,3 +1697,4 @@ Audit Ponytail de tout le dépôt après la phase 9 ; corrigé dans `fix/audit-v
 - 2026-11-21 : titre affiché tiré des fichiers puis des noms de fichiers et de dossiers, plus jamais d'un titre web (remplace Q34) ; retours d'usage de la v0.5.0.
 - 2026-11-21 : version `v0.5.1` : titres des séries et « Continuer la lecture » d'un appareil à l'autre (sans rescan).
 - 2026-11-22 : plan de la phase 11 validé (avant la V1 : garde du hors ligne, « Tome suivant » marqué en erreur, promesse de compatibilité ; `Remote-User` après la V1, AVIF gardé) ; idées pour après la V1 notées (OPDS, statistiques, listes, nouveautés suivies, marque-pages, réglages d'image).
+- 2026-11-22 : phase 11 terminée (garde du hors ligne, « Tome suivant » signalé, promesse de compatibilité, attestations) ; version `1.0.0` dans le code, tag `v1.0.0-rc.1` à poser après l'audit.

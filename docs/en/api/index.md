@@ -51,6 +51,7 @@ Route-specific codes are listed on each page.
 - **Dates**: RFC 3339 in UTC (`2026-11-18T21:57:23.374Z`).
 - **Cursor pagination**: `limit` (50 by default, 500 at most) and `before` / `after` depending on the list.
 - **Writes** refused if the browser announces a request from another site (`Sec-Fetch-Site: cross-site`).
+- **Stability**: from 1.0, the API only grows within a major version; a client ignores fields it does not know. See [what an update guarantees](/en/installation/#what-an-update-guarantees-from-1-0).
 
 ## Server health
 
@@ -59,10 +60,10 @@ Route-specific codes are listed on each page.
 No authentication.
 
 ```json
-{ "status": "ok", "version": "0.5.1" }
+{ "status": "ok", "version": "1.0.0" }
 ```
 
-`version`: the installed release number (`0.5.0-rc.2` for a pre-release), otherwise the code version.
+`version`: the installed release number (`1.0.0-rc.1` for a pre-release), otherwise the code version.
 
 ## Reference pages
 
