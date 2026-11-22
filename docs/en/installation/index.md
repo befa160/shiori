@@ -55,7 +55,7 @@ The image (`distroless`, amd64 and arm64) runs without administrator rights. Kee
    | Windows | `shiori-<version>-x86_64-pc-windows-msvc.zip` |
    | macOS (Apple Silicon) | `shiori-<version>-aarch64-apple-darwin.tar.gz` |
 
-   Optional: check its fingerprint against the `SHA256SUMS` file (`sha256sum -c SHA256SUMS --ignore-missing` on Linux).
+   Optional: check its fingerprint against the `SHA256SUMS` file (`sha256sum -c SHA256SUMS --ignore-missing` on Linux), or check that it was built by this repository with the [GitHub CLI](https://cli.github.com/): `gh attestation verify <archive> -R befa160/shiori` (`oci://ghcr.io/befa160/shiori:<version>` for the Docker image). Available from 1.0.
 
 2. Unpack the archive, then start Shiori:
    - **Windows**: double-click `shiori.exe`. On first launch Windows may show "Windows protected your PC": **More info**, then **Run anyway**. Shiori opens its interface in your browser; the black window stays open while it runs (closing it stops Shiori). Closed the interface by mistake? Double-click again: it reopens it.
@@ -92,3 +92,14 @@ The database updates itself when the new version starts; if its format changes, 
 
 - **Docker**: `docker compose pull && docker compose up -d`.
 - **Standalone program**: stop Shiori, replace the program with the one from the new archive, start it again.
+
+### What an update guarantees (from 1.0)
+
+Version numbers follow `major.minor.patch`. From one 1.x version to another:
+
+- **The database is kept**: its format changes through lossless migrations, and Shiori backs it up before each one. Going back to an older version is not supported: restore the `shiori-avant-…` backup made before the update.
+- **Volume and page IDs do not change**: progress, saved links, downloaded volumes and caches stay valid. A modified file gets new IDs, as always.
+- **The `/api` API only grows**: new routes, new fields in responses, new error codes. Nothing is removed or renamed, and a field does not change meaning. A client must therefore ignore fields it does not know.
+- **Command-line options and environment variables stay valid.**
+
+Breaking any of these promises waits for a **major** version (2.0), announced in the release notes. Pre-releases (`1.0.0-rc.1`) are for testing: they promise nothing and never become `latest`.

@@ -51,6 +51,7 @@ Les codes propres à une route sont listés sur sa page.
 - **Dates** : RFC 3339 en UTC (`2026-11-18T21:57:23.374Z`).
 - **Pagination** par curseur : `limit` (50 par défaut, 500 au plus) et `before` / `after` selon la liste.
 - **Écritures** refusées si le navigateur annonce une requête d'un autre site (`Sec-Fetch-Site: cross-site`).
+- **Stabilité** : à partir de la 1.0, l'API ne fait que s'enrichir au sein d'une version majeure ; un client ignore les champs qu'il ne connaît pas. Voir [ce qu'une mise à jour garantit](/installation/#ce-qu-une-mise-a-jour-garantit-a-partir-de-la-1-0).
 
 ## Santé du serveur
 
@@ -59,10 +60,10 @@ Les codes propres à une route sont listés sur sa page.
 Sans authentification.
 
 ```json
-{ "status": "ok", "version": "0.5.1" }
+{ "status": "ok", "version": "1.0.0" }
 ```
 
-`version` : le numéro de la release installée (`0.5.0-rc.2` pour une préversion), sinon la version du code.
+`version` : le numéro de la release installée (`1.0.0-rc.1` pour une préversion), sinon la version du code.
 
 ## Pages de la référence
 

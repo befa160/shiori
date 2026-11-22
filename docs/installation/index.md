@@ -55,7 +55,7 @@ L'image (`distroless`, amd64 et arm64) tourne sans droits d'administrateur. Gard
    | Windows | `shiori-<version>-x86_64-pc-windows-msvc.zip` |
    | macOS (Apple Silicon) | `shiori-<version>-aarch64-apple-darwin.tar.gz` |
 
-   Facultatif : comparez son empreinte avec le fichier `SHA256SUMS` (`sha256sum -c SHA256SUMS --ignore-missing` sous Linux).
+   Facultatif : comparez son empreinte avec le fichier `SHA256SUMS` (`sha256sum -c SHA256SUMS --ignore-missing` sous Linux), ou vérifiez qu'elle a bien été construite par ce dépôt avec la [CLI GitHub](https://cli.github.com/) : `gh attestation verify <archive> -R befa160/shiori` (`oci://ghcr.io/befa160/shiori:<version>` pour l'image Docker). Possible à partir de la 1.0.
 
 2. Décompressez l'archive, puis lancez Shiori :
    - **Windows** : double-cliquez sur `shiori.exe`. Au premier lancement, Windows peut afficher « Windows a protégé votre ordinateur » : **Informations complémentaires**, puis **Exécuter quand même**. Shiori ouvre son interface dans votre navigateur ; la fenêtre noire reste ouverte tant qu'il tourne (la fermer l'arrête). Interface fermée par erreur ? Double-cliquez de nouveau : il la rouvre.
@@ -92,3 +92,14 @@ La base se met à jour toute seule au lancement de la nouvelle version ; si son 
 
 - **Docker** : `docker compose pull && docker compose up -d`.
 - **Programme seul** : arrêtez Shiori, remplacez le programme par celui de la nouvelle archive, relancez-le.
+
+### Ce qu'une mise à jour garantit (à partir de la 1.0)
+
+Les numéros de version suivent `majeure.mineure.correctif`. D'une version 1.x à une autre :
+
+- **La base est gardée** : son format évolue par des migrations sans perte, et Shiori la sauvegarde avant chacune. Revenir à une version plus ancienne n'est pas prévu : restaurez la sauvegarde `shiori-avant-…` faite avant la mise à jour.
+- **Les identifiants des tomes et des pages ne changent pas** : progression, liens enregistrés, tomes téléchargés et caches restent valables. Un fichier modifié reçoit de nouveaux identifiants, comme toujours.
+- **L'API `/api` ne fait que s'enrichir** : nouvelles routes, nouveaux champs dans les réponses, nouveaux codes d'erreur. Rien n'est retiré ni renommé, et un champ ne change pas de sens. Un client doit donc ignorer les champs qu'il ne connaît pas.
+- **Les options de lancement et les variables d'environnement restent valables.**
+
+Toute rupture de l'une de ces promesses attend une version **majeure** (2.0), annoncée dans les notes de version. Les préversions (`1.0.0-rc.1`) servent à l'essai : elles ne promettent rien et ne deviennent jamais `latest`.
