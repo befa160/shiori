@@ -17,7 +17,7 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 | 9 | Maintenance de la bibliothèque (surveillance des dossiers, scan complet périodique, santé) + documentation VitePress bilingue + bilan V1 | ✅ |
 | 10 | Retours de la vraie bibliothèque (NAS) : scan tolérant, sources de métadonnées et Wikipédia FR, série lue/non lue, lecture rapide | ✅ |
 | 11 | Avant la V1 : hors ligne qui prévient quand il ne marchera pas, « Tome suivant » vers un tome en erreur, promesse de compatibilité et attestations, `v1.0.0-rc.1` | ✅ |
-| V1 | Vérifications sur vrai matériel, audit, captures de la documentation, attestations, promesse de compatibilité (voir « Maturité pour une V1 ») | 🚧 |
+| V1 | Vérifications sur vrai matériel, audit, captures de la documentation, attestations, promesse de compatibilité (voir « Maturité pour une V1 ») ; `v1.0.0` | ✅ |
 
 ## Méthode de travail
 
@@ -1427,7 +1427,7 @@ Fonctionnellement, Shiori couvre l'usage visé. Ce qui manque pour une V1 n'est 
 
 ### Proposition : à faire avant la V1 (❓ à valider)
 
-1. **Vérifications sur vrai matériel** (par toi ; jamais faites, c'est pourtant l'usage principal) : PWA installée, session longue et hors-ligne sur la Tab A9 et le A55 ; derrière le vrai reverse proxy HTTPS (cookie `Secure`, split DNS, `--allowed-host`) ; image arm64 si un NAS ou un Pi est prévu ; Backrest réel sur le dossier des sauvegardes, avec une restauration d'essai. Chaque défaut trouvé devient un correctif avant la V1.
+1. ✅ (2026-11-22, `v1.0.0-rc.1` sur la Tab A9 et le A55) **Vérifications sur vrai matériel** (par toi ; jamais faites, c'est pourtant l'usage principal) : PWA installée, session longue et hors-ligne sur la Tab A9 et le A55 ; derrière le vrai reverse proxy HTTPS (cookie `Secure`, split DNS, `--allowed-host`) ; image arm64 si un NAS ou un Pi est prévu ; Backrest réel sur le dossier des sauvegardes, avec une restauration d'essai. Chaque défaut trouvé devient un correctif avant la V1.
 2. **Audit complet** (`ponytail-audit`) : le dernier date d'avant la phase 7, et les phases 7 à 9 ont ajouté l'authentification, la restauration et la surveillance.
 3. ✅ (2026-11-22) **Captures d'écran** de la documentation (repères `ecran_…`), aux couleurs du thème sombre.
 4. ✅ (lot 11.3) **Attestations de provenance** (`actions/attest-build-provenance`) sur les archives et l'image : gratuites, sans secret (voir « Signature des binaires »).
@@ -1587,7 +1587,7 @@ D'après les retours d'usage de la v0.5.1 (hors ligne sur la Tab A9) et le bilan
   - ✅ `v1.0.0-rc.1` publiée le 2026-11-22 : binaires, `SHA256SUMS`, image `1.0.0-rc.1` (pas `latest`), attestations vérifiées avec `gh attestation verify` sur l'archive Linux et l'image.
   - ✅ Captures d'écran (2026-11-22) : 12 par langue dans `docs/public/screens/{fr,en}/`, prises par l'utilisateur sur sa vraie bibliothèque (tablette et PC) ; installation en anglais générée sur une instance jetable ; métadonnées EXIF retirées ; hauteur bornée par `custom.css`.
   - Défauts vus sur les captures, à corriger : tags d'AniList affichés en anglais sur une page de série en français (« Sci-Fi », « Supernatural »…), alors que le lot 10.2a les traduit ; libellé d'un tome téléchargé figé dans la langue du moment du téléchargement (« Volume 8 » dans l'interface française).
-  - Reste : l'essai de la rc.1 sur les appareils.
+  - ✅ Essai de la rc.1 sur la Tab A9 et le A55 validé par l'utilisateur (2026-11-22) ; capture française de la page de série gardée telle quelle. `v1.0.0` publiée depuis `main`.
 
 ## Fonctionnalités ajoutées en cours de route
 
@@ -1704,3 +1704,4 @@ Audit Ponytail de tout le dépôt après la phase 9 ; corrigé dans `fix/audit-v
 - 2026-11-22 : plan de la phase 11 validé (avant la V1 : garde du hors ligne, « Tome suivant » marqué en erreur, promesse de compatibilité ; `Remote-User` après la V1, AVIF gardé) ; idées pour après la V1 notées (OPDS, statistiques, listes, nouveautés suivies, marque-pages, réglages d'image).
 - 2026-11-22 : phase 11 terminée (garde du hors ligne, « Tome suivant » signalé, promesse de compatibilité, attestations) ; version `1.0.0` dans le code, tag `v1.0.0-rc.1` à poser après l'audit.
 - 2026-11-22 : audit avant la V1 (#122) ; préversion `v1.0.0-rc.1` publiée ; captures d'écran de la documentation.
+- 2026-11-22 : essai de la rc.1 validé sur les appareils ; version `v1.0.0`.
