@@ -15,17 +15,19 @@
 
 📖 **Documentation : <https://befa160.github.io/shiori/>** ([English](https://befa160.github.io/shiori/en/))
 
-<!-- [ecran_readme] -->
+![L'accueil de Shiori : « Continuer la lecture », puis les étagères des bibliothèques](docs/public/screens/fr/ecran_accueil.jpg)
+
+> **Version 1.0 en approche** : la préversion [`v1.0.0-rc.1`](https://github.com/befa160/shiori/releases/tag/v1.0.0-rc.1) est à l'essai. À partir de la 1.0, une mise à jour garde votre base, les identifiants des tomes et des pages, et l'API ne fait que s'enrichir ([ce qui est promis](https://befa160.github.io/shiori/installation/#ce-qu-une-mise-a-jour-garantit-a-partir-de-la-1-0)).
 
 ## Ce que ça fait
 
-- **Lire partout** : manga de droite à gauche, BD, doubles pages, webtoon en défilement continu ; la progression suit d'un appareil à l'autre ; application installable (PWA) et tomes téléchargés pour lire hors ligne.
+- **Lire partout** : manga de droite à gauche, BD, doubles pages, webtoon en défilement continu, zoom au pincement ; la progression suit d'un appareil à l'autre ; application installable (PWA) et tomes téléchargés pour lire hors ligne ; pages suivantes préparées d'avance pour feuilleter sans attendre, même sur un petit NAS.
 - **Tous vos formats** : CBZ (zip64 compris), CBR (RAR 4 et 5, solide compris) et PDF, dont la planche s'affiche sans les marges de la page ; images JPEG, PNG, WebP, AVIF, BMP et GIF. Pages redimensionnées en AVIF à la taille de l'écran.
 - **Une bibliothèque qui se tient à jour** : un dossier par série, les numéros de tomes et chapitres reconnus dans les noms, la surveillance des dossiers qui scanne seule ce qui change, un scan complet périodique pour les partages réseau.
 - **Une bibliothèque en bonne santé** : chaque page vérifiée au scan, un tableau de bord des tomes sains, en avertissement ou en erreur, la liste de ce qu'il faut réparer, chaque problème expliqué.
 - **Des fiches complètes** : ComicInfo.xml, `index.json`, propriétés des PDF, et si vous l'autorisez AniList, MangaDex et Wikipédia ; vos modifications passent toujours en premier.
 - **Toute la famille** : un compte par personne, bibliothèques ouvertes à la carte, double authentification, jetons d'API, sauvegardes automatiques et restauration depuis l'interface.
-- **Chez vous** : Linux, Windows, macOS ou Docker (amd64, arm64) ; rien ne quitte votre réseau sans votre accord. Interface en français et en anglais, thèmes sombre, clair, noir OLED et sépia.
+- **Chez vous** : Linux, Windows, macOS ou Docker (amd64, arm64), avec des attestations de provenance pour vérifier qu'un binaire vient bien de ce dépôt ; rien ne quitte votre réseau sans votre accord. Interface en français et en anglais, thèmes sombre, clair, noir OLED et sépia.
 
 ## Pourquoi
 
@@ -83,7 +85,7 @@ Les sources de la documentation sont dans [`docs/`](docs/), l'avancement détail
 
 ## In English
 
-Shiori is a self-hosted manga, comics and webtoon reader: a single Rust binary (or Docker image) that reads your CBZ, CBR and PDF folders (JPEG, PNG, WebP, AVIF, BMP and GIF pages) and serves them to an installable web app, designed tablet-first. Every page has a stable identity and is checked when scanned, so the reader never shows the wrong page. See the [English documentation](https://befa160.github.io/shiori/en/).
+Shiori is a self-hosted manga, comics and webtoon reader: a single Rust binary (or Docker image) that reads your CBZ, CBR and PDF folders (JPEG, PNG, WebP, AVIF, BMP and GIF pages) and serves them to an installable web app, designed tablet-first, with offline reading, family accounts and metadata from your files, AniList, MangaDex and Wikipedia. Every page has a stable identity and is checked when scanned, so the reader never shows the wrong page. Version 1.0 is in pre-release ([`v1.0.0-rc.1`](https://github.com/befa160/shiori/releases/tag/v1.0.0-rc.1)). See the [English documentation](https://befa160.github.io/shiori/en/).
 
 ## Développement
 
@@ -92,6 +94,7 @@ Rust (axum, tokio, sqlx + SQLite) et React 19 + TypeScript + Tailwind + shadcn/u
 ```bash
 cd backend && cargo test --workspace
 cd web && npm ci && npm run dev
+cd web && npm run e2e   # bout en bout, contre un vrai serveur
 ```
 
 Commandes, règles et publication : [Contribuer](https://befa160.github.io/shiori/development/) ; règles complètes dans [CLAUDE.md](CLAUDE.md).
