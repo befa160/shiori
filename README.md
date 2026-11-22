@@ -17,7 +17,7 @@
 
 ![L'accueil de Shiori : « Continuer la lecture », puis les étagères des bibliothèques](docs/public/screens/fr/ecran_accueil.jpg)
 
-> **Version 1.0 en approche** : la préversion [`v1.0.0-rc.1`](https://github.com/befa160/shiori/releases/tag/v1.0.0-rc.1) est à l'essai. À partir de la 1.0, une mise à jour garde votre base, les identifiants des tomes et des pages, et l'API ne fait que s'enrichir ([ce qui est promis](https://befa160.github.io/shiori/installation/#ce-qu-une-mise-a-jour-garantit-a-partir-de-la-1-0)).
+> **Version 1.0** : d'une version 1.x à une autre, une mise à jour garde votre base, les identifiants des tomes et des pages, et l'API ne fait que s'enrichir ([ce qui est promis](https://befa160.github.io/shiori/installation/#ce-qu-une-mise-a-jour-garantit-a-partir-de-la-1-0)).
 
 ## Ce que ça fait
 
@@ -85,7 +85,7 @@ Les sources de la documentation sont dans [`docs/`](docs/), l'avancement détail
 
 ## In English
 
-Shiori is a self-hosted manga, comics and webtoon reader: a single Rust binary (or Docker image) that reads your CBZ, CBR and PDF folders (JPEG, PNG, WebP, AVIF, BMP and GIF pages) and serves them to an installable web app, designed tablet-first, with offline reading, family accounts and metadata from your files, AniList, MangaDex and Wikipedia. Every page has a stable identity and is checked when scanned, so the reader never shows the wrong page. Version 1.0 is in pre-release ([`v1.0.0-rc.1`](https://github.com/befa160/shiori/releases/tag/v1.0.0-rc.1)). See the [English documentation](https://befa160.github.io/shiori/en/).
+Shiori is a self-hosted manga, comics and webtoon reader: a single Rust binary (or Docker image) that reads your CBZ, CBR and PDF folders (JPEG, PNG, WebP, AVIF, BMP and GIF pages) and serves them to an installable web app, designed tablet-first, with offline reading, family accounts and metadata from your files, AniList, MangaDex and Wikipedia. Every page has a stable identity and is checked when scanned, so the reader never shows the wrong page. From 1.0, updates keep your database, volume and page IDs, and the API only grows ([what is promised](https://befa160.github.io/shiori/en/installation/#what-an-update-guarantees-from-1-0)). See the [English documentation](https://befa160.github.io/shiori/en/).
 
 ## Développement
 
