@@ -15,6 +15,13 @@ export function fakeCaches() {
     }
   }
   vi.stubGlobal('caches', { open, delete: async (name: string) => stores.delete(name) })
+  // Page contrôlée par le service worker : sans lui, les téléchargements sont refusés.
+  Object.defineProperty(navigator, 'serviceWorker', {
+    configurable: true,
+    // Copié par les tests qui remplacent `navigator` (`{ ...navigator }`).
+    enumerable: true,
+    value: { controller: {}, addEventListener() {}, removeEventListener() {} },
+  })
   /** Adresses gardées dans un cache, chemin et paramètres. */
   return (name: string) => [...(stores.get(name)?.keys() ?? [])].map((url) => url.replace('http://localhost', ''))
 }

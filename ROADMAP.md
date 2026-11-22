@@ -15,7 +15,8 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 | 7 | Authentification et comptes : comptes locaux, rôles, progression et réglages par compte, double authentification, jetons d'API, sauvegarde et restauration | ✅ |
 | 8 | Lecture des PDF sans marges | ✅ |
 | 9 | Maintenance de la bibliothèque (surveillance des dossiers, scan complet périodique, santé) + documentation VitePress bilingue + bilan V1 | ✅ |
-| 10 | Retours de la vraie bibliothèque (NAS) : scan tolérant, sources de métadonnées et Wikipédia FR, série lue/non lue, lecture rapide | ⏳ |
+| 10 | Retours de la vraie bibliothèque (NAS) : scan tolérant, sources de métadonnées et Wikipédia FR, série lue/non lue, lecture rapide | ✅ |
+| 11 | Avant la V1 : hors ligne qui prévient quand il ne marchera pas, « Tome suivant » vers un tome en erreur, promesse de compatibilité et attestations, `v1.0.0-rc.1` | ⏳ |
 | V1 | Vérifications sur vrai matériel, audit, captures de la documentation, attestations, promesse de compatibilité (voir « Maturité pour une V1 ») | ❓ |
 
 ## Méthode de travail
@@ -1441,6 +1442,15 @@ Fonctionnellement, Shiori couvre l'usage visé. Ce qui manque pour une V1 n'est 
 - **Distribution** : signature Windows (Authenticode) et macOS (Developer ID, notarisation), payantes ; application native (bascule d'adresse locale / publique), icône dans la zone de notification.
 - **Limites connues** (17 `shortcut:` dans le code, aucune bloquante pour l'usage visé) : liste des séries sans pagination (quelques milliers de séries), PDF lu en entier en mémoire, CRC zip64 au-delà de 4 Gio, 4 rendus d'image en parallèle, chiffres pleine chasse et majuscules accentuées (`NOCASE`) non repliés, noms de compte sans normalisation Unicode, couvertures rendues sans cache disque, caches du service worker bornés en nombre d'entrées ; et, des phases précédentes : pas de redimensionnement des pages AVIF d'origine, CBR multivolume refusé, décalage des doubles pages non retenu, « Tome suivant » qui peut mener à un tome en erreur.
 - **À surveiller** : test e2e « tome suivant » instable vu une fois en CI (phase 4), `:root:has()` sur un vrai Safari iOS.
+- **Idées notées le 2026-11-22** (pour reprendre plus tard, à trier) :
+  - **OPDS** en priorité : lire depuis Mihon, Panels, KOReader ou une liseuse, sur les jetons d'API (lecture et progression seulement) ; candidat pour une 1.1.
+  - **Statistiques de lecture** : l'onglet « Statistiques » prévu dans la navigation (CLAUDE.md) n'existe pas ; les données sont là (progression horodatée par compte) : tomes et pages lus par semaine, séries terminées, temps de lecture estimé.
+  - **Listes** : « À lire » par compte, collections partagées choisies par l'administrateur, relations entre séries (suite, édition, spin-off).
+  - **Nouveautés suivies** : marquer une série comme suivie, et voir à l'accueil les tomes ajoutés depuis la dernière visite.
+  - **Marque-pages** dans un tome (plusieurs par tome, avec une note), en plus de la progression.
+  - **Réglages d'image du lecteur** : luminosité (lecture le soir sur l'écran LCD de la Tab A9), rognage des marges blanches d'un scan.
+  - **Liens d'invitation** (conception notée en phase 7) et **édition d'un tome** dans l'interface (l'API existe).
+  - **Pagination de la liste des séries** quand une bibliothèque dépasse quelques milliers de séries (limite connue ci-dessus).
 
 Plus tard, sans ordre : collections et listes de lecture, relations entre séries (suites, éditions), OPDS (avec les jetons d'API), statistiques de lecture, Comic Vine et MangaUpdates. EPUB : non. PDF : phase 8.
 
@@ -1537,6 +1547,33 @@ Premier essai sur la vraie bibliothèque de l'utilisateur, servie depuis son NAS
 
 - ✅ **Titre affiché** (`fix/series-title`) : « Appurushīdo » pour le dossier Appleseed, une traduction mot à mot de MangaDex (« Âme d'argent ») pour Gintama. Décision du 2026-11-21, remplace Q34 : titre modifié > titre des fichiers > nom de la série tiré des noms de fichiers et de dossiers ; les titres web restent des titres alternatifs (cherchables) ; seul un nom tout en minuscules (`one-piece`) prend l'écriture d'une fiche de même nom. Appliqué à la fusion, recalculée au démarrage : pas de rescan. Sur la base de l'utilisateur : 82 séries changent de titre (Appleseed, Gintama, Captain Tsubasa au lieu d'« Olive et Tom », City Hunter au lieu de « Nicky Larson », Goldorak…).
 - ✅ **« Continuer la lecture »** : un tome commencé sur un appareil, la série marquée lue sur un autre, le tome restait dans « Continuer la lecture » de l'autre appareil. Cause (piste de l'utilisateur, reproduite avec deux navigateurs) : le cache du front, qui gardait la liste 30 s (`staleTime` par défaut) ; le serveur avait raison. La liste est redemandée à chaque affichage de l'accueil et à chaque retour sur l'application (`staleTime: 0`). Tests : `a_series_marked_read_leaves_continue_reading` (serveur) et un test de l'accueil qui échoue sans le correctif.
+
+## Phase 11 : avant la V1 (plan proposé et validé le 2026-11-22)
+
+D'après les retours d'usage de la v0.5.1 (hors ligne sur la Tab A9) et le bilan « Maturité pour une V1 ». Les fonctionnalités nouvelles (OPDS, statistiques, listes…) attendent après la V1 : voir « Idées notées le 2026-11-22 ».
+
+### Constats (2026-11-22)
+
+- **Hors ligne silencieusement inutilisable** : sur la Tab A9, un tome se télécharge mais ne se lit pas sans réseau, et l'application ne s'ouvre pas en mode avion. Cause : la PWA ne partageait pas le stockage de l'onglet Chrome où le service worker tournait (installée à part) ; réinstallée depuis Chrome, tout marche. Le téléchargement n'a besoin que du cache du navigateur (`caches`), pas du service worker, donc rien ne prévient : contraire à l'esprit du principe 4.
+- **« Tome suivant »** (`Reader.tsx`, `Vertical.tsx`) : le tome qui suit dans la série, même s'il est en erreur (archive illisible, 7z de Triage X) ; limite connue du bilan V1.
+- **Connexion** : l'utilisateur passe par Nginx Proxy Manager sans authentification devant, seule celle de Shiori protège : pas de double connexion, `Remote-User` reste pour après la V1 (Q54).
+- **Pages AVIF sur le NAS** : 1 à 2 s par page hors scan, 1,2 à 7 s pendant le rescan (phase 10) ; plus de pauses en feuilletant depuis la fin du rescan : l'AVIF reste (Q55).
+
+### Lots
+
+- ⏳ **11.1 `fix/offline-guard`** (interface + documentation)
+  - Pas de téléchargement quand aucun service worker ne contrôle la page (`navigator.serviceWorker.controller` nul, ou pas de `caches`) : téléchargement refusé avec sa raison (message), et la page Téléchargements le dit en tête, avec un lien vers la documentation.
+  - Même alerte si des tomes sont déjà téléchargés : ils restent listés, mais « non lisibles hors ligne sur cette installation ».
+  - Guide « Lire » (`docs/guide/reading.md` et `docs/en/guide/reading.md`, partie hors ligne) : installer la PWA depuis le navigateur qui sert à lire, à l'adresse habituelle, et l'ouvrir une fois en ligne avant de partir ; une autre adresse ou un autre navigateur, c'est une autre application (déjà expliqué pour le split DNS).
+  - Tests Vitest (avec et sans contrôleur) ; e2e existants inchangés.
+- ⏳ **11.2 `fix/next-volume`** (interface) : le bouton « Tome suivant » (barre d'outils et fin de tome, paginé et vertical) mène toujours au tome qui suit, mais dit quand il est en erreur (« Tome suivant (illisible) », statut `error` du tome dans la série) ; le lecteur de ce tome affiche déjà son erreur explicite. Tests Vitest (tome suivant sain, en erreur, absent) ; catalogues fr et en.
+- ⏳ **11.3 `docs/v1`** : promesse de compatibilité dans la documentation (fr, en), attestations de provenance (`actions/attest-build-provenance`) sur les archives et l'image, bilan de la phase, puis `v1.0.0-rc.1`.
+
+### Décisions (2026-11-22)
+
+- **Q53 « Tome suivant » vers un tome en erreur** : **marqué, jamais sauté** (rien de masqué, principe 4).
+- **Q54 `Remote-User`** : **après la V1**. Aucun proxy d'authentification chez l'utilisateur (Nginx Proxy Manager sans connexion, celle de Shiori suffit). Quand il viendra : compte inconnu du proxy **refusé** (page de connexion), jamais créé d'office ; en-tête cru seulement d'un `--trusted-proxy`.
+- **Q55 Format des pages** : **AVIF gardé**, plus de pauses depuis la fin du rescan ; option JPEG seulement si elles reviennent.
 
 ## Fonctionnalités ajoutées en cours de route
 
@@ -1650,3 +1687,4 @@ Audit Ponytail de tout le dépôt après la phase 9 ; corrigé dans `fix/audit-v
 - 2026-11-20 : phase 10 terminée (scan tolérant, Wikipédia et métadonnées, série lue, rendu anticipé, zoom au pincement et à la souris) ; version `v0.5.0`.
 - 2026-11-21 : titre affiché tiré des fichiers puis des noms de fichiers et de dossiers, plus jamais d'un titre web (remplace Q34) ; retours d'usage de la v0.5.0.
 - 2026-11-21 : version `v0.5.1` : titres des séries et « Continuer la lecture » d'un appareil à l'autre (sans rescan).
+- 2026-11-22 : plan de la phase 11 validé (avant la V1 : garde du hors ligne, « Tome suivant » marqué en erreur, promesse de compatibilité ; `Remote-User` après la V1, AVIF gardé) ; idées pour après la V1 notées (OPDS, statistiques, listes, nouveautés suivies, marque-pages, réglages d'image).
