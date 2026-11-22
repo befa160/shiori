@@ -2,6 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SeriesDetail } from '@/api/types'
+import i18n from '@/i18n'
 import { fakeCaches } from '@/test/caches'
 import { ADMIN, NO_METADATA, json, me, renderAt } from '@/test/render'
 import { resetForTests } from './downloads'
@@ -116,6 +117,24 @@ describe('tomes téléchargés, dans l’interface', () => {
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent('Lecture hors ligne indisponible ici')
     expect(within(alert).getByRole('link', { name: /Voir la documentation/ })).toHaveAttribute('href', 'https://befa160.github.io/shiori/guide/reading#lire-hors-ligne')
+  })
+
+  it('nomme les tomes téléchargés dans la langue affichée, même changée depuis', async () => {
+    serve()
+    renderAt('/series/7')
+    const main = within(screen.getByRole('main'))
+    await userEvent.click(await main.findByRole('button', { name: 'Actions pour Tome 1' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Télécharger pour lire hors ligne' }))
+    expect(await main.findByText('Téléchargé')).toBeInTheDocument()
+    // Un tome gardé par une version précédente n'a que son nom d'alors.
+    const kept = JSON.parse(localStorage.getItem('shiori.downloads')!)
+    localStorage.setItem('shiori.downloads', JSON.stringify([...kept, { volumeId: 'old', seriesId: 7, series: 'Toriko', label: 'Tome 9', pages: 1, bytes: 1 }]))
+    resetForTests()
+    await i18n.changeLanguage('en')
+    renderAt('/downloads')
+    const page = within(screen.getAllByRole('main').at(-1)!)
+    expect(await page.findByRole('link', { name: 'Read Toriko · Volume 1' })).toBeInTheDocument()
+    expect(page.getByRole('link', { name: 'Read Toriko · Tome 9' })).toBeInTheDocument()
   })
 
   it('hors ligne, l’avis mène aux tomes téléchargés', async () => {

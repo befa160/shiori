@@ -1,8 +1,11 @@
 import type { TFunction } from 'i18next'
 import type { SeriesVolume } from '@/api/types'
 
+/** Ce qui nomme un tome (gardé aussi avec un tome téléchargé, pour le nommer hors ligne). */
+export type VolumeName = Pick<SeriesVolume, 'kind' | 'number' | 'number_end' | 'file_name'>
+
 /** Nom d'un tome dans sa série, d'après le parseur de noms du serveur, dans la langue donnée. */
-export function volumeLabel(v: SeriesVolume, t: TFunction, language: string): string {
+export function volumeLabel(v: VolumeName, t: TFunction, language: string): string {
   if (v.number === null) {
     return v.kind === 'special' ? t('volume.special') : v.file_name
   }
