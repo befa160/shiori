@@ -1,6 +1,7 @@
 //! Service des images : pages (originales ou redimensionnées), couvertures, vignettes des
 //! sources ; ETag et cache permanent (principes 2, 4, 6 et 7).
 
+use std::collections::hash_map::Entry;
 use std::future::Future;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
@@ -226,17 +227,20 @@ enum Render {
     Elsewhere,
 }
 
-/// Retire une page du registre des rendus en cours quand son rendu s'arrête, erreur comprise.
+/// Retire une page du registre des rendus en cours quand son rendu s'arrête, erreur comprise, et
+/// réveille les demandes qui l'attendaient.
 struct InFlight<'a>(&'a App, (PageId, u32, Format));
 
 impl Drop for InFlight<'_> {
     fn drop(&mut self) {
-        let mut set = self
+        let mut map = self
             .0
             .rendering
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
-        set.remove(&self.1);
+        if let Some(done) = map.remove(&self.1) {
+            done.notify_waiters();
+        }
     }
 }
 
@@ -259,18 +263,25 @@ async fn render_cached(
             return Ok(Render::Done(bytes));
         }
         // Vérifier et s'inscrire d'un seul geste : deux demandes ne démarrent pas ensemble.
-        if app
-            .rendering
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .insert(key)
-        {
-            break InFlight(app, key);
-        }
-        if !wait {
-            return Ok(Render::Elsewhere);
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        // Déjà en cours : l'attente est inscrite sous le verrou, la fin du rendu (qui le prend
+        // aussi) ne peut donc pas passer sans la réveiller. Ensuite, le cache est relu, ou le rendu
+        // repris ici s'il a échoué.
+        let done = {
+            let mut map = app.rendering.lock().unwrap_or_else(PoisonError::into_inner);
+            match map.entry(key) {
+                Entry::Vacant(slot) => {
+                    slot.insert(Arc::default());
+                    break InFlight(app, key);
+                }
+                Entry::Occupied(_) if !wait => return Ok(Render::Elsewhere),
+                Entry::Occupied(slot) => {
+                    let mut done = Box::pin(slot.get().clone().notified_owned());
+                    done.as_mut().enable();
+                    done
+                }
+            }
+        };
+        done.await;
     };
     // Jeton d'abord : au plus `renders` originales en mémoire à la fois, pas une par requête.
     let _permit = if wait {
