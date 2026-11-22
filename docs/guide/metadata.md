@@ -31,7 +31,7 @@ Elles sont **désactivées par défaut** (**Administration → Métadonnées web
 - les genres et tags des sources (en anglais chez elles) s'affichent traduits dans la langue de l'interface ; la recherche et le filtre « Tags » les trouvent dans les deux langues ;
 - les fiches pour adultes sont exclues des recherches, sauf si l'administration les permet.
 
-<!-- [ecran_identifier] -->
+![Fenêtre Identifier : sources liées (AniList, Wikipédia) et fiches possibles d'une recherche MangaDex](/screens/fr/ecran_identifier.jpg)
 
 
 ## Couverture

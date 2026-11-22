@@ -14,21 +14,21 @@ Ce guide décrit Shiori écran par écran. Pour l'installer : [démarrage rapide
 
 ## L'interface
 
-<!-- [ecran_accueil] -->
+![Accueil : « Continuer la lecture », puis les étagères des bibliothèques](/screens/fr/ecran_accueil.jpg)
 
 - **Grand écran** : barre latérale (Accueil, Séries, Recherche, vos bibliothèques, Documentation, Téléchargés, Administration, Compte), repliable. Sur téléphone, la documentation s'ouvre depuis la page **Compte**.
 - **Téléphone et tablette en portrait** : barre d'onglets en bas (Accueil, Séries, Recherche, Compte).
 - **Accueil** : « Continuer la lecture » (le tome en cours de chaque série, ou le suivant quand un tome est fini), puis une étagère par bibliothèque.
 - **Séries** : toutes les séries en couvertures, filtrables par lecture (non lu, en cours, lu), statut de publication, bibliothèque et **tags** (plusieurs tags cochés = séries qui les ont tous), triables par titre, dernière lecture ou ajout récent.
 - **Recherche** : par titre, titre alternatif, auteur ou tag, sans tenir compte des accents ni des majuscules.
-<!-- [ecran_series] -->
+![Page Séries : recherche, filtres (lecture, publication, tags, bibliothèque), tri et couvertures](/screens/fr/ecran_series.jpg)
 
 
 - **Page d'une série** : couverture, résumé, auteurs, genres et tags (chacun mène aux séries qui l'ont), avancement, bouton pour reprendre ou commencer, liste des tomes. Le menu d'un tome le marque lu ou non lu, le télécharge pour le hors-ligne et montre les problèmes de son dernier scan. Le menu de la série (sur sa page, ou sur sa carte dans les listes) la marque **entière** lue ou non lue, pour votre compte seulement ; « non lu » efface la progression de tous ses tomes et demande donc confirmation. Une série est « Lu » dès que tout ce qui se lit est lu : un tome illisible (en erreur) ne la retient pas, il reste signalé par son badge.
 
 Une barre ambre en bas d'une couverture montre la progression d'un tome commencé.
 
-<!-- [ecran_serie] -->
+![Page d'une série : couverture, progression, Reprendre, Modifier, Télécharger la série, Identifier, résumé et tags](/screens/fr/ecran_serie.jpg)
 
 ## Et ensuite
 

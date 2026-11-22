@@ -1429,7 +1429,7 @@ Fonctionnellement, Shiori couvre l'usage visé. Ce qui manque pour une V1 n'est 
 
 1. **Vérifications sur vrai matériel** (par toi ; jamais faites, c'est pourtant l'usage principal) : PWA installée, session longue et hors-ligne sur la Tab A9 et le A55 ; derrière le vrai reverse proxy HTTPS (cookie `Secure`, split DNS, `--allowed-host`) ; image arm64 si un NAS ou un Pi est prévu ; Backrest réel sur le dossier des sauvegardes, avec une restauration d'essai. Chaque défaut trouvé devient un correctif avant la V1.
 2. **Audit complet** (`ponytail-audit`) : le dernier date d'avant la phase 7, et les phases 7 à 9 ont ajouté l'authentification, la restauration et la surveillance.
-3. **Captures d'écran** de la documentation (repères `ecran_…`), aux couleurs du thème sombre.
+3. ✅ (2026-11-22) **Captures d'écran** de la documentation (repères `ecran_…`), aux couleurs du thème sombre.
 4. ✅ (lot 11.3) **Attestations de provenance** (`actions/attest-build-provenance`) sur les archives et l'image : gratuites, sans secret (voir « Signature des binaires »).
 5. ✅ (lot 11.3) **Promesse de compatibilité**, écrite dans la documentation : à partir de 1.0, une mise à jour garde la base (migrations sans perte, sauvegarde avant migration déjà faite), les IDs de tomes et de pages ne changent pas, l'API `/api` n'évolue que par ajouts dans une même version majeure, toute rupture passe par une version majeure.
 6. **Versions** : `v0.4.0` dès maintenant (phase 9), puis `v1.0.0-rc.1` après les points 1 à 5, essayée quelques jours sur les appareils, puis `v1.0.0`.
@@ -1583,6 +1583,11 @@ D'après les retours d'usage de la v0.5.1 (hors ligne sur la Tab A9) et le bilan
 - Livré : téléchargement refusé et alerte quand la lecture hors ligne ne peut pas marcher (#119, avec `url` 2.5.9 pour RUSTSEC-2026-0592), « Tome suivant » signalé quand le tome est en erreur (#120), promesse de compatibilité, attestations de provenance, version 1.0.0 (lot 11.3).
 - Routine cloud hebdomadaire (mardi 10 h, heure d'hiver) : regroupe les PR Dependabot dans une seule PR vérifiée, sans rien fusionner ni publier.
 - **Reste avant `v1.0.0`** (bilan V1, points 1 à 3) : essai de `v1.0.0-rc.1` sur la Tab A9 et le A55 (PWA installée depuis Chrome, hors ligne, session longue) ; audit complet (`ponytail-audit`, le dernier date d'avant la phase 10) ; captures d'écran de la documentation (repères `ecran_…`). Proposition : l'audit avant de poser le tag `v1.0.0-rc.1`, les captures pendant l'essai.
+  - ✅ Audit fait le 2026-11-22 : rien de bloquant ; seul constat corrigé, l'attente d'un rendu en cours par notification au lieu d'une vérification toutes les 50 ms (#122).
+  - ✅ `v1.0.0-rc.1` publiée le 2026-11-22 : binaires, `SHA256SUMS`, image `1.0.0-rc.1` (pas `latest`), attestations vérifiées avec `gh attestation verify` sur l'archive Linux et l'image.
+  - ✅ Captures d'écran (2026-11-22) : 12 par langue dans `docs/public/screens/{fr,en}/`, prises par l'utilisateur sur sa vraie bibliothèque (tablette et PC) ; installation en anglais générée sur une instance jetable ; métadonnées EXIF retirées ; hauteur bornée par `custom.css`.
+  - Défauts vus sur les captures, à corriger : tags d'AniList affichés en anglais sur une page de série en français (« Sci-Fi », « Supernatural »…), alors que le lot 10.2a les traduit ; libellé d'un tome téléchargé figé dans la langue du moment du téléchargement (« Volume 8 » dans l'interface française).
+  - Reste : l'essai de la rc.1 sur les appareils.
 
 ## Fonctionnalités ajoutées en cours de route
 
@@ -1698,3 +1703,4 @@ Audit Ponytail de tout le dépôt après la phase 9 ; corrigé dans `fix/audit-v
 - 2026-11-21 : version `v0.5.1` : titres des séries et « Continuer la lecture » d'un appareil à l'autre (sans rescan).
 - 2026-11-22 : plan de la phase 11 validé (avant la V1 : garde du hors ligne, « Tome suivant » marqué en erreur, promesse de compatibilité ; `Remote-User` après la V1, AVIF gardé) ; idées pour après la V1 notées (OPDS, statistiques, listes, nouveautés suivies, marque-pages, réglages d'image).
 - 2026-11-22 : phase 11 terminée (garde du hors ligne, « Tome suivant » signalé, promesse de compatibilité, attestations) ; version `1.0.0` dans le code, tag `v1.0.0-rc.1` à poser après l'audit.
+- 2026-11-22 : audit avant la V1 (#122) ; préversion `v1.0.0-rc.1` publiée ; captures d'écran de la documentation.

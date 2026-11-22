@@ -20,7 +20,7 @@ Name and password (8 characters at least), then the two-factor code if it is on.
 
 ## Account page
 
-<!-- [ecran_compte] -->
+![Account page: language, theme and page-turn direction](/screens/en/ecran_compte.jpg)
 
 - **Preferences**: language, theme and page-turn direction for this account, on all its devices.
 - **Password**: changing it signs out its other devices.

@@ -31,7 +31,7 @@ They are **off by default** (**Administration → Web metadata**). Only the seri
 - genres and tags from the sources (in English there) are shown translated into the interface language; search and the "Tags" filter find them in both languages;
 - adult entries are excluded from searches, unless the administration allows them.
 
-<!-- [ecran_identifier] -->
+![Identify window: linked sources (AniList, Wikipedia) and possible entries from a MangaDex search](/screens/en/ecran_identifier.jpg)
 
 ## Cover
 

@@ -14,7 +14,7 @@ This guide describes Shiori screen by screen. To install it: [quick start](/en/i
 
 ## The interface
 
-<!-- [ecran_accueil] -->
+![Home: “Continue reading”, then the library shelves](/screens/en/ecran_accueil.jpg)
 
 - **Large screens**: a collapsible sidebar (Home, Series, Search, your libraries, Documentation, Downloads, Administration, Account). On phones, the documentation opens from the **Account** page.
 - **Phones and tablets in portrait**: a tab bar at the bottom (Home, Series, Search, Account).
@@ -22,13 +22,13 @@ This guide describes Shiori screen by screen. To install it: [quick start](/en/i
 - **Series**: all series as covers, filtered by reading state (unread, in progress, read), publication status, library and **tags** (several tags = series that have them all), sorted by title, last read or recently added.
 - **Search**: by title, alternative title, author or tag, ignoring accents and case.
 
-<!-- [ecran_series] -->
+![Series page: search, filters (reading, publication, tags, library), sort and covers](/screens/en/ecran_series.jpg)
 
 - **Series page**: cover, summary, authors, genres and tags (each leads to the series that have it), progress, a button to resume or start, and the list of volumes. A volume's menu marks it read or unread, downloads it for offline reading and shows the problems of its last scan. The series menu (on its page, or on its card in lists) marks the **whole** series read or unread, for your account only; "unread" clears the progress of all its volumes, so it asks for confirmation. A series is "Read" as soon as everything readable is read: an unreadable volume (in error) does not hold it back, it stays flagged by its badge.
 
 An amber bar at the bottom of a cover shows the progress of a volume in progress.
 
-<!-- [ecran_serie] -->
+![Series page: cover, progress, Resume, Edit, Download series, Identify, summary and tags](/screens/en/ecran_serie.jpg)
 
 ## Next
 

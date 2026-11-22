@@ -20,7 +20,7 @@ Nom et mot de passe (8 caractères au moins), puis le code de la double authenti
 
 ## Page Compte
 
-<!-- [ecran_compte] -->
+![Page Compte : langue, thème et sens pour tourner les pages](/screens/fr/ecran_compte.jpg)
 
 - **Préférences** : langue, thème et sens des pages de ce compte, sur tous ses appareils.
 - **Mot de passe** : le changer déconnecte ses autres appareils.

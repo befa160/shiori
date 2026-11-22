@@ -76,7 +76,7 @@ Their exact location is shown at startup and in **Administration → Data**. To 
 
 ## First steps
 
-<!-- [ecran_installation] -->
+![Setup page: setup token, name and password of the administrator account](/screens/en/ecran_installation.jpg)
 
 1. **Create the administrator account.** On first launch, the interface shows the **Setup** page: an account name, a password (8 characters at least) and the **setup token**, printed at startup in Shiori's window or in `docker compose logs shiori`. It changes at every launch. Without the interface: `shiori user add <name> --admin` (Docker: `docker compose exec shiori shiori user add <name> --admin`) gives a temporary password.
 2. **Administration → Add a library**: a name, the full path of the folder (with Docker: the right-hand path, for example `/libraries/manga`) and its type (manga, comics or webtoon).

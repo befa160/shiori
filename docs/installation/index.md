@@ -76,7 +76,7 @@ Leur emplacement exact s'affiche au démarrage et dans **Administration → Donn
 
 ## Premiers pas
 
-<!-- [ecran_installation] -->
+![Page d'installation : jeton d'installation, nom et mot de passe du compte administrateur](/screens/fr/ecran_installation.jpg)
 
 1. **Créez le compte administrateur.** Au premier lancement, l'interface affiche la page **Installation** : un nom de compte, un mot de passe (8 caractères au moins) et le **jeton d'installation**, affiché au démarrage dans la fenêtre de Shiori ou dans `docker compose logs shiori`. Il change à chaque lancement. Sans interface : `shiori user add <nom> --admin` (Docker : `docker compose exec shiori shiori user add <nom> --admin`) donne un mot de passe provisoire.
 2. **Administration → Ajouter une bibliothèque** : un nom, le chemin complet du dossier (avec Docker : le chemin de droite, par exemple `/bibliotheques/mangas`) et son type (manga, BD ou webtoon).
