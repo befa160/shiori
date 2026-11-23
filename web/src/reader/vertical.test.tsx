@@ -152,7 +152,7 @@ describe('mode webtoon', () => {
     const bottom = 99 * 1280 + 1200 - 768
     await act(async () => scrollWindow(bottom))
     await waitFor(
-      () => expect(spy.mock.calls.filter(([, init]) => init?.method === 'PUT').at(-1)?.[1]?.body).toBe('{"page_id":"s100"}'),
+      () => expect(spy.mock.calls.filter(([, init]) => init?.method === 'PUT').at(-1)?.[1]?.body).toMatch(/^{"page_id":"s100","utc_offset":-?\d+}$/),
       { timeout: 2000 },
     )
   })

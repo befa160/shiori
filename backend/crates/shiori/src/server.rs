@@ -69,7 +69,9 @@ use series::{
     series_settings,
 };
 use settings::{save_settings, settings};
-use volumes::{clear_progress, pages, patch_volume, progress, save_progress, volume};
+use volumes::{
+    clear_progress, pages, patch_volume, progress, reading_stats, save_progress, volume,
+};
 
 /// Délai pour recevoir les en-têtes d'une requête.
 const HEADER_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
@@ -368,6 +370,7 @@ pub fn router(app: Arc<App>, hosts: Option<Vec<String>>) -> Router {
         .route("/api/me", get(accounts::me).put(accounts::save_me))
         .route("/api/me/password", post(auth::change_password))
         .route("/api/me/sessions", get(accounts::devices))
+        .route("/api/me/stats", get(reading_stats))
         .route("/api/me/totp", post(totp::start).delete(totp::disable))
         .route("/api/me/totp/confirm", post(totp::confirm))
         .route("/api/me/tokens", get(tokens::list).post(tokens::create))

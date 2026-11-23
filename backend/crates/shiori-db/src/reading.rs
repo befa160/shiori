@@ -331,18 +331,22 @@ impl Db {
         volume: &VolumeId,
         page: &PageId,
     ) -> Result<SaveProgress, Error> {
-        self.save_progress_at(viewer, volume, page, None).await
+        self.save_progress_at(viewer, volume, page, None, Some(0))
+            .await
     }
 
     /// Comme [`Db::save_progress`], pour une page lue à `read_at` (ISO 8601, lecture hors ligne
     /// envoyée plus tard) : elle ne remplace pas une page lue après elle sur un autre appareil,
     /// mais marque quand même le tome comme lu. Une date future compte comme maintenant.
+    /// `utc_offset` (minutes à l'est d'UTC) donne le jour de l'appareil pour les statistiques ;
+    /// `None` : l'enregistrement n'y entre pas (« Marquer comme lu » n'est pas une lecture).
     pub async fn save_progress_at(
         &self,
         viewer: &Viewer,
         volume: &VolumeId,
         page: &PageId,
         read_at: Option<&str>,
+        utc_offset: Option<i32>,
     ) -> Result<SaveProgress, Error> {
         let sql = concat!(
             "SELECT CASE WHEN ?1 IS NULL THEN ",
@@ -379,6 +383,25 @@ impl Db {
         };
         let ordinal: i64 = p.get("ordinal");
         let last = ordinal + 1 >= v.get::<i64, _>("page_count");
+        // IMMEDIATE : lire puis écrire dans une transaction ordinaire échoue (SQLITE_BUSY, sans
+        // attente) si une autre connexion, un scan par exemple, a écrit entre les deux.
+        let mut tx = self.pool.begin_with("BEGIN IMMEDIATE").await?;
+        let before = sqlx::query(
+            "SELECT ordinal, finished_at IS NOT NULL AS finished,
+                    CAST(round((julianday(?3) - julianday(updated_at)) * 86400) AS INTEGER) AS gap
+             FROM reading_progress WHERE user_id = ?1 AND volume_id = ?2",
+        )
+        .bind(viewer.user)
+        .bind(&volume)
+        .bind(&at)
+        .fetch_optional(&mut *tx)
+        .await?;
+        let (pages, seconds) = activity(
+            before.as_ref().map(|r| (r.get("ordinal"), r.get("gap"))),
+            ordinal,
+            read_at.is_some(),
+        );
+        let finished = last && !before.is_some_and(|r| r.get::<bool, _>("finished"));
         // La plus récente des deux pages l'emporte ; « lu » ne se perd jamais.
         let sql = "INSERT INTO reading_progress
                (user_id, volume_id, page_id, ordinal, finished_at, updated_at)
@@ -397,8 +420,29 @@ impl Db {
             .bind(ordinal)
             .bind(last)
             .bind(&at)
-            .execute(&self.pool)
+            .execute(&mut *tx)
             .await?;
+        if let Some(utc_offset) = utc_offset
+            && (pages > 0 || seconds > 0 || finished)
+        {
+            sqlx::query(
+                "INSERT INTO reading_activity (user_id, day, pages, seconds, finished)
+                 VALUES (?1, date(?2, ?3), ?4, ?5, ?6)
+                 ON CONFLICT (user_id, day) DO UPDATE SET
+                   pages = pages + excluded.pages,
+                   seconds = seconds + excluded.seconds,
+                   finished = finished + excluded.finished",
+            )
+            .bind(viewer.user)
+            .bind(&at)
+            .bind(format!("{utc_offset} minutes"))
+            .bind(pages)
+            .bind(seconds)
+            .bind(finished)
+            .execute(&mut *tx)
+            .await?;
+        }
+        tx.commit().await?;
         let row = sqlx::query(progress_of!("r.volume_id = ?2"))
             .bind(viewer.user)
             .bind(&volume)
@@ -516,6 +560,24 @@ impl Db {
             .transpose()?
             .unwrap_or_default())
     }
+}
+
+/// Pages et secondes de lecture qu'ajoute un enregistrement (Q58). `before` : page et écart en
+/// secondes avec l'enregistrement précédent du tome (aucun : le tome s'ouvre, comme depuis la
+/// page -1). Seule une avance compte ; plus de 50 pages d'un coup, c'est un saut (curseur),
+/// sauf hors ligne où l'appareil n'envoie que la dernière page lue. Le temps ne compte que
+/// si moins de 5 minutes séparent deux pages : au-delà, c'est une pause.
+fn activity(before: Option<(i64, Option<i64>)>, ordinal: i64, offline: bool) -> (i64, i64) {
+    const MAX_JUMP: i64 = 50;
+    const MAX_GAP: i64 = 5 * 60;
+    let (was, gap) = before.unwrap_or((-1, None));
+    let advance = ordinal - was;
+    let pages = match advance > 0 && (offline || advance <= MAX_JUMP) {
+        true => advance,
+        false => 0,
+    };
+    let seconds = gap.filter(|g| (1..MAX_GAP).contains(g)).unwrap_or(0);
+    (pages, seconds)
 }
 
 #[cfg(test)]

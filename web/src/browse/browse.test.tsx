@@ -272,7 +272,7 @@ describe('page d’une série', () => {
     await waitFor(() =>
       expect(fetch.mock.calls.find(([, init]) => init?.method === 'PUT')).toEqual([
         '/api/volumes/c/progress',
-        expect.objectContaining({ body: JSON.stringify({ page_id: 'c12' }) }),
+        expect.objectContaining({ body: JSON.stringify({ page_id: 'c12', stats: false }) }),
       ]),
     )
     // Un tome lu : rien à marquer comme lu.

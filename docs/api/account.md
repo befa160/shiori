@@ -41,6 +41,24 @@ Préférences du compte, mise à jour partielle : `language` (`fr`, `en`), `them
 
 Déconnecte un appareil. **Réponse 204**, 404 si la session n'est pas à ce compte.
 
+## Statistiques de lecture
+
+### `GET /api/me/stats`
+
+Statistiques du compte de la session, jamais celles d'un autre compte. Refusé aux jetons d'API.
+
+Paramètres : `days` (période en jours, aujourd'hui compris : 84 par défaut, de 1 à 366), `utc_offset` (fuseau de l'appareil en minutes à l'est d'UTC, qui fixe « aujourd'hui » ; UTC par défaut).
+
+```json
+{
+  "days": [{ "day": "2026-11-23", "pages": 184, "seconds": 2460, "finished": 1 }],
+  "total": { "pages": 5210, "seconds": 70310, "finished": 31 },
+  "series_finished": 4
+}
+```
+
+`days` : jours lus de la période, du plus ancien au plus récent ; un jour sans lecture est absent. `pages` : pages avancées (un saut de plus de 50 pages d'un coup ne compte pas, sauf une lecture hors ligne) ; `seconds` : temps estimé, sans les pauses de 5 minutes et plus ; `finished` : tomes dont la dernière page a été atteinte. `total` : depuis le début ; avant la 1.1, seuls les tomes terminés sont connus. `series_finished` : séries visibles dont tous les tomes lisibles sont lus. **Erreur** : 400 `invalid_query`.
+
 ## Double authentification
 
 ### `POST /api/me/totp`

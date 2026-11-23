@@ -257,7 +257,7 @@ function VolumeMenu({
     mutationFn: async (read: boolean) => {
       if (!read) return void (await api.clearProgress(id))
       const pages = await api.pages(id)
-      await api.saveProgress(id, pages[pages.length - 1].id)
+      await api.markVolumeRead(id, pages[pages.length - 1].id)
     },
     onSuccess: () => {
       for (const queryKey of [...LISTS, ['volumes', id]]) void queryClient.invalidateQueries({ queryKey })

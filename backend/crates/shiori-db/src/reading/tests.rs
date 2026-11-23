@@ -132,14 +132,14 @@ async fn a_page_read_offline_does_not_replace_a_later_one() {
     // Téléphone, hors ligne plus tôt : page 2, envoyée après. La page 8 reste.
     let early = Some("2020-01-01T10:00:00.000Z");
     let p = saved(
-        f.db.save_progress_at(&me, &f.volume, &f.pages[2], early)
+        f.db.save_progress_at(&me, &f.volume, &f.pages[2], early, Some(0))
             .await
             .unwrap(),
     );
     assert_eq!((p.ordinal, p.finished), (8, false));
     // Mais la dernière page lue hors ligne marque quand même le tome comme lu.
     let p = saved(
-        f.db.save_progress_at(&me, &f.volume, &f.pages[last], early)
+        f.db.save_progress_at(&me, &f.volume, &f.pages[last], early, Some(0))
             .await
             .unwrap(),
     );
@@ -147,7 +147,7 @@ async fn a_page_read_offline_does_not_replace_a_later_one() {
     // Une date future compte comme maintenant : elle ne fige pas la progression.
     let future = Some("2999-01-01T00:00:00.000Z");
     saved(
-        f.db.save_progress_at(&me, &f.volume, &f.pages[5], future)
+        f.db.save_progress_at(&me, &f.volume, &f.pages[5], future, Some(0))
             .await
             .unwrap(),
     );
@@ -160,13 +160,13 @@ async fn a_page_read_offline_does_not_replace_a_later_one() {
     // Premier enregistrement d'un tome, daté : pris tel quel.
     f.db.clear_progress(&me, &f.volume).await.unwrap();
     let p = saved(
-        f.db.save_progress_at(&me, &f.volume, &f.pages[4], early)
+        f.db.save_progress_at(&me, &f.volume, &f.pages[4], early, Some(0))
             .await
             .unwrap(),
     );
     assert_eq!(p.ordinal, 4);
     assert_eq!(
-        f.db.save_progress_at(&me, &f.volume, &f.pages[4], Some("hier"))
+        f.db.save_progress_at(&me, &f.volume, &f.pages[4], Some("hier"), Some(0))
             .await
             .unwrap(),
         SaveProgress::InvalidTime
@@ -503,4 +503,104 @@ async fn the_viewer_language_is_the_account_one_then_the_instance_one() {
         f.db.viewer(alice.user).await.unwrap().language,
         Language::Fr
     );
+}
+
+#[test]
+fn only_reading_counts_as_activity() {
+    // Ouverture du tome : la page vue compte.
+    assert_eq!(activity(None, 0, false), (1, 0));
+    // Trois pages en 20 secondes.
+    assert_eq!(activity(Some((4, Some(20))), 7, false), (3, 20));
+    // Saut au curseur : le temps compte, pas les pages ; hors ligne, l'avance compte.
+    assert_eq!(activity(Some((0, Some(20))), 60, false), (0, 20));
+    assert_eq!(activity(Some((0, None)), 60, true), (60, 0));
+    // Retour en arrière : pas de pages ; pause de 5 minutes ou plus, ou écart nul : pas de temps.
+    assert_eq!(activity(Some((9, Some(20))), 3, false), (0, 20));
+    assert_eq!(activity(Some((1, Some(300))), 2, false), (1, 0));
+    assert_eq!(activity(Some((1, Some(0))), 2, false), (1, 0));
+}
+
+#[tokio::test]
+async fn progress_fills_the_reading_stats() {
+    let f = fixture(LibraryKind::Manga).await;
+    let me = crate::tests::viewer(&f.db).await;
+    let last = f.pages.len() - 1;
+    let at = |s: &'static str| Some(s);
+    // 23 h 30 UTC, appareil à UTC+1 : le 2 janvier. Pages 1 à 3, 30 puis 40 secondes.
+    for (page, time) in [
+        (0, "2020-01-01T23:30:00.000Z"),
+        (1, "2020-01-01T23:30:30.000Z"),
+        (2, "2020-01-01T23:31:10.000Z"),
+    ] {
+        f.db.save_progress_at(&me, &f.volume, &f.pages[page], at(time), Some(60))
+            .await
+            .unwrap();
+    }
+    // Dernière page aujourd'hui (UTC), deux fois : le tome ne compte qu'une fois.
+    for _ in 0..2 {
+        f.db.save_progress(&me, &f.volume, &f.pages[last])
+            .await
+            .unwrap();
+    }
+    let days: Vec<(String, i64, i64, i64)> =
+        sqlx::query_as("SELECT day, pages, seconds, finished FROM reading_activity ORDER BY day")
+            .fetch_all(&f.db.pool)
+            .await
+            .unwrap();
+    assert_eq!(days[0], ("2020-01-02".to_owned(), 3, 70, 0));
+    assert_eq!((days[1].1, days[1].3), (last as i64 - 2, 1));
+
+    let stats = f.db.reading_stats(&me, 7, 0).await.unwrap();
+    assert_eq!(stats.days.len(), 1, "2020 est hors de la période");
+    assert_eq!(stats.days[0].activity.finished, 1);
+    assert_eq!(
+        stats.total,
+        crate::Activity {
+            pages: last as i64 + 1,
+            seconds: 70,
+            finished: 1
+        }
+    );
+    assert_eq!(stats.series_finished, 1);
+
+    // Strictement personnelles : un autre compte ne voit rien.
+    let other =
+        f.db.create_user("autre", "mot de passe", crate::Role::Reader)
+            .await
+            .unwrap();
+    let other = f.db.viewer(other.id).await.unwrap();
+    let stats = f.db.reading_stats(&other, 7, 0).await.unwrap();
+    assert!(stats.days.is_empty());
+    assert_eq!(stats.total, crate::Activity::default());
+}
+
+#[tokio::test]
+async fn volumes_finished_before_the_stats_count_on_their_day() {
+    let f = fixture(LibraryKind::Manga).await;
+    let me = crate::tests::viewer(&f.db).await;
+    let last = f.pages.len() - 1;
+    f.db.save_progress_at(
+        &me,
+        &f.volume,
+        &f.pages[last],
+        Some("2020-03-04T22:00:00.000Z"),
+        Some(0),
+    )
+    .await
+    .unwrap();
+    // Base d'avant la 1.1 : pas de table d'activité, la migration 23 la remplit.
+    for undo in [
+        "DROP TABLE reading_activity",
+        "DELETE FROM _sqlx_migrations WHERE version = 23",
+    ] {
+        sqlx::query(undo).execute(&f.db.pool).await.unwrap();
+    }
+    f.db.pool.close().await;
+    let db = Db::open(&f._dir.path().join("t.db")).await.unwrap();
+    let days: Vec<(String, i64, i64)> =
+        sqlx::query_as("SELECT day, pages, finished FROM reading_activity")
+            .fetch_all(&db.pool)
+            .await
+            .unwrap();
+    assert_eq!(days, [("2020-03-04".to_owned(), 0, 1)]);
 }

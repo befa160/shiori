@@ -78,10 +78,12 @@ A web source's cover kept by the server (`cover_image_id`), original or `?w=&f=`
 Saves the page read. Allowed to API tokens.
 
 ```json
-{ "page_id": "3f9c…", "read_at": "2026-11-19T08:12:00.000Z" }
+{ "page_id": "3f9c…", "read_at": "2026-11-19T08:12:00.000Z", "utc_offset": 60 }
 ```
 
 `read_at`: optional, time of reading (ISO 8601) of a page read offline and sent later; missing: now, and a future time counts as now. The most recent page wins: a page read offline does not replace the one read since on another device.
+
+`utc_offset`: optional, the device time zone in minutes east of UTC (UTC by default, capped at ±840), which gives the day counted by the [statistics](account#reading-statistics). `stats`: optional, `false` for a save that is not reading (“Mark as read”) and stays out of the statistics.
 
 **Response 200**: the progress kept. `finished` becomes true as soon as the last page is reached, even by an older page. **Errors**: 400 `invalid_body` (including a `read_at` that is not a date), 404 `not_found`, 422 `page_not_in_volume`.
 
