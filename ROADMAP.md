@@ -32,7 +32,29 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 
 ## Prochaine phase : 1.1 (⏳ plan à valider)
 
-Shiori `v1.0.0` couvre l'usage visé (bibliothèque chez soi, lecture en streaming et hors ligne sur la Tab A9 et le A55, comptes de la famille). La 1.1 réunit OPDS (ouvre Shiori aux liseuses et aux applications de lecture) et les statistiques de lecture (onglet prévu par CLAUDE.md, données déjà en base).
+Shiori `v1.0.0` couvre l'usage visé (bibliothèque chez soi, lecture en streaming et hors ligne sur la Tab A9 et le A55, comptes de la famille). La 1.1 réunit OPDS (ouvre Shiori aux liseuses et aux applications de lecture) et les statistiques de lecture (onglet prévu par CLAUDE.md).
+
+Constats avant le plan :
+- Les jetons d'API (`shiori_t_…`) ne passent qu'en `Authorization: Bearer` ; KOReader et Panels n'envoient que du Basic (nom + mot de passe).
+- OPDS-PSE (lecture page par page, ce qu'attendent Panels et KOReader pour un CBZ) adresse les pages par **numéro** dans l'URL, ce que le principe 1 interdit.
+- Aucune route ne sert le fichier d'origine (téléchargement pour lecture hors ligne dans l'application OPDS).
+- `reading_progress` ne garde que le dernier état par tome (`updated_at`, `finished_at`) : les tomes terminés par semaine s'en déduisent, **pas les pages lues ni le temps**. Il faut un journal d'activité, sans historique avant la 1.1.
+- La barre du bas a déjà ses 4 onglets (Accueil, Séries, Recherche, Compte).
+
+Lots :
+- **1.1a OPDS, catalogue** : Basic accepté pour un jeton d'API (mot de passe = jeton, nom ignoré), jamais pour un mot de passe de compte ; flux OPDS 1.2 (Atom) sous `/api/opds` : racine, Continuer la lecture, bibliothèques, séries (paginées par `rel="next"`), tomes avec couverture et vignette, recherche OpenSearch ; droits du compte respectés (bibliothèques visibles) ; XML écrit avec `quick-xml`.
+- **1.1b OPDS, lecture** : PSE (`/api/opds/volumes/{id}/pages/{n}` → redirection `no-store` vers l'URL immuable `/api/pages/{page_id}/image`, le numéro est résolu depuis l'ordre du scan) ; progression enregistrée quand une page plus loin est demandée, `pse:lastRead` renvoyé ; téléchargement du fichier d'origine (Q60) ; documentation FR/EN (KOReader, Panels, Mihon à vérifier) ; essai sur la Tab A9.
+- **1.1c Statistiques, serveur** : table `reading_activity(user_id, day, volume_id, pages, seconds)` remplie à chaque progression enregistrée (pages = avance depuis l'état précédent, temps = écart entre deux enregistrements s'il est court) ; `GET /api/me/stats` (par semaine : tomes terminés, pages, temps ; séries terminées ; totaux) ; tomes terminés avant la 1.1 repris depuis `finished_at`.
+- **1.1d Statistiques, interface** : page `/stats`, entrée « Statistiques » dans la sidebar, barres en CSS (pas de bibliothèque de graphiques), i18n, e2e, captures 4 tailles, documentation FR/EN.
+
+Questions :
+- **Q58** Exception au principe 1 pour PSE seulement (numéro dans l'URL de redirection, jamais mis en cache, la page servie garde son ID stable) ? Sinon, OPDS sans lecture page par page (téléchargement seul).
+- **Q59** Progression enregistrée par une simple lecture de page OPDS (effet de bord d'un GET, seulement vers l'avant) ?
+- **Q60** Téléchargement du fichier d'origine dans OPDS (lecture hors ligne dans KOReader) ?
+- **Q61** Temps de lecture : écart compté seulement s'il est sous 5 minutes entre deux pages ; avance de plus de 50 pages d'un coup (saut au curseur) comptée 0 ?
+- **Q62** Jours en UTC (lecture après minuit comptée sur la veille ou le lendemain selon le fuseau), ou fuseau envoyé par l'appareil ?
+- **Q63** Statistiques sur mobile : lien depuis la page Compte (barre du bas inchangée) ?
+- **Q64** Statistiques strictement personnelles (l'administrateur ne voit pas celles des autres comptes) ?
 
 ## Planning après la V1
 
