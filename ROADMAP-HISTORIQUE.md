@@ -1564,6 +1564,44 @@ D'après les retours d'usage de la v0.5.1 (hors ligne sur la Tab A9) et le bilan
   - Défauts vus sur les captures, à corriger : tags d'AniList affichés en anglais sur une page de série en français (« Sci-Fi », « Supernatural »…), alors que le lot 10.2a les traduit ; libellé d'un tome téléchargé figé dans la langue du moment du téléchargement (« Volume 8 » dans l'interface française).
   - ✅ Essai de la rc.1 sur la Tab A9 et le A55 validé par l'utilisateur (2026-11-22) ; capture française de la page de série gardée telle quelle. `v1.0.0` publiée depuis `main`.
 
+## Version 1.1 : statistiques de lecture ; essai de l'application Android abandonné (plan validé et terminée le 2026-11-23)
+
+Shiori `v1.0.0` couvre l'usage visé (bibliothèque chez soi, lecture en streaming et hors ligne sur la Tab A9 et le A55, comptes de la famille). La 1.1 réunit les statistiques de lecture (onglet prévu par CLAUDE.md) et une **application Android** (enveloppe Tauri 2) qui bascule seule entre l'adresse locale et l'adresse publique. OPDS repasse au backlog (2026-11-23).
+
+Constats avant le plan :
+- `reading_progress` ne garde que le dernier état par tome (`updated_at`, `finished_at`) : les tomes terminés par semaine s'en déduisent, **pas les pages lues ni le temps**. Il faut un journal d'activité, sans historique avant la 1.1.
+- La barre du bas a déjà ses 4 onglets (Accueil, Séries, Recherche, Compte).
+- Tauri 2 sert sur Android un protocole maison à `http://<schéma>.localhost` par un gestionnaire Rust asynchrone ; le greffon de mise à jour de Tauri ne fonctionne pas sur mobile.
+- Le front appelle `/api` en relatif et la session tient dans un cookie (`SameSite=Lax`) ; la connexion renvoie aussi le jeton de session, et l'API l'accepte en `Bearer`. Une application qui chargerait le front depuis sa propre origine serait « cross-site » : cookie non envoyé, images (`<img>`) sans en-tête d'authentification.
+- Le hors-ligne repose sur le service worker (`public/sw.js`) et le cache `shiori-offline-v1` ; un service worker sur une origine de protocole maison de la WebView Android n'est pas garanti.
+- Tauri sous Linux tire webkit2gtk (bibliothèque C) : l'application ne peut pas entrer dans le workspace `backend/` sans casser `cargo test --workspace` et la règle du pur Rust. Un build Android (NDK, Gradle) dépasse aussi la mémoire de la machine de dev (WSL 3,8 Gio) : l'APK se construit en CI.
+
+Proposition d'architecture (Q62) : l'application est un **relais**. La WebView charge `http://shiori.localhost/` ; un gestionnaire Rust transmet chaque requête (front compris) au serveur joignable, en ajoutant `Authorization: Bearer` avec le jeton de session qu'il a relevé à la connexion. Le front est donc toujours celui du serveur (jamais de décalage de version), tout reste « same-origin » pour la WebView, et **le serveur ne change pas**. L'application n'ajoute qu'un écran de réglage des deux adresses.
+
+Lots :
+- ✅ **1.1a Statistiques, serveur** (#133) : table `reading_activity(user_id, day, pages, seconds, finished)` remplie à chaque progression enregistrée (pages = avance depuis l'état précédent, temps = écart entre deux enregistrements s'il est court) ; `GET /api/me/stats` (par jour, regroupé en semaines par l'interface : tomes terminés, pages, temps ; séries terminées ; totaux) ; tomes terminés avant la 1.1 repris depuis `finished_at` ; fuseau de l'appareil reçu avec la progression (Q59) ; « Marquer comme lu » n'entre pas dans les statistiques (`stats: false`).
+- 🚧 **1.1b Statistiques, interface** (`feat/stats-page`) : page `/stats`, entrée « Statistiques » dans la sidebar et lien depuis la page Compte (Q60), barres en CSS (pas de bibliothèque de graphiques), i18n, e2e, captures 4 tailles, documentation FR/EN.
+- **1.1c Application, essai** (go / no-go) : dossier `app/` (projet Tauri 2 à part, son propre workspace cargo), relais vers une seule adresse, connexion et lecture d'un webtoon sur la Tab A9 ; mesure de fluidité à travers le relais ; job CI qui construit l'APK de debug. Arrêt et retour au split DNS si l'essai n'est pas concluant.
+- ❌ **1.1d Application, adresses et session** (abandonné) : écran de réglage (adresse locale, adresse publique), bascule automatique sur Wi-Fi nommé (Q66, greffon Kotlin), jeton de session gardé dans le stockage privé de l'application (Q67), déconnexion qui l'efface ; logique du relais dans un module Rust testé sans Tauri (couverture ≥ 80 %).
+- ❌ **1.1e Application, hors ligne** (abandonné) : le relais garde sur disque le front et ce que « Télécharger » récupère, et le sert quand aucune adresse ne répond ; la progression lue hors ligne repart à la reconnexion, datée comme dans la PWA (`read_at`) (Q62, Q63).
+- ❌ **1.1f Application, distribution** (abandonné) : APK signé dans la release GitHub, attestation de provenance, mises à jour par Obtainium (Q64), documentation FR/EN (installation, réglage, mise à jour).
+
+Décisions (2026-11-23) :
+- **Q58** Temps compté seulement si moins de 5 minutes séparent deux pages ; une avance de plus de 50 pages d'un coup (saut au curseur) compte 0 page.
+- **Q59** Jours et semaines dans le fuseau de l'appareil, envoyé avec la progression.
+- **Q60** Statistiques sur mobile : lien depuis la page Compte, barre du bas inchangée ; entrée dans la sidebar à partir de `lg`.
+- **Q61** Statistiques strictement personnelles.
+- **Q62** Application en relais, avec cache disque : il garde le front et les tomes téléchargés, donc l'application s'ouvre et lit hors ligne ; besoin exprimé : hors ligne et bascule automatique par détection du réseau.
+- **Q63** Hors ligne de l'application par le cache disque du relais (pas de service worker dans la WebView).
+- **Q64** APK signé dans la release GitHub, mises à jour par Obtainium ; clé de signature créée par l'utilisateur, dans les secrets GitHub avec une copie hors ligne.
+- **Q65** Android seulement (Tab A9, A55).
+- **Q66** Adresse locale seulement sur un Wi-Fi nommé (liste réglée dans l'application) **et** si elle répond (`/api/health`, 1,5 s), sinon adresse publique ; réévalué à chaque changement de réseau (greffon Kotlin : nom du Wi-Fi et changements de réseau, permission de localisation demandée avec une explication). Raison : sur un autre Wi-Fi à la même plage d'adresses, un autre appareil recevrait la session en clair.
+- **Q67** Jeton de session dans le stockage privé de l'application, sans Keystore.
+
+Bilan :
+- Statistiques (1.1a #133, 1.1b #134) : journal `reading_activity` rempli à chaque page enregistrée, `GET /api/me/stats`, page Statistiques (tuiles, 12 semaines en colonnes CSS, tableau), dans la barre latérale et la page Compte.
+- Application Android : **no-go** le 2026-11-23, retour au split DNS. Sur la Tab A9, la WebView d'Android limite trop les requêtes qu'un protocole maison intercepte (relais Tauri) : pas de `Sec-Fetch-Site`, réponses 3xx refusées (la WebView charge alors l'adresse sur le réseau, `ERR_CONNECTION_REFUSED`), et surtout **corps des POST et PUT perdus** (connexion impossible sans faire passer le corps autrement, par un script injecté dans chaque page). Les GET passaient vers l'adresse publique. L'adresse IP locale n'a pas abouti dans l'application (cause non établie : elle marche dans le navigateur). Le code de l'essai reste sur la branche `feat/android-spike`.
+
 ## Fonctionnalités ajoutées en cours de route
 
 ### Menu d'administration des scans (demandé le 2026-11-11)
