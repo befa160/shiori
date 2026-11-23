@@ -215,6 +215,13 @@ async fn a_session_is_found_by_its_token_only_while_valid() {
     )
     .await;
     assert_eq!(db.session_user(&session.token).await.unwrap(), None);
+    let alive = db.create_session(bob.id, "Safari").await.unwrap();
+    assert_eq!(
+        db.purge_sessions().await.unwrap(),
+        1,
+        "seule l'expirée part"
+    );
+    assert!(db.session_user(&alive.token).await.unwrap().is_some());
 
     let other = db.create_session(bob.id, "Chrome").await.unwrap();
     db.end_session(&other.token).await.unwrap();

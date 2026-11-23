@@ -107,7 +107,10 @@ pub(crate) async fn upload(
         .ok_or_else(|| ApiError::not_found("sauvegarde"))
 }
 
-/// Écrit le corps dans `part` ; refuse ce qui ne commence pas comme une base SQLite.
+const SQLITE_HEADER: &[u8; 16] = b"SQLite format 3\0";
+
+/// Écrit le corps dans `part` ; refuse ce qui ne commence pas comme une base SQLite, dès les
+/// premiers octets (un mauvais fichier de plusieurs Go ne remplit pas le disque avant).
 async fn receive(body: Body, part: &std::path::Path) -> Result<(), ApiError> {
     let io = |e: std::io::Error| ApiError::from(shiori_db::Error::Io(e));
     let mut out = tokio::fs::File::create(part).await.map_err(io)?;
@@ -119,12 +122,15 @@ async fn receive(body: Body, part: &std::path::Path) -> Result<(), ApiError> {
         if let Ok(data) = frame.into_data() {
             if head.len() < 16 {
                 head.extend(data.iter().take(16 - head.len()));
+                if !SQLITE_HEADER.starts_with(&head) {
+                    return Err(invalid(RestoreError::NotABackup));
+                }
             }
             out.write_all(&data).await.map_err(io)?;
         }
     }
     out.flush().await.map_err(io)?;
-    if head != b"SQLite format 3\0" {
+    if head != SQLITE_HEADER {
         return Err(invalid(RestoreError::NotABackup));
     }
     Ok(())

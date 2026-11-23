@@ -50,7 +50,7 @@ Les codes propres à une route sont listés sur sa page.
 - **Identifiants** : nombres pour les bibliothèques, séries, comptes et passes ; chaînes hexadécimales pour les tomes (BLAKE3, 64 caractères) et les pages (128 bits, 32 caractères). Ils ne changent jamais tant que le contenu ne change pas.
 - **Dates** : RFC 3339 en UTC (`2026-11-18T21:57:23.374Z`).
 - **Pagination** par curseur : `limit` (50 par défaut, 500 au plus) et `before` / `after` selon la liste.
-- **Écritures** refusées si le navigateur annonce une requête d'un autre site (`Sec-Fetch-Site: cross-site`).
+- **Écritures** refusées si le navigateur annonce une requête qui ne vient pas de Shiori lui-même (`Sec-Fetch-Site` autre que `same-origin` ou `none` : un autre site, mais aussi un autre sous-domaine ou un autre port).
 - **Stabilité** : à partir de la 1.0, l'API ne fait que s'enrichir au sein d'une version majeure ; un client ignore les champs qu'il ne connaît pas. Voir [ce qu'une mise à jour garantit](/installation/#ce-qu-une-mise-a-jour-garantit-a-partir-de-la-1-0).
 
 ## Santé du serveur

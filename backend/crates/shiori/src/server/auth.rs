@@ -721,7 +721,8 @@ pub(crate) async fn check_own_password(
 }
 
 /// Code de double authentification du compte connecté (TOTP ou secours), exigé pour la
-/// retirer ; même limite d'essais que le mot de passe.
+/// retirer ; même limite d'essais que le mot de passe. Un bon code ne remet pas le compteur à
+/// zéro : seul le mot de passe vérifié ensuite le fait.
 pub(crate) async fn check_own_code(app: &App, user: &User, code: &str) -> Result<(), ApiError> {
     let limits = own_limit(user);
     if let Some(wait) = app.auth.paused(&limits) {

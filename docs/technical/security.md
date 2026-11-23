@@ -32,7 +32,7 @@ Un lecteur ne voit que les bibliothèques qui lui sont ouvertes (404 pour le res
 ## Parades
 
 - **DNS rebinding** : en écoute locale, seul un `Host` local est accepté ; `--allowed-host` / `SHIORI_ALLOWED_HOSTS` ajoute des noms et active ce contrôle en écoute réseau (l'image Docker le fait pour `localhost`). Sinon : 403 `invalid_host`.
-- **CSRF** : écritures refusées si `Sec-Fetch-Site: cross-site` (403 `cross_site`), en plus du cookie `SameSite=Lax`.
+- **CSRF** : écritures refusées si `Sec-Fetch-Site` n'est ni `same-origin` ni `none` (403 `cross_site`), en plus du cookie `SameSite=Lax` : un autre sous-domaine ou un autre port (`same-site`) reçoit ce cookie, il est donc refusé aussi.
 - **Chemins** : un scan ne vise qu'un chemin sous la racine d'une bibliothèque, sans `..` ni lien symbolique (`path_outside_library`).
 - **Archives hostiles** : tailles déclarées vérifiées, plafonds d'entrées, de pixels et de mémoire, paniques des décodeurs isolées par fichier.
 - **SSRF** : couvertures des sources téléchargées depuis leurs seuls hôtes connus, sans suivre de redirection.

@@ -634,6 +634,13 @@ impl Db {
         }))
     }
 
+    /// Efface les sessions expirées (au démarrage) : elles ne servent plus et la table ne
+    /// grossirait pas sans fin.
+    pub async fn purge_sessions(&self) -> Result<u64, Error> {
+        let sql = concat!("DELETE FROM sessions WHERE expires_at <= ", now!());
+        Ok(sqlx::query(sql).execute(&self.pool).await?.rows_affected())
+    }
+
     /// Ferme la session de ce jeton (déconnexion) ; sans effet si elle n'existe plus.
     pub async fn end_session(&self, token: &str) -> Result<(), Error> {
         sqlx::query("DELETE FROM sessions WHERE token_hash = ?")

@@ -114,6 +114,17 @@ async fn back_up_download_upload_and_restore_from_the_interface() {
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert!(String::from_utf8_lossy(&error).contains("invalid_backup"));
+    // Plus long que l'en-tête : refusé dès ses premiers octets, sans fichier laissé derrière.
+    let files = || {
+        std::fs::read_dir(dir.path().join("backups"))
+            .unwrap()
+            .count()
+    };
+    let before = files();
+    let long = b"pas une base SQLite, mais un long fichier".repeat(1000);
+    let (status, _) = call(&app, "POST", "/api/admin/backups/upload", long).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(files(), before);
     let mut fake = b"SQLite format 3\0".to_vec();
     fake.extend([0; 100]);
     let (_, fake) = call(&app, "POST", "/api/admin/backups/upload", fake).await;
