@@ -46,8 +46,8 @@ Proposition d'architecture (Q62) : l'application est un **relais**. La WebView c
 
 Lots :
 - ✅ **1.1a Statistiques, serveur** (#133) : table `reading_activity(user_id, day, pages, seconds, finished)` remplie à chaque progression enregistrée (pages = avance depuis l'état précédent, temps = écart entre deux enregistrements s'il est court) ; `GET /api/me/stats` (par jour, regroupé en semaines par l'interface : tomes terminés, pages, temps ; séries terminées ; totaux) ; tomes terminés avant la 1.1 repris depuis `finished_at` ; fuseau de l'appareil reçu avec la progression (Q59) ; « Marquer comme lu » n'entre pas dans les statistiques (`stats: false`).
-- 🚧 **1.1b Statistiques, interface** (`feat/stats-page`) : page `/stats`, entrée « Statistiques » dans la sidebar et lien depuis la page Compte (Q60), barres en CSS (pas de bibliothèque de graphiques), i18n, e2e, captures 4 tailles, documentation FR/EN.
-- **1.1c Application, essai** (go / no-go) : dossier `app/` (projet Tauri 2 à part, son propre workspace cargo), relais vers une seule adresse, connexion et lecture d'un webtoon sur la Tab A9 ; mesure de fluidité à travers le relais ; job CI qui construit l'APK de debug. Arrêt et retour au split DNS si l'essai n'est pas concluant.
+- ✅ **1.1b Statistiques, interface** (#134) : page `/stats`, entrée « Statistiques » dans la sidebar et lien depuis la page Compte (Q60), barres en CSS (pas de bibliothèque de graphiques), i18n, e2e, captures 4 tailles, documentation FR/EN.
+- 🚧 **1.1c Application, essai** (go / no-go, `feat/android-spike`) : dossier `app/` (projet Tauri 2 à part, son propre workspace cargo), relais vers une seule adresse, connexion et lecture d'un webtoon sur la Tab A9 ; mesure de fluidité à travers le relais ; job CI qui construit l'APK de debug. Arrêt et retour au split DNS si l'essai n'est pas concluant.
 - **1.1d Application, adresses et session** : écran de réglage (adresse locale, adresse publique), bascule automatique sur Wi-Fi nommé (Q66, greffon Kotlin), jeton de session gardé dans le stockage privé de l'application (Q67), déconnexion qui l'efface ; logique du relais dans un module Rust testé sans Tauri (couverture ≥ 80 %).
 - **1.1e Application, hors ligne** : le relais garde sur disque le front et ce que « Télécharger » récupère, et le sert quand aucune adresse ne répond ; la progression lue hors ligne repart à la reconnexion, datée comme dans la PWA (`read_at`) (Q62, Q63).
 - **1.1f Application, distribution** : APK signé dans la release GitHub, attestation de provenance, mises à jour par Obtainium (Q64), documentation FR/EN (installation, réglage, mise à jour).
@@ -63,6 +63,7 @@ Décisions (2026-11-23) :
 - **Q65** Android seulement (Tab A9, A55).
 - **Q66** Adresse locale seulement sur un Wi-Fi nommé (liste réglée dans l'application) **et** si elle répond (`/api/health`, 1,5 s), sinon adresse publique ; réévalué à chaque changement de réseau (greffon Kotlin : nom du Wi-Fi et changements de réseau, permission de localisation demandée avec une explication). Raison : sur un autre Wi-Fi à la même plage d'adresses, un autre appareil recevrait la session en clair.
 - **Q67** Jeton de session dans le stockage privé de l'application, sans Keystore.
+- Mise en œuvre (1.1c) : le relais ne relève pas de jeton. Pour la WebView, tout est sur `https://shiori.localhost`, donc le cookie de session reste dans son stockage (privé à l'application, Q67) et part vers l'adresse choisie, quelle qu'elle soit. Le serveur ne change pas. Le service worker est coupé dans l'application (`/sw.js` en 404) jusqu'au hors-ligne du lot 1.1e.
 
 ## Planning après la V1
 

@@ -1,0 +1,5 @@
+# Rust stable, comme le backend ; la cible Android (Tab A9, A55 : arm64) s'installe d'elle-même.
+[toolchain]
+channel = "stable"
+components = ["clippy", "rustfmt"]
+targets = ["aarch64-linux-android"]

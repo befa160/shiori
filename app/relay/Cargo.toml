@@ -1,0 +1,15 @@
+[package]
+name = "shiori-relay"
+description = "Relais de l'application Shiori : transmet les requêtes de la WebView au serveur."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+http = "1"
+# Sans `gzip` : le corps compressé par le serveur passe tel quel, la WebView le décode.
+ureq = { version = "3.5", default-features = false, features = ["rustls"] }
+
+[dev-dependencies]
+tempfile = "3"

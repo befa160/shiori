@@ -1,0 +1,87 @@
+name: Android
+
+# Application Android (lot 1.1c) : le relais est testé, puis un APK de debug (arm64) est
+# construit et publié en artefact, à installer à la main sur la tablette pour l'essai.
+on:
+  push:
+    branches: [main]
+    paths: [app/**, .github/workflows/android.yml]
+  pull_request:
+    paths: [app/**, .github/workflows/android.yml]
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  relay:
+    name: relais
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # rustup lit app/rust-toolchain.toml (stable + clippy + rustfmt + cible Android).
+      - name: Toolchain
+        run: rustup show active-toolchain
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: app
+          key: relay
+      - name: Format
+        run: cargo fmt --all --check
+      # Le relais seul : l'enveloppe Tauri tire webkit2gtk sous Linux, elle est compilée pour
+      # Android dans le job suivant.
+      - name: Clippy
+        run: cargo clippy -p shiori-relay --all-targets -- -D warnings
+      - name: Tests
+        run: cargo test -p shiori-relay
+
+  apk:
+    name: APK de debug
+    runs-on: ubuntu-latest
+    needs: relay
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Toolchain
+        run: rustup show active-toolchain
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: app
+          key: apk
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: web/.node-version
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      # SDK Android déjà sur le runner ; NDK le plus récent du runner (variable de la machine,
+      # que le contexte `env` des workflows ne voit pas).
+      - name: NDK
+        run: echo "NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+      - name: Projet Android et icônes
+        run: |
+          npx tauri android init --ci
+          npx tauri icon ../web/public/icon-512.png
+      - name: Build
+        run: npx tauri android build --debug --apk --target aarch64 --ci
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: shiori-android-debug
+          path: app/src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          if-no-files-found: error

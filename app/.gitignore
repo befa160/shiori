@@ -1,0 +1,5 @@
+node_modules/
+target/
+# Générés en CI (`tauri android init`, `tauri icon`) : rien à maintenir à la main pour l'essai.
+src-tauri/gen/
+src-tauri/icons/

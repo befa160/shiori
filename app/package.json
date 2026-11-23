@@ -1,0 +1,11 @@
+{
+  "name": "shiori-app",
+  "private": true,
+  "description": "Application Android de Shiori (Tauri 2) : construite en CI, voir .github/workflows/android.yml.",
+  "scripts": {
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.6"
+  }
+}

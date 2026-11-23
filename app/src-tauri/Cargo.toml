@@ -1,0 +1,18 @@
+[package]
+name = "shiori-app"
+description = "Application Android de Shiori : une WebView et le relais vers le serveur."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "shiori_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7", features = [] }
+
+[dependencies]
+shiori-relay = { path = "../relay" }
+tauri = { version = "2.12", features = [] }

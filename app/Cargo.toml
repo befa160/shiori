@@ -1,0 +1,11 @@
+# Application Android (lot 1.1c) : workspace à part du backend, car Tauri tire webkit2gtk
+# (bibliothèque C) sous Linux et l'APK se construit avec le NDK, en CI seulement.
+[workspace]
+members = ["relay", "src-tauri"]
+resolver = "3"
+
+[workspace.package]
+version = "1.0.1"
+edition = "2024"
+license = "MIT"
+publish = false

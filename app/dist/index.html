@@ -1,0 +1,18 @@
+<!doctype html>
+<!-- Page de départ de l'application : tout le reste passe par le relais (protocole « shiori »),
+     servi en https://shiori.localhost sous Android et Windows, shiori://localhost ailleurs. -->
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Shiori</title>
+    <style>
+      :root { background: #121212; }
+    </style>
+    <script>
+      const androidOrWindows = /Android|Windows/.test(navigator.userAgent)
+      location.replace(androidOrWindows ? 'https://shiori.localhost/' : 'shiori://localhost/')
+    </script>
+  </head>
+  <body></body>
+</html>
