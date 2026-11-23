@@ -50,6 +50,17 @@ Hors téléchargements, l'application garde aussi les pages déjà vues : reveni
 L'installation de l'application, la lecture hors ligne et les tomes téléchargés demandent une adresse **HTTPS** (ou `localhost`). Voir [Réseau et HTTPS](/installation/network).
 :::
 
+## Statistiques de lecture
+
+**Statistiques** (barre latérale, ou page **Compte** sur téléphone et tablette) montre ce que **votre compte** a lu : personne d'autre ne les voit, pas même l'administrateur.
+
+- **Totaux depuis le début** : pages lues, temps de lecture, tomes terminés, séries terminées (tous leurs tomes lisibles lus).
+- **12 dernières semaines** : les pages lues chaque semaine (du lundi au dimanche), avec le temps et les tomes terminés ; survolez une colonne pour son détail, ou ouvrez **Détail par semaine** pour le tableau.
+- Les jours suivent le fuseau de l'appareil : une lecture à 23 h 30 compte pour ce jour-là.
+- Une avance de plus de 50 pages d'un coup (le curseur) ne compte pas comme des pages lues, sauf une lecture hors ligne envoyée au retour du réseau ; une pause de 5 minutes ou plus ne compte pas dans le temps.
+- **Marquer comme lu** n'entre pas dans les statistiques : ce n'est pas une lecture.
+- Avant la version 1.1, seuls les tomes terminés sont connus : ils comptent le jour de leur fin, sans pages ni temps.
+
 ## Installer l'application
 
 Shiori s'installe comme une application (PWA), en plein écran, sans la barre du navigateur :

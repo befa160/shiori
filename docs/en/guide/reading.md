@@ -48,6 +48,17 @@ Outside downloads, the app also keeps the pages already seen: going back or a sh
 Installing the app, offline reading and downloaded volumes need an **HTTPS** address (or `localhost`). See [Network and HTTPS](/en/installation/network).
 :::
 
+## Reading statistics
+
+**Statistics** (sidebar, or the **Account** page on phones and tablets) shows what **your account** has read: nobody else sees it, not even the administrator.
+
+- **Totals since the start**: pages read, reading time, volumes finished, series finished (all their readable volumes read).
+- **Last 12 weeks**: pages read each week (Monday to Sunday), with the time and the volumes finished; hover a column for its details, or open **Week by week** for the table.
+- Days follow the device time zone: reading at 11:30 pm counts for that day.
+- Moving more than 50 pages at once (the slider) does not count as pages read, except reading done offline and sent when the network is back; a break of 5 minutes or more does not count in the time.
+- **Mark as read** stays out of the statistics: it is not reading.
+- Before version 1.1, only finished volumes are known: they count on the day they were finished, without pages or time.
+
 ## Installing the app
 
 Shiori installs like an app (PWA), full screen, without the browser bar:

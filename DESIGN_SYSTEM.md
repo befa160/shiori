@@ -168,6 +168,13 @@ Quand la série n'a pas de couverture **ou** que l'image échoue (`onError`), m�
 - **Sur une couverture** : `h-1` collée en bas (`absolute inset-x-0 bottom-0`), indicateur ambre, piste `bg-black/80` (l’ambre reste à 5,6:1 même sur une image blanche ; à 60 % d’opacité il tombe à 2,6:1), sans arrondi.
 - **Hors couverture** (page série, scan en cours) : composant `Progress` (Radix, `role="progressbar"` avec valeur), `h-1` ou `h-2`, `rounded-full`, toujours accompagné du texte « 45 / 183 » ou du pourcentage : la barre seule ne suffit pas.
 
+### Graphiques (statistiques, lot 1.1b)
+
+- **Colonnes en CSS**, sans bibliothèque : une série en `bg-primary` (l'ambre des barres de progression), 24 px de large au plus (`max-w-6`), arrondi de 4 px en haut seulement, posées sur une ligne de base `border-border` ; pas de légende pour une seule série (le titre la nomme), pas de grille.
+- **Valeurs écrites** : seule la plus haute est inscrite sur le graphique, en `text-muted-foreground`, jamais dans la couleur des données ; une phrase résume la période et un tableau (`<details>`, défilement horizontal sur mobile) donne toutes les valeurs. Le dessin est `aria-hidden` : le résumé et le tableau le remplacent pour les lecteurs d'écran.
+- **Infobulle** au survol de chaque colonne (valeur en gras, puis la période) : elle complète, elle ne cache jamais une valeur introuvable ailleurs.
+- **Tuiles de totaux** : `dl` en grille (2 colonnes, 4 à partir de `lg`), carte `bg-card`, libellé `text-sm text-muted-foreground`, valeur `text-2xl font-semibold` en chiffres proportionnels (`tabular-nums` seulement dans les tableaux).
+
 ### Navigation
 
 - **Sidebar** (`≥ lg`, Sidebar shadcn) : surface `card`, entrées de 44 px, icône lucide + libellé ; entrée active `bg-accent text-primary` et `aria-current="page"` ; réduite, les icônes ont une infobulle et un nom accessible. État réduit gardé dans `localStorage`. Lien « Aller au contenu » en premier arrêt du clavier, visible au focus.

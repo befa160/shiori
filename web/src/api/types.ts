@@ -187,6 +187,27 @@ export interface SeriesSummary {
   resume_volume_id: string | null
 }
 
+/** Ce qu'un compte a lu sur une période (`GET /api/me/stats`). */
+export interface Activity {
+  pages: number
+  /** Temps estimé, sans les pauses de 5 minutes et plus. */
+  seconds: number
+  /** Tomes dont la dernière page a été atteinte. */
+  finished: number
+}
+
+export interface DayActivity extends Activity {
+  /** `AAAA-MM-JJ`, dans le fuseau de l'appareil qui a lu. */
+  day: string
+}
+
+export interface ReadingStats {
+  /** Jours lus de la période, du plus ancien au plus récent. */
+  days: DayActivity[]
+  total: Activity
+  series_finished: number
+}
+
 /** Une entrée de « Continuer la lecture » (`GET /api/continue`), une par série. */
 export interface ContinueItem {
   series_id: number

@@ -22,6 +22,7 @@ import type {
   MetadataOverview,
   PageInfo,
   Progress,
+  ReadingStats,
   ReadingSettings,
   RunSummary,
   ScanProgress,
@@ -84,6 +85,9 @@ export const api = {
   librarySeries: (id: number, init?: RequestInit) => must<SeriesSummary[]>(`/libraries/${id}/series`, init),
   allSeries: (init?: RequestInit) => must<SeriesSummary[]>('/series', init),
   continueReading: (init?: RequestInit) => must<ContinueItem[]>('/continue', init),
+  /** Statistiques du compte sur `days` jours, « aujourd'hui » étant celui de l'appareil. */
+  readingStats: (days: number, init?: RequestInit) =>
+    must<ReadingStats>(`/me/stats?days=${days}&utc_offset=${-new Date().getTimezoneOffset()}`, init),
   series: (id: number, init?: RequestInit) => must<SeriesDetail>(`/series/${id}`, init),
   volume: (id: string, init?: RequestInit) => must<VolumeDetail>(`/volumes/${id}`, init),
   pages: (volumeId: string, init?: RequestInit) => must<PageInfo[]>(`/volumes/${volumeId}/pages`, init),
