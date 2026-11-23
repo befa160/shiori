@@ -181,6 +181,9 @@ jobs:
           curl -sf localhost:7878/ | grep -q '<title>Shiori</title>'
           # Parade au DNS rebinding active dans le conteneur.
           test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: evil.example' localhost:7878/api/health)" = 403
+          # HEALTHCHECK déclaré, et sa commande répond dans l'image (distroless : pas de curl).
+          docker inspect -f '{{json .Config.Healthcheck.Test}}' shiori | grep -q '"health"'
+          docker exec shiori /usr/local/bin/shiori health
           # `docker stop` envoie SIGTERM : arrêt propre (0), pas tué au bout du délai (137).
           docker stop -t 5 shiori
           docker logs shiori
