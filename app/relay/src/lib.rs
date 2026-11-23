@@ -23,6 +23,9 @@ const HOP_BY_HOP: [header::HeaderName; 6] = [
     header::TE,
     header::UPGRADE,
 ];
+/// Requêtes conditionnelles : elles appellent un 304, qu'une réponse interceptée ne peut pas
+/// être sous Android (voir `handle`). Le serveur renvoie donc toujours la réponse entière.
+const CONDITIONAL: [header::HeaderName; 2] = [header::IF_NONE_MATCH, header::IF_MODIFIED_SINCE];
 
 pub struct Relay {
     agent: ureq::Agent,
@@ -79,6 +82,24 @@ impl Relay {
             return text(StatusCode::NOT_FOUND, "");
         }
         match self.forward(&server, request) {
+            // La WebView d'Android refuse une réponse interceptée en 3xx (elle charge alors
+            // l'adresse sur le réseau, où rien n'écoute) : une redirection ne la traverse jamais.
+            // Le serveur Shiori n'en envoie pas ; un proxy, si (http vers https) : on propose
+            // l'adresse vers laquelle il renvoie.
+            Ok(response) if response.status().is_redirection() => {
+                let target = response
+                    .headers()
+                    .get(header::LOCATION)
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|l| l.parse::<Uri>().ok())
+                    .and_then(|uri| Some(format!("{}://{}", uri.scheme_str()?, uri.authority()?)));
+                self.page(
+                    StatusCode::BAD_GATEWAY,
+                    texts,
+                    Some(texts.redirected),
+                    target.as_deref().unwrap_or(&server),
+                )
+            }
             Ok(response) => response,
             Err(_) => self.page(
                 StatusCode::BAD_GATEWAY,
@@ -114,10 +135,15 @@ impl Relay {
             );
         }
         *self.server.lock().expect("adresse du serveur") = Some(server);
-        let mut response = text(StatusCode::SEE_OTHER, "");
-        response
-            .headers_mut()
-            .insert(header::LOCATION, HeaderValue::from_static("/"));
+        // Pas de 303 (refusé par la WebView d'Android, voir `handle`) : une page qui ouvre l'accueil.
+        let mut response = text(
+            StatusCode::OK,
+            r#"<!doctype html><meta http-equiv="refresh" content="0;url=/"><script>location.replace('/')</script>"#,
+        );
+        response.headers_mut().insert(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("text/html; charset=utf-8"),
+        );
         response
     }
 
@@ -132,7 +158,7 @@ impl Relay {
             .method(parts.method.clone())
             .uri(format!("{server}{path}"));
         for (name, value) in &parts.headers {
-            if !HOP_BY_HOP.contains(name) {
+            if !HOP_BY_HOP.contains(name) && !CONDITIONAL.contains(name) {
                 outgoing = outgoing.header(name, value);
             }
         }
@@ -196,6 +222,7 @@ struct Texts {
     save: &'static str,
     invalid: &'static str,
     unreachable: &'static str,
+    redirected: &'static str,
     not_saved: &'static str,
 }
 
@@ -207,6 +234,7 @@ const FR: Texts = Texts {
     save: "Ouvrir",
     invalid: "Adresse non valable : http:// ou https://, puis le nom ou l'adresse IP du serveur, sans chemin.",
     unreachable: "Le serveur ne répond pas à cette adresse. Vérifiez le réseau ou l'adresse.",
+    redirected: "Cette adresse renvoie vers une autre (souvent https://) : la voici, ouvrez-la si c'est bien votre serveur.",
     not_saved: "L'adresse n'a pas pu être enregistrée sur l'appareil.",
 };
 
@@ -218,6 +246,7 @@ const EN: Texts = Texts {
     save: "Open",
     invalid: "Invalid address: http:// or https://, then the server name or IP address, without a path.",
     unreachable: "The server does not answer at this address. Check the network or the address.",
+    redirected: "This address sends to another one (often https://): here it is, open it if it is your server.",
     not_saved: "The address could not be saved on the device.",
 };
 

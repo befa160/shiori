@@ -67,8 +67,9 @@ fn the_address_is_asked_checked_saved_then_kept() {
     assert!(body(&response).contains("ftp://nas&lt;b&gt;"));
     // Adresse acceptée : enregistrée, puis l'interface.
     let response = relay.handle(setup("server=+http%3A%2F%2F192.168.1.20%3A7878%2F+"));
-    assert_eq!(response.status(), StatusCode::SEE_OTHER);
-    assert_eq!(response.headers()[header::LOCATION], "/");
+    // Pas de redirection (la WebView d'Android n'en veut pas) : une page qui ouvre l'accueil.
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(body(&response).contains(r#"content="0;url=/""#));
     assert_eq!(
         std::fs::read_to_string(dir.path().join("server.txt")).unwrap(),
         "http://192.168.1.20:7878"
@@ -127,18 +128,37 @@ fn requests_go_to_the_server_as_they_are_and_come_back_as_they_are() {
 }
 
 #[test]
-fn a_get_has_no_body_and_a_redirect_is_not_followed() {
+fn a_get_has_no_body_and_a_redirect_offers_the_address_it_points_to() {
+    // Un proxy qui renvoie de http vers https : sa nouvelle adresse est proposée.
     let (server, received) = serve(
-        "HTTP/1.1 302 Found\r\nLocation: /login\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        "HTTP/1.1 301 Moved Permanently\r\nLocation: https://shiori.example.com/admin\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
     );
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("server.txt"), &server).unwrap();
-    let response = Relay::new(dir.path().to_owned()).handle(get("/admin"));
+    let mut request = get("/admin");
+    request
+        .headers_mut()
+        .insert(header::IF_NONE_MATCH, HeaderValue::from_static("\"abc\""));
+    let response = Relay::new(dir.path().to_owned()).handle(request);
     let sent = received.recv().unwrap().to_ascii_lowercase();
     assert!(sent.starts_with("get /admin http/1.1\r\n"), "{sent}");
     assert!(!sent.contains("content-length"), "{sent}");
-    assert_eq!(response.status(), StatusCode::FOUND);
-    assert_eq!(response.headers()[header::LOCATION], "/login");
+    // Pas de requête conditionnelle : un 304 ne passerait pas la WebView.
+    assert!(!sent.contains("if-none-match"), "{sent}");
+    assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
+    let page = body(&response);
+    assert!(page.contains("renvoie vers une autre"), "{page}");
+    assert!(
+        page.contains(r#"value="https://shiori.example.com""#),
+        "{page}"
+    );
+    // Redirection relative : l'adresse actuelle reste proposée.
+    let (server, _received) = serve(
+        "HTTP/1.1 302 Found\r\nLocation: /login\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+    );
+    std::fs::write(dir.path().join("server.txt"), &server).unwrap();
+    let page = body(&Relay::new(dir.path().to_owned()).handle(get("/admin")));
+    assert!(page.contains(&format!(r#"value="{server}""#)), "{page}");
 }
 
 #[test]
