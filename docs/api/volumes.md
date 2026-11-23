@@ -78,10 +78,12 @@ Couverture d'une source web gardée par le serveur (`cover_image_id`), originale
 Enregistre la page lue. Permis aux jetons d'API.
 
 ```json
-{ "page_id": "3f9c…", "read_at": "2026-11-19T08:12:00.000Z" }
+{ "page_id": "3f9c…", "read_at": "2026-11-19T08:12:00.000Z", "utc_offset": 60 }
 ```
 
 `read_at` : facultatif, heure de lecture (ISO 8601) d'une page lue hors ligne et envoyée plus tard ; absent : maintenant, et une heure future compte comme maintenant. La page la plus récente l'emporte : une page lue hors ligne ne remplace pas celle lue depuis sur un autre appareil.
+
+`utc_offset` : facultatif, fuseau de l'appareil en minutes à l'est d'UTC (UTC par défaut, borné à ±840), qui donne le jour compté par les [statistiques](account#statistiques-de-lecture). `stats` : facultatif, `false` pour un enregistrement qui n'est pas une lecture (« Marquer comme lu ») et n'entre pas dans les statistiques.
 
 **Réponse 200** : la progression gardée. `finished` devient vrai dès que la dernière page est atteinte, même par une page plus ancienne. **Erreurs** : 400 `invalid_body` (dont `read_at` qui n'est pas une date), 404 `not_found`, 422 `page_not_in_volume`.
 

@@ -16,6 +16,7 @@ SQLite (`sqlx`, `sqlite-bundled`), un fichier `shiori.db` en mode WAL, migration
 | `user_totp`, `user_recovery_codes` | secret TOTP d'un compte (dernier pas accepté), codes de secours (hash BLAKE3, usage unique) |
 | `api_tokens` | jetons d'API (`shiori_t_` + 256 bits, seul le hash BLAKE3 gardé, préfixe, expiration facultative) |
 | `reading_progress` | page lue par compte et par tome |
+| `reading_activity` | pages, temps et tomes terminés par compte et par jour (statistiques) |
 | `user_series_settings`, `user_settings` | réglages de lecture d'une série et préférences (langue, thème, sens des pages), par compte |
 | `legacy_progress`, `legacy_series_settings` | progression et réglages d'avant les comptes, repris par le premier administrateur |
 | `app_settings` | réglages de l'instance : langue, thème et sens des pages par défaut, métadonnées web, intervalle du scan complet (`full_scan_hours`) |
@@ -40,6 +41,7 @@ erDiagram
   users ||--o{ sessions : "connecté sur"
   users ||--o{ api_tokens : possède
   users ||--o{ reading_progress : lit
+  users ||--o{ reading_activity : "a lu"
   volumes ||--o{ reading_progress : "lu dans"
   users }o--o{ libraries : "user_libraries"
   series ||--o| series_metadata : "fiche fusionnée"

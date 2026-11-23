@@ -350,6 +350,11 @@ describe('progression, réglages de la série, tome suivant', () => {
     fetch.mock.calls
       .filter(([, init]) => init?.method === method)
       .map(([url, init]) => [url, JSON.parse(init?.body as string)])
+      // Le fuseau de l'appareil part avec chaque page (statistiques) : vérifié à part.
+      .map(([url, body]) => {
+        delete body.utc_offset
+        return [url, body]
+      })
 
   it('reprend à la dernière page lue ; un tome terminé repart du début', async () => {
     serve({ progress: progress(1) })

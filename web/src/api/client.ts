@@ -87,9 +87,17 @@ export const api = {
   series: (id: number, init?: RequestInit) => must<SeriesDetail>(`/series/${id}`, init),
   volume: (id: string, init?: RequestInit) => must<VolumeDetail>(`/volumes/${id}`, init),
   pages: (volumeId: string, init?: RequestInit) => must<PageInfo[]>(`/volumes/${volumeId}/pages`, init),
-  /** `readAt` : heure de lecture d'une page lue hors ligne ; le serveur garde la plus récente. */
+  /** `readAt` : heure de lecture d'une page lue hors ligne ; le serveur garde la plus récente.
+   * `utc_offset` : fuseau de l'appareil, qui donne le jour compté par les statistiques. */
   saveProgress: (volumeId: string, pageId: string, init?: RequestInit, readAt?: string) =>
-    must<Progress>(`/volumes/${volumeId}/progress`, { ...init, method: 'PUT', body: JSON.stringify({ page_id: pageId, read_at: readAt }) }),
+    must<Progress>(`/volumes/${volumeId}/progress`, {
+      ...init,
+      method: 'PUT',
+      body: JSON.stringify({ page_id: pageId, read_at: readAt, utc_offset: -new Date().getTimezoneOffset() }),
+    }),
+  /** « Marquer comme lu » : la dernière page, hors des statistiques (ce n'est pas une lecture). */
+  markVolumeRead: (volumeId: string, lastPageId: string) =>
+    must<Progress>(`/volumes/${volumeId}/progress`, { method: 'PUT', body: JSON.stringify({ page_id: lastPageId, stats: false }) }),
   createLibrary: (library: { name: string; root: string; kind: LibraryKind; share: boolean }) =>
     must<Library>('/libraries', { method: 'POST', body: JSON.stringify(library) }),
   setLibraryWatch: (id: number, watch: boolean) =>

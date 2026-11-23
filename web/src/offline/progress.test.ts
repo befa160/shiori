@@ -35,7 +35,7 @@ describe('progression lue hors ligne', () => {
     // Avec l'heure de lecture : le serveur ne remplace pas une page lue depuis ailleurs.
     const sent = fetch.mock.calls.find(([url]) => url === '/api/volumes/a/progress') as unknown as [string, RequestInit]
     expect(sent[1].method).toBe('PUT')
-    expect(JSON.parse(sent[1].body as string)).toEqual({ page_id: 'p2', read_at: expect.stringMatching(/^\d{4}-\d\d-\d\dT[\d:.]+Z$/) })
+    expect(JSON.parse(sent[1].body as string)).toEqual({ page_id: 'p2', read_at: expect.stringMatching(/^\d{4}-\d\d-\d\dT[\d:.]+Z$/), utc_offset: expect.any(Number) })
     expect([pendingPage('a'), pendingPage('b')]).toEqual([undefined, undefined])
   })
 
@@ -70,7 +70,8 @@ describe('progression lue hors ligne', () => {
     const fetch = vi.fn(async () => json({}))
     vi.stubGlobal('fetch', fetch)
     await flushProgress()
-    expect(fetch).toHaveBeenCalledWith('/api/volumes/a/progress', expect.objectContaining({ body: JSON.stringify({ page_id: 'p1' }) }))
+    expect(fetch).toHaveBeenCalledWith('/api/volumes/a/progress', expect.objectContaining({ body: expect.stringContaining('"page_id":"p1"') }))
+    expect(fetch).toHaveBeenCalledWith('/api/volumes/a/progress', expect.objectContaining({ body: expect.not.stringContaining('read_at') }))
     // Illisible : abandonnée sans rien casser.
     localStorage.setItem('shiori.pendingProgress', '{pas du json')
     setProgressUser(3)

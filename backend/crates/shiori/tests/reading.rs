@@ -492,3 +492,59 @@ async fn a_series_is_marked_read_then_unread() {
         );
     }
 }
+
+#[tokio::test]
+async fn reading_stats_follow_the_progress() {
+    let f = fixture(None).await;
+    let uri = format!("/api/volumes/{}/progress", f.volume);
+    // Lu hors ligne le 1er janvier à 23 h UTC sur un appareil à UTC+14 (décalage hors limites
+    // ramené à 14 h) : compté le 2 janvier. Puis la dernière page, maintenant (11 pages de plus).
+    let body =
+        json!({ "page_id": f.pages[0], "read_at": "2020-01-01T23:00:00Z", "utc_offset": 5000 });
+    assert_eq!(
+        call(&f.app, "PUT", &uri, Some(body)).await.0,
+        StatusCode::OK
+    );
+    let last = f.pages.last().unwrap();
+    let body = json!({ "page_id": last, "utc_offset": 60 });
+    assert_eq!(
+        call(&f.app, "PUT", &uri, Some(body)).await.0,
+        StatusCode::OK
+    );
+
+    let (status, stats) = call(&f.app, "GET", "/api/me/stats?days=7&utc_offset=60", None).await;
+    assert_eq!(status, StatusCode::OK, "{stats}");
+    assert_eq!(stats["days"].as_array().unwrap().len(), 1);
+    assert_eq!(stats["days"][0]["finished"], 1);
+    assert_eq!(
+        stats["total"],
+        json!({ "pages": 12, "seconds": 0, "finished": 1 })
+    );
+    assert_eq!(stats["series_finished"], 1);
+    let day: (String,) = sqlx::query_as("SELECT min(day) FROM reading_activity")
+        .fetch_one(f.db.pool())
+        .await
+        .unwrap();
+    assert_eq!(day.0, "2020-01-02");
+
+    // « Marquer comme lu » (`stats: false`) n'y entre pas.
+    call(&f.app, "DELETE", &uri, None).await;
+    let body = json!({ "page_id": last, "stats": false });
+    assert_eq!(
+        call(&f.app, "PUT", &uri, Some(body)).await.0,
+        StatusCode::OK
+    );
+    let (_, again) = call(&f.app, "GET", "/api/me/stats", None).await;
+    assert_eq!(again["total"], stats["total"]);
+
+    // Défauts (84 jours, UTC) ; paramètre invalide refusé avec un code stable.
+    assert_eq!(
+        call(&f.app, "GET", "/api/me/stats", None).await.0,
+        StatusCode::OK
+    );
+    let (status, error) = call(&f.app, "GET", "/api/me/stats?days=abc", None).await;
+    assert_eq!(
+        (status, &error["code"]),
+        (StatusCode::BAD_REQUEST, &json!("invalid_query"))
+    );
+}
