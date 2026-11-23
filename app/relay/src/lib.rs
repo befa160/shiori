@@ -29,6 +29,11 @@ pub struct Relay {
     /// Fichier qui garde l'adresse du serveur, dans le dossier privé de l'application.
     saved: PathBuf,
     server: Mutex<Option<String>>,
+    /// Jeton tiré à chaque lancement, caché dans le formulaire de réglage : seul ce formulaire
+    /// change le serveur. Une page étrangère chargée dans la WebView ne le lit pas, et ne peut
+    /// donc pas détourner l'application (et la session) vers son propre serveur. (La WebView
+    /// d'Android n'envoie pas `Sec-Fetch-Site` aux requêtes interceptées : pas de garde par là.)
+    token: String,
 }
 
 impl Relay {
@@ -50,6 +55,7 @@ impl Relay {
             agent,
             saved,
             server: Mutex::new(server),
+            token: random_token(),
         }
     }
 
@@ -62,20 +68,10 @@ impl Relay {
         let texts = if french { &FR } else { &EN };
         let server = self.server.lock().expect("adresse du serveur").clone();
         if request.uri().path() == SETUP {
-            // Seuls le formulaire de la page de réglage (même origine) ou une adresse tapée
-            // changent le serveur : une page étrangère chargée dans la WebView ne peut pas
-            // détourner l'application (et la session) vers le sien.
-            let ours = request
-                .headers()
-                .get("sec-fetch-site")
-                .is_some_and(|v| v == "same-origin" || v == "none");
-            return match ours {
-                true => self.setup(request.uri(), server.as_deref(), texts),
-                false => page(StatusCode::OK, texts, None, server.as_deref().unwrap_or("")),
-            };
+            return self.setup(request.uri(), server.as_deref(), texts);
         }
         let Some(server) = server else {
-            return page(StatusCode::OK, texts, None, "");
+            return self.page(StatusCode::OK, texts, None, "");
         };
         // shortcut: pas de service worker dans l'application (il ne passerait pas par le relais),
         // donc pas de hors-ligne ; le relais le remplacera au lot 1.1e.
@@ -84,7 +80,7 @@ impl Relay {
         }
         match self.forward(&server, request) {
             Ok(response) => response,
-            Err(_) => page(
+            Err(_) => self.page(
                 StatusCode::BAD_GATEWAY,
                 texts,
                 Some(texts.unreachable),
@@ -93,21 +89,24 @@ impl Relay {
         }
     }
 
-    /// `GET /__shiori/setup?server=…` enregistre l'adresse et ouvre l'interface ; sans adresse
-    /// valable, la page de réglage (avec l'adresse actuelle).
+    /// `GET /__shiori/setup?server=…&token=…` enregistre l'adresse et ouvre l'interface ; sans
+    /// adresse valable ou sans le jeton du formulaire, la page de réglage (adresse actuelle).
     fn setup(&self, uri: &Uri, current: Option<&str>, texts: &Texts) -> Response<Vec<u8>> {
-        let asked = uri
-            .query()
-            .and_then(|q| q.split('&').find_map(|p| p.strip_prefix("server=")))
-            .map(form_decode);
+        let param = |name: &str| {
+            uri.query()?
+                .split('&')
+                .find_map(|p| p.strip_prefix(name)?.strip_prefix('='))
+                .map(form_decode)
+        };
+        let asked = param("server").filter(|_| param("token").as_deref() == Some(&self.token));
         let Some(asked) = asked else {
-            return page(StatusCode::OK, texts, None, current.unwrap_or(""));
+            return self.page(StatusCode::OK, texts, None, current.unwrap_or(""));
         };
         let Some(server) = server_address(asked.trim()) else {
-            return page(StatusCode::BAD_REQUEST, texts, Some(texts.invalid), &asked);
+            return self.page(StatusCode::BAD_REQUEST, texts, Some(texts.invalid), &asked);
         };
         if std::fs::write(&self.saved, &server).is_err() {
-            return page(
+            return self.page(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 texts,
                 Some(texts.not_saved),
@@ -222,38 +221,48 @@ const EN: Texts = Texts {
     not_saved: "The address could not be saved on the device.",
 };
 
-/// Page de réglage de l'adresse, avec un message d'erreur éventuel.
-fn page(status: StatusCode, t: &Texts, error: Option<&str>, value: &str) -> Response<Vec<u8>> {
-    let error = error.map_or(String::new(), |e| {
-        format!(r#"<p role="alert" class="error">{}</p>"#, escape(e))
-    });
-    let html = format!(
-        r#"<!doctype html>
-<html lang="{lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Shiori</title><style>
-:root{{color-scheme:dark;font-family:system-ui,sans-serif;background:#121212;color:#f4f4f5}}
-body{{margin:0;padding:max(1.5rem,env(safe-area-inset-top)) 1rem 1.5rem;max-width:32rem;margin-inline:auto}}
-h1{{font-size:1.5rem}}p{{color:#a1a1aa;line-height:1.5}}.error{{color:#f87171}}
-label{{display:block;font-weight:600;margin:1.5rem 0 .5rem}}
-input{{box-sizing:border-box;width:100%;min-height:44px;padding:.5rem .75rem;border-radius:.375rem;border:1px solid #3f3f46;background:#1e1e1e;color:inherit;font-size:1rem}}
-button{{margin-top:1rem;min-height:44px;padding:0 1.25rem;border:0;border-radius:.375rem;background:#e5a00d;color:#121212;font-weight:600;font-size:1rem}}
-</style></head><body><h1>{title}</h1><p>{help}</p>{error}
-<form method="get" action="{SETUP}"><label for="server">{label}</label>
+impl Relay {
+    /// Page de réglage de l'adresse, avec un message d'erreur éventuel.
+    fn page(
+        &self,
+        status: StatusCode,
+        t: &Texts,
+        error: Option<&str>,
+        value: &str,
+    ) -> Response<Vec<u8>> {
+        let error = error.map_or(String::new(), |e| {
+            format!(r#"<p role="alert" class="error">{}</p>"#, escape(e))
+        });
+        let html = format!(
+            r#"<!doctype html>
+    <html lang="{lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Shiori</title><style>
+    :root{{color-scheme:dark;font-family:system-ui,sans-serif;background:#121212;color:#f4f4f5}}
+    body{{margin:0;padding:max(1.5rem,env(safe-area-inset-top)) 1rem 1.5rem;max-width:32rem;margin-inline:auto}}
+    h1{{font-size:1.5rem}}p{{color:#a1a1aa;line-height:1.5}}.error{{color:#f87171}}
+    label{{display:block;font-weight:600;margin:1.5rem 0 .5rem}}
+    input{{box-sizing:border-box;width:100%;min-height:44px;padding:.5rem .75rem;border-radius:.375rem;border:1px solid #3f3f46;background:#1e1e1e;color:inherit;font-size:1rem}}
+    button{{margin-top:1rem;min-height:44px;padding:0 1.25rem;border:0;border-radius:.375rem;background:#e5a00d;color:#121212;font-weight:600;font-size:1rem}}
+    </style></head><body><h1>{title}</h1><p>{help}</p>{error}
+    <form method="get" action="{SETUP}"><label for="server">{label}</label>
+    <input type="hidden" name="token" value="{token}">
 <input id="server" name="server" type="url" inputmode="url" autocomplete="url" required value="{value}">
-<button type="submit">{save}</button></form></body></html>"#,
-        lang = t.lang,
-        title = t.title,
-        help = escape(t.help),
-        label = t.label,
-        save = t.save,
-        value = escape(value),
-    );
-    let mut response = text(status, &html);
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        HeaderValue::from_static("text/html; charset=utf-8"),
-    );
-    response
+    <button type="submit">{save}</button></form></body></html>"#,
+            lang = t.lang,
+            title = t.title,
+            help = escape(t.help),
+            label = t.label,
+            save = t.save,
+            value = escape(value),
+            token = self.token,
+        );
+        let mut response = text(status, &html);
+        response.headers_mut().insert(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("text/html; charset=utf-8"),
+        );
+        response
+    }
 }
 
 fn text(status: StatusCode, body: &str) -> Response<Vec<u8>> {
@@ -263,6 +272,18 @@ fn text(status: StatusCode, body: &str) -> Response<Vec<u8>> {
         .headers_mut()
         .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     response
+}
+
+/// 128 bits imprévisibles sans dépendance : les clés de `RandomState` viennent de l'aléa du
+/// système, deux hachages en donnent deux moitiés.
+fn random_token() -> String {
+    use std::hash::{BuildHasher, Hasher};
+    let half = || {
+        std::collections::hash_map::RandomState::new()
+            .build_hasher()
+            .finish()
+    };
+    format!("{:016x}{:016x}", half(), half())
 }
 
 fn escape(s: &str) -> String {

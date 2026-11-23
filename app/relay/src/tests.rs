@@ -40,7 +40,6 @@ fn serve(reply: &'static str) -> (String, mpsc::Receiver<String>) {
 fn get(path: &str) -> Request<Vec<u8>> {
     Request::get(format!("https://shiori.localhost{path}"))
         .header(header::HOST, "shiori.localhost")
-        .header("sec-fetch-site", "same-origin")
         .header(header::ACCEPT_LANGUAGE, "fr-FR,fr;q=0.9")
         .body(Vec::new())
         .unwrap()
@@ -59,14 +58,15 @@ fn the_address_is_asked_checked_saved_then_kept() {
     assert_eq!(response.status(), StatusCode::OK);
     assert!(body(&response).contains("Adresse du serveur Shiori"));
     // Adresse refusée : message, saisie gardée (échappée).
-    let response = relay.handle(get("/__shiori/setup?server=ftp%3A%2F%2Fnas%3Cb%3E"));
+    // Le formulaire porte le jeton du lancement.
+    assert!(body(&response).contains(&format!(r#"name="token" value="{}""#, relay.token)));
+    let setup = |query: &str| get(&format!("/__shiori/setup?token={}&{query}", relay.token));
+    let response = relay.handle(setup("server=ftp%3A%2F%2Fnas%3Cb%3E"));
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     assert!(body(&response).contains("Adresse non valable"));
     assert!(body(&response).contains("ftp://nas&lt;b&gt;"));
     // Adresse acceptée : enregistrée, puis l'interface.
-    let response = relay.handle(get(
-        "/__shiori/setup?server=+http%3A%2F%2F192.168.1.20%3A7878%2F+",
-    ));
+    let response = relay.handle(setup("server=+http%3A%2F%2F192.168.1.20%3A7878%2F+"));
     assert_eq!(response.status(), StatusCode::SEE_OTHER);
     assert_eq!(response.headers()[header::LOCATION], "/");
     assert_eq!(
@@ -167,9 +167,11 @@ fn an_address_that_cannot_be_saved_is_reported() {
     let dir = tempfile::tempdir().unwrap();
     // Le dossier n'existe pas : l'écriture échoue.
     let relay = Relay::new(dir.path().join("absent"));
-    let response = relay.handle(get(
-        "/__shiori/setup?server=https%3A%2F%2Fshiori.example.com",
-    ));
+    let url = format!(
+        "/__shiori/setup?server=https%3A%2F%2Fshiori.example.com&token={}",
+        relay.token
+    );
+    let response = relay.handle(get(&url));
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     assert!(body(&response).contains("pas pu être enregistrée"));
 }
@@ -210,29 +212,22 @@ fn a_foreign_page_cannot_change_the_server() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("server.txt"), "http://nas:7878").unwrap();
     let relay = Relay::new(dir.path().to_owned());
-    for site in [Some("cross-site"), Some("same-site"), None] {
-        let mut request = get("/__shiori/setup?server=https%3A%2F%2Fpirate.example");
-        match site {
-            Some(site) => request
-                .headers_mut()
-                .insert("sec-fetch-site", HeaderValue::from_static(site)),
-            None => request.headers_mut().remove("sec-fetch-site"),
-        };
-        let response = relay.handle(request);
-        assert_eq!(response.status(), StatusCode::OK, "{site:?}");
+    // Sans le jeton du formulaire, ou avec un autre (celui d'un lancement précédent) : rien ne change.
+    let other = Relay::new(dir.path().to_owned()).token;
+    assert_ne!(other, relay.token);
+    for query in [
+        "server=https%3A%2F%2Fpirate.example".to_owned(),
+        format!("server=https%3A%2F%2Fpirate.example&token={other}"),
+    ] {
+        let response = relay.handle(get(&format!("/__shiori/setup?{query}")));
+        assert_eq!(response.status(), StatusCode::OK, "{query}");
         assert!(
             body(&response).contains(r#"value="http://nas:7878""#),
-            "{site:?}"
+            "{query}"
         );
     }
     assert_eq!(
         std::fs::read_to_string(dir.path().join("server.txt")).unwrap(),
         "http://nas:7878"
     );
-    // Adresse tapée par l'utilisateur : acceptée.
-    let mut request = get("/__shiori/setup?server=https%3A%2F%2Fshiori.example.com");
-    request
-        .headers_mut()
-        .insert("sec-fetch-site", HeaderValue::from_static("none"));
-    assert_eq!(relay.handle(request).status(), StatusCode::SEE_OTHER);
 }
