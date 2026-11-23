@@ -1600,7 +1600,7 @@ Décisions (2026-11-23) :
 
 Bilan :
 - Statistiques (1.1a #133, 1.1b #134) : journal `reading_activity` rempli à chaque page enregistrée, `GET /api/me/stats`, page Statistiques (tuiles, 12 semaines en colonnes CSS, tableau), dans la barre latérale et la page Compte.
-- Application Android : **no-go** le 2026-11-23, retour au split DNS. Sur la Tab A9, la WebView d'Android limite trop les requêtes qu'un protocole maison intercepte (relais Tauri) : pas de `Sec-Fetch-Site`, réponses 3xx refusées (la WebView charge alors l'adresse sur le réseau, `ERR_CONNECTION_REFUSED`), et surtout **corps des POST et PUT perdus** (connexion impossible sans faire passer le corps autrement, par un script injecté dans chaque page). Les GET passaient vers l'adresse publique. Par ailleurs, une adresse IP locale est refusée par le serveur tant qu'elle n'est pas dans `SHIORI_ALLOWED_HOSTS` (`invalid_host`). Le code de l'essai reste sur la branche `feat/android-spike`.
+- Application Android : **no-go** le 2026-11-23, retour au split DNS. Sur la Tab A9, la WebView d'Android limite trop les requêtes qu'un protocole maison intercepte (relais Tauri) : pas de `Sec-Fetch-Site`, réponses 3xx refusées (la WebView charge alors l'adresse sur le réseau, `ERR_CONNECTION_REFUSED`), et surtout **corps des POST et PUT perdus** (connexion impossible sans faire passer le corps autrement, par un script injecté dans chaque page). Les GET passaient vers l'adresse publique. L'adresse IP locale n'a pas abouti dans l'application (cause non établie : elle marche dans le navigateur). Le code de l'essai reste sur la branche `feat/android-spike`.
 
 ## Fonctionnalités ajoutées en cours de route
 

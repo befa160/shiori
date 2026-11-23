@@ -32,7 +32,7 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 
 ## Prochaine phase (❓ à décider)
 
-La 1.1 est terminée : statistiques de lecture (#133, #134) ; l'essai de l'application Android est abandonné (no-go le 2026-11-23, constats dans l'historique), le split DNS reste la façon de passer de l'adresse locale à l'adresse publique. Prochaines étapes proposées : version `1.1.0`, puis le plan de la 1.2 (lecteur : luminosité, rognage des marges, marque-pages, édition d'un tome).
+La 1.1 est terminée : statistiques de lecture (#133, #134) ; l'essai de l'application Android est abandonné (no-go le 2026-11-23, constats dans l'historique), le split DNS reste la façon de passer de l'adresse locale à l'adresse publique. Version `1.1.0` ; prochaine étape proposée : le plan de la 1.2 (lecteur : luminosité, rognage des marges, marque-pages, édition d'un tome).
 
 ## Planning après la V1
 
@@ -148,3 +148,4 @@ Décisions assumées, chacune marquée `shortcut:` dans le code avec son seuil (
 - 2026-11-23 : backlog rangé par version (1.1 statistiques et application Android, OPDS reporté, 1.2 lecteur, 1.3 listes et nouveautés, 1.4 invitations et métadonnées, 1.5 `Remote-User`) ; le reste attend un déclencheur.
 - 2026-11-23 : plan de la 1.1 validé (Q58 à Q67) : statistiques personnelles dans le fuseau de l'appareil ; application Android en relais avec cache disque, Wi-Fi nommé pour l'adresse locale, APK par GitHub et Obtainium.
 - 2026-11-23 : essai de l'application Android abandonné (PR #135 fermée) : la WebView d'Android perd le corps des POST et PUT interceptés et refuse les 3xx ; retour au split DNS. La 1.1 se limite aux statistiques.
+- 2026-11-23 : version `v1.1.0` (statistiques de lecture).

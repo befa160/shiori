@@ -60,7 +60,7 @@ Les codes propres à une route sont listés sur sa page.
 Sans authentification.
 
 ```json
-{ "status": "ok", "version": "1.0.1" }
+{ "status": "ok", "version": "1.1.0" }
 ```
 
 `version` : le numéro de la release installée (`1.0.0-rc.1` pour une préversion), sinon la version du code.
