@@ -30,11 +30,25 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 
 ---
 
-## Prochaine phase (❓ à décider)
+## Prochaine phase : 1.1 (⏳ plan à valider)
 
-Shiori `v1.0.0` couvre l'usage visé (bibliothèque chez soi, lecture en streaming et hors ligne sur la Tab A9 et le A55, comptes de la famille). Aucun lot n'est planifié après la V1. Proposition pour une **1.1** : OPDS d'abord (ouvre Shiori aux liseuses et aux applications de lecture), puis les statistiques de lecture (onglet prévu par CLAUDE.md, données déjà en base). Le reste du backlog ci-dessous se pioche au besoin.
+Shiori `v1.0.0` couvre l'usage visé (bibliothèque chez soi, lecture en streaming et hors ligne sur la Tab A9 et le A55, comptes de la famille). La 1.1 réunit OPDS (ouvre Shiori aux liseuses et aux applications de lecture) et les statistiques de lecture (onglet prévu par CLAUDE.md, données déjà en base).
 
-Entretien courant, sans phase : la routine cloud du mardi (10 h, heure d'hiver) regroupe les PR Dependabot dans une PR vérifiée ; une release corrective (`1.0.x`) suit quand elle apporte quelque chose.
+## Planning après la V1
+
+Le backlog ci-dessous, rangé par version (S : une PR, M : 2 ou 3 PR, L : une phase). Chaque version garde son plan détaillé validé avant de coder ; l'ordre peut bouger.
+
+| Version | Contenu | Taille |
+|---|---|---|
+| 1.1 | OPDS (lecture et progression, sur les jetons d'API) ; statistiques de lecture | M + M |
+| 1.2 | Lecteur : luminosité, rognage des marges blanches (calculé côté serveur, principe 3), marque-pages ; édition d'un tome dans l'interface | S + M + M + S |
+| 1.3 | Nouveautés suivies ; listes « À lire » par compte, puis collections partagées et relations entre séries | M + S + M |
+| 1.4 | Liens d'invitation ; sources MangaUpdates et Comic Vine ; actualisation périodique des fiches | M + M + S |
+| 1.5 | En-tête `Remote-User` (pour les autres installations, inutile ici) | S |
+
+Sur déclencheur, sans version : pagination de la liste des séries (quelques milliers de séries), option JPEG des pages (pauses sur le NAS), signature Windows et macOS (décision de budget), application native (si le split DNS ne suffit plus), icône dans la zone de notification.
+
+Entretien courant, sans phase : la routine cloud du mardi (10 h, heure d'hiver) regroupe les PR Dependabot dans une PR vérifiée ; une release corrective (`1.0.x`) suit quand elle apporte quelque chose ; le reste (Triage X, e2e instable, Safari iOS, registre shadcn) se fait au fil des lots.
 
 ## Backlog : idées et demandes (sans ordre, sauf mention)
 
@@ -131,3 +145,4 @@ Décisions assumées, chacune marquée `shortcut:` dans le code avec son seuil (
 - 2026-11-22 : essai de la rc.1 validé sur les appareils ; version `v1.0.0`.
 - 2026-11-23 : audit de sécurité et de qualité après la 1.0 : CSRF `same-site` et retrait du TOTP corrigés (#127), `server.rs` découpé (#128), gestes du lecteur et toasts d'erreur mis en commun (#129) ; `shiori health` et `HEALTHCHECK` dans l'image Docker (Docker ne redémarre pas seul un conteneur `unhealthy`).
 - 2026-11-23 : version `v1.0.1` (correctifs de l'audit, health check Docker).
+- 2026-11-23 : backlog rangé par version (1.1 OPDS et statistiques, 1.2 lecteur, 1.3 listes et nouveautés, 1.4 invitations et métadonnées, 1.5 `Remote-User`) ; le reste attend un déclencheur.
