@@ -42,7 +42,7 @@ Il faut Docker et Docker Compose ([installer Docker](https://docs.docker.com/get
 
 3. Ouvrez <http://localhost:7878> et passez aux [premiers pas](#premiers-pas).
 
-L'image (`distroless`, amd64 et arm64) tourne sans droits d'administrateur. Gardez les **volumes nommés** : un dossier de l'hôte créé par Docker appartient à root, et Shiori ne pourrait pas y écrire.
+L'image (`distroless`, amd64 et arm64) tourne sans droits d'administrateur. Elle se vérifie elle-même toutes les 30 secondes (`shiori health`) : `docker ps` affiche `healthy`, ou `unhealthy` après trois échecs. Docker ne redémarre pas seul un conteneur `unhealthy` (`restart:` ne joue qu'à l'arrêt du programme) : un outil comme [autoheal](https://github.com/willfarrell/docker-autoheal), Swarm ou Kubernetes s'en charge. Gardez les **volumes nommés** : un dossier de l'hôte créé par Docker appartient à root, et Shiori ne pourrait pas y écrire.
 
 ## Avec le programme seul
 

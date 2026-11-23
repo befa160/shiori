@@ -32,6 +32,7 @@ Dans l'image Docker : base dans `/data`, cache dans `/cache`, écoute sur `0.0.0
 | `shiori user password <nom>` | nouveau mot de passe provisoire, ferme les sessions du compte |
 | `shiori user totp-reset <nom>` | retire la double authentification d'un compte |
 | `shiori backup` | une sauvegarde tout de suite, Shiori allumé ou non |
+| `shiori health [--addr 127.0.0.1:7878]` | demande `/api/health` au Shiori lancé : code 0 s'il répond, 1 sinon (`SHIORI_HEALTH_ADDR`) |
 
 Avec Docker, préfixez par `docker compose exec shiori` (par exemple `docker compose exec shiori shiori backup`).
 

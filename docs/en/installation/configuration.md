@@ -32,6 +32,7 @@ In the Docker image: database in `/data`, cache in `/cache`, listening on `0.0.0
 | `shiori user password <name>` | new temporary password, closes the account's sessions |
 | `shiori user totp-reset <name>` | removes an account's two-factor authentication |
 | `shiori backup` | a backup right away, Shiori running or not |
+| `shiori health [--addr 127.0.0.1:7878]` | asks the running Shiori for `/api/health`: exit code 0 if it answers, 1 otherwise (`SHIORI_HEALTH_ADDR`) |
 
 With Docker, prefix with `docker compose exec shiori` (for example `docker compose exec shiori shiori backup`).
 

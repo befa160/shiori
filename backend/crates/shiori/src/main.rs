@@ -3,7 +3,7 @@
 use std::process::ExitCode;
 
 use clap::{ArgAction, Parser, Subcommand};
-use shiori::{backup, scan, server, user};
+use shiori::{backup, health, scan, server, user};
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
@@ -33,6 +33,8 @@ enum Command {
     User(user::UserArgs),
     /// Sauvegarde de la base, cohérente même Shiori allumé, dans le dossier des sauvegardes.
     Backup(backup::BackupArgs),
+    /// Vérifie qu'un Shiori lancé répond (`HEALTHCHECK` de Docker) : code 0 s'il répond, 1 sinon.
+    Health(health::HealthArgs),
 }
 
 fn main() -> ExitCode {
@@ -71,6 +73,7 @@ fn main() -> ExitCode {
                         backup::run(args).await?;
                         Ok(ExitCode::SUCCESS)
                     }
+                    Command::Health(args) => Ok(health::run(args).await),
                 }
             })
         });
