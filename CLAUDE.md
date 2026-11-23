@@ -24,6 +24,7 @@ CLI (depuis `backend/`) :
 
 - Scan d'intégrité : `cargo run -p shiori -- scan <dossier>... [--deep] [--json -] [--no-db]` (aide : `cargo run -p shiori -- scan --help`)
 - Serveur HTTP : `cargo run -p shiori -- serve [--listen 127.0.0.1:7878] [--db <fichier>] [--cache-dir <dossier>] [--cache-max-mib 2048] [--jobs N] [--scan-log-days 30] [--allowed-host <nom>]` (API JSON sous `/api`, session exigée sauf `/api/health` et `/api/auth/*` ; premier compte par la page d'installation avec le jeton affiché au démarrage, ou `cargo run -p shiori -- user add <nom> --admin` ; en écoute sur 0.0.0.0, donner `--allowed-host` / `SHIORI_ALLOWED_HOSTS` pour garder la parade au DNS rebinding ; l'interface web est servie hors `/api` : en debug lue dans `web/dist`, en release intégrée au binaire, donc `npm run build` dans `web/` avant `cargo build --release`)
+- Vérification d'un serveur lancé (`HEALTHCHECK` de l'image Docker) : `cargo run -p shiori -- health [--addr 127.0.0.1:7878]`, code 0 s'il répond, 1 sinon.
 - Base par défaut dans le dossier de données de l'OS ; `SHIORI_DATA_DIR` ou `--db` pour la déplacer. Code de sortie : 0 ok, 1 problème au-delà de `--fail-on`, 2 erreur d'usage ou fatale.
 
 Front (depuis `web/`) :

@@ -17,6 +17,7 @@ pub const RELEASE: &str = match option_env!("SHIORI_RELEASE") {
 
 pub mod backup;
 pub mod cache;
+pub mod health;
 pub mod job;
 pub mod meta;
 pub mod render;

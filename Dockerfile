@@ -17,5 +17,9 @@ ENV SHIORI_DATA_DIR=/data \
     SHIORI_ALLOWED_HOSTS=localhost
 VOLUME ["/data", "/cache"]
 EXPOSE 7878
+# Distroless : ni shell ni curl, le binaire interroge lui-même /api/health. Un `--listen` sur un
+# autre port : `SHIORI_HEALTH_ADDR=127.0.0.1:<port>`.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD ["/usr/local/bin/shiori", "health"]
 ENTRYPOINT ["/usr/local/bin/shiori"]
 CMD ["serve", "--listen", "0.0.0.0:7878"]
