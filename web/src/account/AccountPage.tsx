@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BookOpen, HardDriveDownload, Settings } from 'lucide-react'
+import { BookOpen, ChartColumn, HardDriveDownload, Settings } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { toast } from 'sonner'
@@ -21,7 +21,7 @@ import { TokensSection } from './TokensSection'
 import { TotpSection } from './TotpSection'
 
 /** Mon compte : préférences, mot de passe, double authentification, appareils connectés, déconnexion ; raccourcis vers
- * les tomes téléchargés et, pour l'administrateur, l'administration. */
+ * les statistiques, les tomes téléchargés et, pour l'administrateur, l'administration. */
 export function AccountPage() {
   const { t, i18n } = useTranslation()
   const user = useUser()
@@ -46,6 +46,12 @@ export function AccountPage() {
             </Link>
           </Button>
         )}
+        <Button asChild variant="secondary">
+          <Link to="/stats">
+            <ChartColumn aria-hidden />
+            {t('nav.stats')}
+          </Link>
+        </Button>
         <Button asChild variant="secondary">
           <Link to="/downloads">
             <HardDriveDownload aria-hidden />

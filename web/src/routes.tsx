@@ -11,6 +11,7 @@ import { ScanPage, ScansPage } from '@/admin/Scans'
 import { HomePage } from '@/library/HomePage'
 import { DownloadsPage } from '@/offline/DownloadsPage'
 import { SeriesBrowse } from '@/library/SeriesBrowse'
+import { StatsPage } from '@/stats/StatsPage'
 import { AdminPage } from '@/pages/AdminPage'
 import { Layout } from '@/pages/Layout'
 import { LoadFailed, NotFound } from '@/pages/NotFound'
@@ -41,6 +42,7 @@ export const routes: RouteObject[] = [
           { path: 'search', element: <SeriesBrowse key="search" search /> },
           { path: 'series/:id', element: <WithId>{(id) => <SeriesPage id={id} />}</WithId> },
           { path: 'downloads', element: <DownloadsPage /> },
+          { path: 'stats', element: <StatsPage /> },
           { path: 'account', element: <AccountPage /> },
           {
             element: <AdminOnly />,

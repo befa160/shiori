@@ -66,11 +66,11 @@ export function useSaveProgress(volumeId: string, pageId: string | undefined) {
       api
         .saveProgress(volumeId, page, { keepalive: true })
         // Les listes qui montrent la progression la redemanderont à leur prochain affichage :
-        // détail et liste des séries, séries d'une bibliothèque, « Continuer la lecture ».
+        // détail et liste des séries, séries d'une bibliothèque, « Continuer la lecture », statistiques.
         .then(() => {
           // Le serveur répond de nouveau : ce qui a été lu hors ligne part aussi.
           void flushProgress()
-          for (const queryKey of [['series'], ['libraries'], ['continue']]) {
+          for (const queryKey of [['series'], ['libraries'], ['continue'], ['stats']]) {
             void queryClient.invalidateQueries({ queryKey, refetchType: 'none' })
           }
           void queryClient.invalidateQueries({ queryKey: ['volumes', volumeId], exact: true, refetchType: 'none' })

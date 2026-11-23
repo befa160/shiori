@@ -172,6 +172,11 @@ test('reprend à la page lue après un rechargement, puis passe au tome suivant'
   await page.getByRole('link', { name: 'Tome suivant' }).click()
   await expect(page).toHaveURL(new RegExp(all['E2E Manga T02.cbr'].volume_id))
   expect(await checkShown(page, 'E2E Manga T02.cbr')).toEqual([1])
+  // Ce qui vient d'être lu compte dans les statistiques : un tome fini, des pages cette semaine.
+  await page.goto('/stats')
+  const main = page.getByRole('main')
+  await expect(main.getByText(/· Tomes terminés : [1-9]/)).toBeVisible()
+  await expect(main.getByTestId('week-bar').last()).toBeVisible()
 })
 
 test('captures aux quatre tailles', async ({ page }) => {
@@ -195,6 +200,10 @@ test('captures aux quatre tailles', async ({ page }) => {
     await page.goto('/admin')
     await page.getByRole('main').getByRole('combobox', { name: 'Langue' }).waitFor()
     await shot('administration')
+    await page.goto('/stats')
+    // Remplie ou vide selon les tests passés avant : la page chargée, dans un cas comme dans l'autre.
+    await page.getByRole('main').getByText(/^(Pages lues|Rien de lu)/).first().waitFor()
+    await shot('statistiques')
     await page.goto(`/read/${manga.volume_id}`)
     await checkShown(page, 'E2E Manga T01.cbz')
     await page.keyboard.press('Tab')
