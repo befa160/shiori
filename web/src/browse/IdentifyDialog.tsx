@@ -10,8 +10,8 @@ import { DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/c
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Credits } from '@/admin/Metadata'
-import { errorText, sourceErrorText } from '@/i18n/errors'
-import { FallbackCover } from '@/library/covers'
+import { errorText, sourceErrorText, toastFailure } from '@/i18n/errors'
+import { FallbackCover } from '@/library/Covers'
 import { useSeriesAction } from './series'
 
 const SOURCES: SourceId[] = ['mangadex', 'anilist', 'wikipedia']
@@ -40,7 +40,7 @@ export function IdentifyDialog({ series }: { series: SeriesDetail }) {
     onMutate: () => setError(null),
     onError: (e) => setError(errorText(e, t)),
   })
-  const failed = (e: Error) => toast.error(t('series.identifyFailed'), { description: errorText(e, t) })
+  const failed = toastFailure(t('series.identifyFailed'), t)
   const link = useSeriesAction(series.id, (externalId: string) => api.linkSource(series.id, source, externalId))
   const refresh = useSeriesAction(series.id, () => api.refreshMetadata(series.id))
   const cover = useSeriesAction(series.id, (s: SourceId) => api.useSourceCover(series.id, s))

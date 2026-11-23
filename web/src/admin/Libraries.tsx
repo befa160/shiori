@@ -7,7 +7,7 @@ import { ApiError, api } from '@/api/client'
 import { useLibraries } from '@/api/queries'
 import { useSettings } from '@/account/preferences'
 import type { FullScanHours, Library, LibraryKind, Settings } from '@/api/types'
-import { QueryState } from '@/browse/parts'
+import { QueryState } from '@/browse/Parts'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,7 +24,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
-import { errorText } from '@/i18n/errors'
+import { errorText, toastFailure } from '@/i18n/errors'
 import { useStartScan } from './useStartScan'
 
 const KINDS: LibraryKind[] = ['manga', 'comics', 'webtoon']
@@ -80,7 +80,7 @@ function FullScanSetting() {
   const save = useMutation({
     mutationFn: (hours: FullScanHours) => api.saveSettings({ full_scan_hours: hours }),
     onSuccess: (saved: Settings) => queryClient.setQueryData(['settings'], saved),
-    onError: (error) => toast.error(t('admin.fullScanNotSaved'), { description: errorText(error, t) }),
+    onError: toastFailure(t('admin.fullScanNotSaved'), t),
   })
   const value = save.isPending ? save.variables : settings.data?.full_scan_hours
   if (value === undefined) return null
@@ -117,7 +117,7 @@ function LibraryRow({ library, watchHelp }: { library: Library; watchHelp: strin
   const watch = useMutation({
     mutationFn: (on: boolean) => api.setLibraryWatch(library.id, on),
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['libraries'] }),
-    onError: (error) => toast.error(t('admin.watchNotSaved'), { description: errorText(error, t) }),
+    onError: toastFailure(t('admin.watchNotSaved'), t),
   })
   // Pendant l'enregistrement, l'interrupteur montre déjà le choix ; un échec le remet.
   const watching = watch.isPending ? watch.variables : library.watch
@@ -127,7 +127,7 @@ function LibraryRow({ library, watchHelp }: { library: Library; watchHelp: strin
       for (const queryKey of LISTS) void queryClient.invalidateQueries({ queryKey })
       toast.success(t('admin.deleted', { name: library.name }))
     },
-    onError: (error) => toast.error(t('admin.deleteFailed'), { description: errorText(error, t) }),
+    onError: toastFailure(t('admin.deleteFailed'), t),
   })
   return (
     <li className="flex flex-col gap-3 rounded-md bg-card p-4 sm:flex-row sm:items-center">

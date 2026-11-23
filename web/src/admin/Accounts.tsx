@@ -9,7 +9,7 @@ import type { Account, Library, Role } from '@/api/types'
 import { describedBy } from '@/auth/describedBy'
 import { Field } from '@/auth/Field'
 import { accountError, useUser } from '@/auth/session'
-import { BackLink, QueryState } from '@/browse/parts'
+import { BackLink, QueryState } from '@/browse/Parts'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,6 +25,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { toastFailure } from '@/i18n/errors'
 
 const ROLES: Role[] = ['reader', 'admin']
 const KEY = ['accounts']
@@ -237,7 +238,6 @@ function EditAccount({ account, libraries, onDone }: { account: Account; librari
   const [chosen, setChosen] = useState(account.libraries)
   const [disabled, setDisabled] = useState(account.disabled)
   const refresh = () => void queryClient.invalidateQueries({ queryKey: KEY })
-  const fail = (title: string) => (error: Error) => toast.error(title, { description: accountError(error, t) })
   const save = useMutation({
     mutationFn: () => api.updateAccount(account.id, { role, disabled, libraries: role === 'reader' ? chosen : undefined }),
     onSuccess: () => {
@@ -245,19 +245,19 @@ function EditAccount({ account, libraries, onDone }: { account: Account; librari
       onDone()
     },
   })
-  const reset = useMutation({ mutationFn: () => api.resetPassword(account.id), onSuccess: refresh, onError: fail(t('accounts.resetFailed')) })
+  const reset = useMutation({ mutationFn: () => api.resetPassword(account.id), onSuccess: refresh, onError: toastFailure(t('accounts.resetFailed'), t, accountError) })
   const resetTotp = useMutation({
     mutationFn: () => api.resetTotp(account.id),
     onSuccess: () => {
       refresh()
       toast.success(t('accounts.totpReset', { name: account.username }))
     },
-    onError: fail(t('accounts.totpResetFailed')),
+    onError: toastFailure(t('accounts.totpResetFailed'), t, accountError),
   })
   const signOut = useMutation({
     mutationFn: () => api.signOutAccount(account.id),
     onSuccess: () => toast.success(t('accounts.signedOut', { name: account.username })),
-    onError: fail(t('accounts.signOutFailed')),
+    onError: toastFailure(t('accounts.signOutFailed'), t, accountError),
   })
   const remove = useMutation({
     mutationFn: () => api.deleteAccount(account.id),
@@ -266,7 +266,7 @@ function EditAccount({ account, libraries, onDone }: { account: Account; librari
       toast.success(t('accounts.deleted', { name: account.username }))
       onDone()
     },
-    onError: fail(t('accounts.deleteFailed')),
+    onError: toastFailure(t('accounts.deleteFailed'), t, accountError),
   })
   const submit = (e: FormEvent) => {
     e.preventDefault()

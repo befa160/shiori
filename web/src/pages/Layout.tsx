@@ -22,7 +22,7 @@ import {
   SidebarTrigger,
   useSidebar,
 } from '@/components/ui/sidebar'
-import { ScanWatcher } from '@/admin/scans'
+import { ScanWatcher } from '@/admin/Scans'
 import { docsUrl } from '@/lib/docs'
 import { useOnline } from '@/lib/online'
 import { useTheme } from '@/lib/theme'

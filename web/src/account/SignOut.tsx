@@ -2,7 +2,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Loader2, LogOut } from 'lucide-react'
 import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
 import { accountError, signOut } from '@/auth/session'
 import {
   AlertDialog,
@@ -19,6 +18,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { SidebarMenuButton } from '@/components/ui/sidebar'
 import { useOnline } from '@/lib/online'
 import { useOffline } from '@/offline/downloads'
+import { toastFailure } from '@/i18n/errors'
 
 /** Déconnexion ; propose d'effacer aussi les tomes téléchargés sur cet appareil. `sidebar` : en
  * entrée de la barre latérale (desktop) plutôt qu'en bouton de la page Compte. */
@@ -31,7 +31,7 @@ export function SignOut({ sidebar = false }: { sidebar?: boolean }) {
   const [erase, setErase] = useState(false)
   const out = useMutation({
     mutationFn: () => signOut(queryClient, erase ? downloads.map((d) => d.volumeId) : []),
-    onError: (error) => toast.error(t('account.signOutFailed'), { description: accountError(error, t) }),
+    onError: toastFailure(t('account.signOutFailed'), t, accountError),
   })
   // Sans réseau, la session ne peut pas être fermée sur le serveur.
   const disabled = !online || out.isPending
