@@ -175,5 +175,5 @@ Décisions assumées, chacune marquée `shortcut:` dans le code avec son seuil (
 - 2026-11-22 : essai de la rc.1 validé sur les appareils ; version `v1.0.0`.
 - 2026-11-23 : audit de sécurité et de qualité après la 1.0 : CSRF `same-site` et retrait du TOTP corrigés (#127), `server.rs` découpé (#128), gestes du lecteur et toasts d'erreur mis en commun (#129) ; `shiori health` et `HEALTHCHECK` dans l'image Docker (Docker ne redémarre pas seul un conteneur `unhealthy`).
 - 2026-11-23 : version `v1.0.1` (correctifs de l'audit, health check Docker).
-- 2026-11-23 : plan de la 1.1 validé (Q58 à Q67) : statistiques personnelles dans le fuseau de l'appareil ; application Android en relais avec cache disque, Wi-Fi nommé pour l'adresse locale, APK par GitHub et Obtainium.
 - 2026-11-23 : backlog rangé par version (1.1 statistiques et application Android, OPDS reporté, 1.2 lecteur, 1.3 listes et nouveautés, 1.4 invitations et métadonnées, 1.5 `Remote-User`) ; le reste attend un déclencheur.
+- 2026-11-23 : plan de la 1.1 validé (Q58 à Q67) : statistiques personnelles dans le fuseau de l'appareil ; application Android en relais avec cache disque, Wi-Fi nommé pour l'adresse locale, APK par GitHub et Obtainium.
