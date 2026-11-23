@@ -9,10 +9,11 @@ import { formatDate } from '@/admin/format'
 import { PageTurnSetting } from '@/admin/PageTurnSetting'
 import { ThemeSetting } from '@/admin/ThemeSetting'
 import { accountError, useUser } from '@/auth/session'
-import { QueryState } from '@/browse/parts'
+import { QueryState } from '@/browse/Parts'
 import { Button } from '@/components/ui/button'
 import { docsUrl } from '@/lib/docs'
 import { LanguageSelect } from '@/pages/LanguageSelect'
+import { toastFailure } from '@/i18n/errors'
 import { deviceName } from './device'
 import { PasswordForm } from './PasswordForm'
 import { SignOut } from './SignOut'
@@ -130,7 +131,7 @@ function DeviceRow({ device }: { device: Device }) {
   const revoke = useMutation({
     mutationFn: () => api.revokeDevice(device.id),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['devices'] }),
-    onError: (error) => toast.error(t('account.revokeFailed'), { description: accountError(error, t) }),
+    onError: toastFailure(t('account.revokeFailed'), t, accountError),
   })
   return (
     <li className="flex items-center gap-3 py-3">

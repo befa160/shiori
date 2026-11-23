@@ -10,7 +10,7 @@ import { describedBy } from '@/auth/describedBy'
 import { Field } from '@/auth/Field'
 import { PasswordInput } from '@/auth/PasswordInput'
 import { accountError } from '@/auth/session'
-import { QueryState } from '@/browse/parts'
+import { QueryState } from '@/browse/Parts'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,6 +25,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { toastFailure } from '@/i18n/errors'
 
 const KEY = ['tokens']
 /** Durées proposées, en jours ; `never` : sans expiration. */
@@ -71,7 +72,7 @@ function TokenRow({ token, now }: { token: ApiToken; now: string }) {
   const revoke = useMutation({
     mutationFn: () => api.revokeToken(token.id),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: KEY }),
-    onError: (error) => toast.error(t('tokens.revokeFailed'), { description: accountError(error, t) }),
+    onError: toastFailure(t('tokens.revokeFailed'), t, accountError),
   })
   const date = (iso: string) => formatDate(iso, i18n.language)
   const expired = token.expires_at !== null && token.expires_at < now

@@ -1,10 +1,9 @@
 import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
 import { type Scope, usePreference } from '@/account/preferences'
 import type { Theme } from '@/api/types'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { errorText } from '@/i18n/errors'
+import { toastFailure } from '@/i18n/errors'
 
 const THEMES: Theme[] = ['system', 'dark', 'light', 'oled', 'sepia']
 
@@ -26,7 +25,7 @@ export function ThemeSetting({ scope = 'account' }: { scope?: Scope }) {
   const id = useId()
   const { value: saved, save } = usePreference('theme', scope)
   const choose = (theme: Theme) =>
-    save.mutate(theme, { onError: (error) => toast.error(t('admin.themeNotSaved'), { description: errorText(error, t) }) })
+    save.mutate(theme, { onError: toastFailure(t('admin.themeNotSaved'), t) })
   const value = save.isPending ? save.variables : saved
   if (value === undefined) return null
   return (

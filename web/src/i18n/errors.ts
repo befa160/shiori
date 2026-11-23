@@ -1,4 +1,5 @@
 import type { TFunction } from 'i18next'
+import { toast } from 'sonner'
 import { ApiError } from '@/api/client'
 import type { Issue } from '@/api/types'
 import i18n from '.'
@@ -11,6 +12,12 @@ export function errorText(error: Error, t: TFunction, notFound?: string): string
   const key = `errors.${error.code}`
   return i18n.exists(key) ? t(key as 'errors.network', { status: error.status }) : error.message
 }
+
+/** `onError` d'une action ratée : `title` en titre, l'erreur traduite par `describe` dessous. */
+export const toastFailure =
+  (title: string, t: TFunction, describe: (error: Error, t: TFunction) => string = errorText) =>
+  (error: Error) =>
+    toast.error(title, { description: describe(error, t) })
 
 /** Texte d'un problème de scan, d'après son code stable ; un code inconnu garde le message du serveur. */
 export function issueText(issue: Pick<Issue, 'message'> & { code: string }, t: TFunction): string {

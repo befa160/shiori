@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { api } from '@/api/client'
 import type { Library } from '@/api/types'
-import { errorText } from '@/i18n/errors'
+import { toastFailure } from '@/i18n/errors'
 
 /** Lance le scan d'une bibliothèque ; le résultat se dit par une notification, et le suivi de
  * la passe en cours repart (il n'interroge le serveur que pendant un scan). */
@@ -21,6 +21,6 @@ export function useStartScan() {
       queryClient.setQueryData(['scans', 'started'], run)
       void queryClient.invalidateQueries({ queryKey: ['scans', 'current'] })
     },
-    onError: (error) => toast.error(t('admin.scanNotStarted'), { description: errorText(error, t) }),
+    onError: toastFailure(t('admin.scanNotStarted'), t),
   })
 }

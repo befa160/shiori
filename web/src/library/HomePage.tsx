@@ -4,9 +4,9 @@ import { Link } from 'react-router'
 import { useAllSeries, useContinue, useLibraries } from '@/api/queries'
 import type { Library, SeriesSummary } from '@/api/types'
 import { useIsAdmin } from '@/auth/session'
-import { QueryState } from '@/browse/parts'
+import { QueryState } from '@/browse/Parts'
 import { Button } from '@/components/ui/button'
-import { ContinueCard, CoverSkeletons, SeriesCard, Shelf } from './covers'
+import { ContinueCard, CoverSkeletons, SeriesCard, Shelf } from './Covers'
 
 // Séries par étagère : au-delà, « Tout voir » mène à la grille de la bibliothèque.
 const SHELF_SIZE = 20

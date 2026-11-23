@@ -18,7 +18,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import { errorText } from '@/i18n/errors'
+import { toastFailure } from '@/i18n/errors'
 
 const KEY = ['backups']
 
@@ -79,7 +79,7 @@ function useRestored() {
       toast.success(t('backups.restored'))
       signedOut(queryClient)
     },
-    onError: (error: Error) => toast.error(t('backups.restoreFailed'), { description: errorText(error, t) }),
+    onError: toastFailure(t('backups.restoreFailed'), t),
   }
 }
 
@@ -91,7 +91,7 @@ function Actions() {
   const create = useMutation({
     mutationFn: api.createBackup,
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: KEY }),
-    onError: (error) => toast.error(t('backups.createFailed'), { description: errorText(error, t) }),
+    onError: toastFailure(t('backups.createFailed'), t),
   })
   const restored = useRestored()
   const upload = useMutation({
@@ -145,7 +145,7 @@ function BackupRow({ file }: { file: BackupFile }) {
   const remove = useMutation({
     mutationFn: () => api.deleteBackup(file.name),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: KEY }),
-    onError: (error) => toast.error(t('backups.deleteFailed'), { description: errorText(error, t) }),
+    onError: toastFailure(t('backups.deleteFailed'), t),
   })
   const busy = restore.isPending || remove.isPending
   return (

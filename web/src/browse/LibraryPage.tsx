@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { useLibraries, useLibrarySeries } from '@/api/queries'
-import { CoverGrid, CoverSkeletons, SeriesCard } from '@/library/covers'
-import { BackLink, QueryState } from './parts'
+import { CoverGrid, CoverSkeletons, SeriesCard } from '@/library/Covers'
+import { BackLink, QueryState } from './Parts'
 
 export function LibraryPage({ id }: { id: number }) {
   const { t } = useTranslation()

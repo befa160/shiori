@@ -2,7 +2,6 @@ import { useQueryClient } from '@tanstack/react-query'
 import { EllipsisVertical } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
 import { api } from '@/api/client'
 import type { ReadingStatus } from '@/api/types'
 import {
@@ -16,7 +15,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { errorText } from '@/i18n/errors'
+import { toastFailure } from '@/i18n/errors'
 import { useSeriesAction } from './series'
 
 /** « Marquer comme lu / non lu » pour toute une série, pour le compte connecté (lot 10.3), sur sa
@@ -43,7 +42,7 @@ export function SeriesReadMenu({
     mark.mutate(read, {
       // La progression de chaque tome, gardée à part pour le lecteur, est aussi à relire.
       onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['volumes'] }),
-      onError: (error) => toast.error(t('series.markSeriesFailed'), { description: errorText(error, t) }),
+      onError: toastFailure(t('series.markSeriesFailed'), t),
     })
   const label = t('series.actions', { label: name })
   return (

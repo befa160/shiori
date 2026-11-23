@@ -6,11 +6,11 @@ import { Link } from 'react-router'
 import { toast } from 'sonner'
 import { api } from '@/api/client'
 import type { Settings, SourceId, SourceIssue } from '@/api/types'
-import { QueryState } from '@/browse/parts'
+import { QueryState } from '@/browse/Parts'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Progress } from '@/components/ui/progress'
-import { errorText, sourceErrorText } from '@/i18n/errors'
+import { sourceErrorText, toastFailure } from '@/i18n/errors'
 
 const CREDITS: [SourceId, string][] = [
   ['anilist', 'https://anilist.co'],
@@ -71,7 +71,7 @@ export function AdminMetadata() {
         void queryClient.invalidateQueries({ queryKey })
       }
     },
-    onError: (error) => toast.error(t('admin.metadataNotSaved'), { description: errorText(error, t) }),
+    onError: toastFailure(t('admin.metadataNotSaved'), t),
   })
   const identify = useMutation({
     mutationFn: api.identify,
@@ -79,7 +79,7 @@ export function AdminMetadata() {
       toast.success(t('admin.identifyStarted'))
       void queryClient.invalidateQueries({ queryKey: ['admin', 'metadata'] })
     },
-    onError: (error) => toast.error(t('admin.identifyNotStarted'), { description: errorText(error, t) }),
+    onError: toastFailure(t('admin.identifyNotStarted'), t),
   })
   // Valeur en cours d'enregistrement, sinon celle du serveur.
   const pending = <K extends 'metadata_online' | 'metadata_adult'>(key: K) =>

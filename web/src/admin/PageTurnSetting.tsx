@@ -1,11 +1,10 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
 import { type Scope, usePreference } from '@/account/preferences'
 import type { PageTurn } from '@/api/types'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { errorText } from '@/i18n/errors'
+import { toastFailure } from '@/i18n/errors'
 
 const TURNS: PageTurn[] = ['reading', 'ltr', 'rtl']
 
@@ -22,7 +21,7 @@ export function PageTurnSetting({ scope = 'account' }: { scope?: Scope }) {
       onSuccess: () => {
         for (const queryKey of [['series'], ['volumes']]) void queryClient.invalidateQueries({ queryKey })
       },
-      onError: (error) => toast.error(t('admin.pageTurnNotSaved'), { description: errorText(error, t) }),
+      onError: toastFailure(t('admin.pageTurnNotSaved'), t),
     })
   const value = save.isPending ? save.variables : saved
   if (value === undefined) return null

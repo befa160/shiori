@@ -8,12 +8,12 @@ import { toast } from 'sonner'
 import { api } from '@/api/client'
 import { useCurrentScan, useLibraries } from '@/api/queries'
 import type { LogLine, RunCounts, RunStatus, RunSummary, Severity } from '@/api/types'
-import { BackLink, QueryState } from '@/browse/parts'
+import { BackLink, QueryState } from '@/browse/Parts'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Progress } from '@/components/ui/progress'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { errorText, issueText } from '@/i18n/errors'
+import { issueText, toastFailure } from '@/i18n/errors'
 import { cn } from '@/lib/utils'
 import { formatDate, formatDuration } from './format'
 import { useStartScan } from './useStartScan'
@@ -83,7 +83,7 @@ export function CurrentScan() {
   const cancel = useMutation({
     mutationFn: api.cancelScan,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['scans', 'current'] }),
-    onError: (error) => toast.error(t('scans.cancelNotSent'), { description: errorText(error, t) }),
+    onError: toastFailure(t('scans.cancelNotSent'), t),
   })
   return (
     <QueryState query={current} isEmpty={(p) => p === null} empty={<p>{t('scans.idle')}</p>}>

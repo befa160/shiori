@@ -3,7 +3,6 @@ import { Download, EllipsisVertical, Pencil, Play, ScanSearch } from 'lucide-rea
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation } from 'react-router'
-import { toast } from 'sonner'
 import { api } from '@/api/client'
 import { useLibraries, useSeries, useVolume } from '@/api/queries'
 import type { SeriesDetail, SeriesVolume } from '@/api/types'
@@ -11,11 +10,11 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Progress } from '@/components/ui/progress'
-import { errorText, issueText } from '@/i18n/errors'
-import { Cover, CoverCard, CoverGrid } from '@/library/covers'
+import { issueText, toastFailure } from '@/i18n/errors'
+import { Cover, CoverCard, CoverGrid } from '@/library/Covers'
 import { cancel, enqueue, remove, useOffline } from '@/offline/downloads'
 import { volumeLabel, volumeTitle } from './labels'
-import { BackLink, QueryState } from './parts'
+import { BackLink, QueryState } from './Parts'
 import { useIsAdmin } from '@/auth/session'
 import { IdentifyDialog } from './IdentifyDialog'
 import { SeriesReadMenu } from './SeriesReadMenu'
@@ -263,7 +262,7 @@ function VolumeMenu({
     onSuccess: () => {
       for (const queryKey of [...LISTS, ['volumes', id]]) void queryClient.invalidateQueries({ queryKey })
     },
-    onError: (error) => toast.error(t('series.markFailed'), { description: errorText(error, t) }),
+    onError: toastFailure(t('series.markFailed'), t),
   })
   return (
     <>
