@@ -32,29 +32,37 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 
 ## Prochaine phase : 1.1 (⏳ plan à valider)
 
-Shiori `v1.0.0` couvre l'usage visé (bibliothèque chez soi, lecture en streaming et hors ligne sur la Tab A9 et le A55, comptes de la famille). La 1.1 réunit OPDS (ouvre Shiori aux liseuses et aux applications de lecture) et les statistiques de lecture (onglet prévu par CLAUDE.md).
+Shiori `v1.0.0` couvre l'usage visé (bibliothèque chez soi, lecture en streaming et hors ligne sur la Tab A9 et le A55, comptes de la famille). La 1.1 réunit les statistiques de lecture (onglet prévu par CLAUDE.md) et une **application Android** (enveloppe Tauri 2) qui bascule seule entre l'adresse locale et l'adresse publique. OPDS repasse au backlog (2026-11-23).
 
 Constats avant le plan :
-- Les jetons d'API (`shiori_t_…`) ne passent qu'en `Authorization: Bearer` ; KOReader et Panels n'envoient que du Basic (nom + mot de passe).
-- OPDS-PSE (lecture page par page, ce qu'attendent Panels et KOReader pour un CBZ) adresse les pages par **numéro** dans l'URL, ce que le principe 1 interdit.
-- Aucune route ne sert le fichier d'origine (téléchargement pour lecture hors ligne dans l'application OPDS).
 - `reading_progress` ne garde que le dernier état par tome (`updated_at`, `finished_at`) : les tomes terminés par semaine s'en déduisent, **pas les pages lues ni le temps**. Il faut un journal d'activité, sans historique avant la 1.1.
 - La barre du bas a déjà ses 4 onglets (Accueil, Séries, Recherche, Compte).
+- Tauri 2 sert sur Android un protocole maison à `http://<schéma>.localhost` par un gestionnaire Rust asynchrone ; le greffon de mise à jour de Tauri ne fonctionne pas sur mobile.
+- Le front appelle `/api` en relatif et la session tient dans un cookie (`SameSite=Lax`) ; la connexion renvoie aussi le jeton de session, et l'API l'accepte en `Bearer`. Une application qui chargerait le front depuis sa propre origine serait « cross-site » : cookie non envoyé, images (`<img>`) sans en-tête d'authentification.
+- Le hors-ligne repose sur le service worker (`public/sw.js`) et le cache `shiori-offline-v1` ; un service worker sur une origine de protocole maison de la WebView Android n'est pas garanti.
+- Tauri sous Linux tire webkit2gtk (bibliothèque C) : l'application ne peut pas entrer dans le workspace `backend/` sans casser `cargo test --workspace` et la règle du pur Rust. Un build Android (NDK, Gradle) dépasse aussi la mémoire de la machine de dev (WSL 3,8 Gio) : l'APK se construit en CI.
+
+Proposition d'architecture (Q62) : l'application est un **relais**. La WebView charge `http://shiori.localhost/` ; un gestionnaire Rust transmet chaque requête (front compris) au serveur joignable, en ajoutant `Authorization: Bearer` avec le jeton de session qu'il a relevé à la connexion. Le front est donc toujours celui du serveur (jamais de décalage de version), tout reste « same-origin » pour la WebView, et **le serveur ne change pas**. L'application n'ajoute qu'un écran de réglage des deux adresses.
 
 Lots :
-- **1.1a OPDS, catalogue** : Basic accepté pour un jeton d'API (mot de passe = jeton, nom ignoré), jamais pour un mot de passe de compte ; flux OPDS 1.2 (Atom) sous `/api/opds` : racine, Continuer la lecture, bibliothèques, séries (paginées par `rel="next"`), tomes avec couverture et vignette, recherche OpenSearch ; droits du compte respectés (bibliothèques visibles) ; XML écrit avec `quick-xml`.
-- **1.1b OPDS, lecture** : PSE (`/api/opds/volumes/{id}/pages/{n}` → redirection `no-store` vers l'URL immuable `/api/pages/{page_id}/image`, le numéro est résolu depuis l'ordre du scan) ; progression enregistrée quand une page plus loin est demandée, `pse:lastRead` renvoyé ; téléchargement du fichier d'origine (Q60) ; documentation FR/EN (KOReader, Panels, Mihon à vérifier) ; essai sur la Tab A9.
-- **1.1c Statistiques, serveur** : table `reading_activity(user_id, day, volume_id, pages, seconds)` remplie à chaque progression enregistrée (pages = avance depuis l'état précédent, temps = écart entre deux enregistrements s'il est court) ; `GET /api/me/stats` (par semaine : tomes terminés, pages, temps ; séries terminées ; totaux) ; tomes terminés avant la 1.1 repris depuis `finished_at`.
-- **1.1d Statistiques, interface** : page `/stats`, entrée « Statistiques » dans la sidebar, barres en CSS (pas de bibliothèque de graphiques), i18n, e2e, captures 4 tailles, documentation FR/EN.
+- **1.1a Statistiques, serveur** : table `reading_activity(user_id, day, volume_id, pages, seconds)` remplie à chaque progression enregistrée (pages = avance depuis l'état précédent, temps = écart entre deux enregistrements s'il est court) ; `GET /api/me/stats` (par semaine : tomes terminés, pages, temps ; séries terminées ; totaux) ; tomes terminés avant la 1.1 repris depuis `finished_at`.
+- **1.1b Statistiques, interface** : page `/stats`, entrée « Statistiques » dans la sidebar, barres en CSS (pas de bibliothèque de graphiques), i18n, e2e, captures 4 tailles, documentation FR/EN.
+- **1.1c Application, essai** (go / no-go) : dossier `app/` (projet Tauri 2 à part, son propre workspace cargo), relais vers une seule adresse, connexion et lecture d'un webtoon sur la Tab A9 ; mesure de fluidité à travers le relais ; job CI qui construit l'APK de debug. Arrêt et retour au split DNS si l'essai n'est pas concluant.
+- **1.1d Application, adresses et session** : écran de réglage (adresse locale, adresse publique), bascule automatique (Q66), jeton de session gardé dans le stockage privé de l'application (Q67), déconnexion qui l'efface ; logique du relais dans un module Rust testé sans Tauri (couverture ≥ 80 %).
+- **1.1e Application, hors ligne** : d'après l'essai, soit le service worker marche dans la WebView, soit le relais garde sur disque ce que « Télécharger » récupère et le sert quand aucune adresse ne répond (Q63).
+- **1.1f Application, distribution** : APK signé dans la release GitHub, attestation de provenance, mises à jour par Obtainium (Q64), documentation FR/EN (installation, réglage, mise à jour).
 
 Questions :
-- **Q58** Exception au principe 1 pour PSE seulement (numéro dans l'URL de redirection, jamais mis en cache, la page servie garde son ID stable) ? Sinon, OPDS sans lecture page par page (téléchargement seul).
-- **Q59** Progression enregistrée par une simple lecture de page OPDS (effet de bord d'un GET, seulement vers l'avant) ?
-- **Q60** Téléchargement du fichier d'origine dans OPDS (lecture hors ligne dans KOReader) ?
-- **Q61** Temps de lecture : écart compté seulement s'il est sous 5 minutes entre deux pages ; avance de plus de 50 pages d'un coup (saut au curseur) comptée 0 ?
-- **Q62** Jours en UTC (lecture après minuit comptée sur la veille ou le lendemain selon le fuseau), ou fuseau envoyé par l'appareil ?
-- **Q63** Statistiques sur mobile : lien depuis la page Compte (barre du bas inchangée) ?
-- **Q64** Statistiques strictement personnelles (l'administrateur ne voit pas celles des autres comptes) ?
+- **Q58** Temps de lecture : écart compté seulement s'il est sous 5 minutes entre deux pages ; avance de plus de 50 pages d'un coup (saut au curseur) comptée 0 ?
+- **Q59** Jours en UTC (lecture après minuit comptée sur la veille ou le lendemain selon le fuseau), ou fuseau envoyé par l'appareil ?
+- **Q60** Statistiques sur mobile : lien depuis la page Compte (barre du bas inchangée) ?
+- **Q61** Statistiques strictement personnelles (l'administrateur ne voit pas celles des autres comptes) ?
+- **Q62** Application en relais (front servi par le serveur, serveur inchangé), plutôt qu'un front embarqué dans l'APK (fonctionne sans réseau au lancement, mais à mettre à jour avec le serveur et à adapter au cross-origin) ?
+- **Q63** Hors ligne dans l'application : tranché après l'essai 1.1c (service worker si la WebView le permet, sinon cache disque du relais) ?
+- **Q64** Distribution : APK dans la release GitHub et Obtainium, sans Play Store ? La clé de signature est créée par toi, rangée dans les secrets GitHub avec une copie hors ligne (perdue = désinstaller pour mettre à jour).
+- **Q65** Android seulement (Tab A9, A55) ; iOS écarté (Mac et compte Apple payant) ?
+- **Q66** Bascule : adresse locale essayée d'abord (`/api/health`, 1,5 s), sinon publique ; nouvel essai après un échec réseau et au retour au premier plan ?
+- **Q67** Jeton de session dans le stockage privé de l'application (isolé par Android), sans chiffrement par le Keystore ?
 
 ## Planning après la V1
 
@@ -62,13 +70,14 @@ Le backlog ci-dessous, rangé par version (S : une PR, M : 2 ou 3 PR, L : une ph
 
 | Version | Contenu | Taille |
 |---|---|---|
-| 1.1 | OPDS (lecture et progression, sur les jetons d'API) ; statistiques de lecture | M + M |
+| 1.1 | Statistiques de lecture ; application Android (Tauri 2, relais avec bascule locale / publique) | M + L |
 | 1.2 | Lecteur : luminosité, rognage des marges blanches (calculé côté serveur, principe 3), marque-pages ; édition d'un tome dans l'interface | S + M + M + S |
 | 1.3 | Nouveautés suivies ; listes « À lire » par compte, puis collections partagées et relations entre séries | M + S + M |
 | 1.4 | Liens d'invitation ; sources MangaUpdates et Comic Vine ; actualisation périodique des fiches | M + M + S |
 | 1.5 | En-tête `Remote-User` (pour les autres installations, inutile ici) | S |
+| plus tard | OPDS (lecture et progression, sur les jetons d'API) | M |
 
-Sur déclencheur, sans version : pagination de la liste des séries (quelques milliers de séries), option JPEG des pages (pauses sur le NAS), signature Windows et macOS (décision de budget), application native (si le split DNS ne suffit plus), icône dans la zone de notification.
+Sur déclencheur, sans version : pagination de la liste des séries (quelques milliers de séries), option JPEG des pages (pauses sur le NAS), signature Windows et macOS (décision de budget), icône dans la zone de notification.
 
 Entretien courant, sans phase : la routine cloud du mardi (10 h, heure d'hiver) regroupe les PR Dependabot dans une PR vérifiée ; une release corrective (`1.0.x`) suit quand elle apporte quelque chose ; le reste (Triage X, e2e instable, Safari iOS, registre shadcn) se fait au fil des lots.
 
@@ -89,7 +98,7 @@ Regroupe tout ce qui a été noté « plus tard » pendant les phases 1 à 11 (l
 
 ### Accès et comptes
 
-- **OPDS**, sur les jetons d'API (lecture et progression seulement) : lire depuis Mihon, Panels, KOReader ou une liseuse. Candidat 1.1.
+- **OPDS**, sur les jetons d'API (lecture et progression seulement) : lire depuis Mihon, Panels, KOReader ou une liseuse. Reporté le 2026-11-23 au profit de l'application Android. Points relevés : Basic à accepter pour un jeton (KOReader, Panels), seulement sous `/api/opds` et sans cookie (CSRF), sans `WWW-Authenticate` ailleurs (fenêtre du navigateur) ; PSE met un numéro de page dans l'URL (exception au principe 1, redirection `no-store`) ; téléchargement du fichier d'origine en flux.
 - **Liens d'invitation** (conception de la phase 7) : l'administrateur génère `/invite/<jeton>` (256 bits, seul le hash en base, usage unique, 7 jours par défaut) avec le rôle et les bibliothèques du futur compte ; la personne choisit son nom et son mot de passe ; liste et révocation dans Administration → Comptes ; aucune inscription libre.
 - **En-tête `Remote-User`** d'un proxy d'authentification (Authelia, Authentik ; Q42, Q54) : option `--auth-header`, refusée sans `--trusted-proxy` (l'en-tête n'est cru que d'un proxy déclaré) ; session ouverte pour le compte de ce nom ; compte inconnu refusé (page de connexion), jamais créé d'office. Pas utile chez l'utilisateur (Nginx Proxy Manager sans authentification devant).
 
@@ -101,7 +110,6 @@ Regroupe tout ce qui a été noté « plus tard » pendant les phases 1 à 11 (l
 ### Distribution
 
 - **Signature Windows** (Authenticode : SignPath Foundation, Azure Trusted Signing ou certificat OV/EV) et **macOS** (Developer ID et notarisation, compte Apple payant) : supprimeraient l'avertissement SmartScreen et l'étape `xattr`. Questions ouvertes : budget annuel, dossier SignPath ou abonnement Azure, compte Apple à quel nom. Les attestations de provenance (gratuites) sont faites depuis la 1.0.
-- **Application native** (enveloppe Tauri mobile ou équivalente) : seule façon de basculer seule entre l'adresse locale et l'adresse publique ; d'ici là, le split DNS documenté suffit.
 - **Icône dans la zone de notification** (rouvrir, quitter) et fenêtre console masquée sous Windows, si le double-clic ne suffit plus.
 
 ### Qualité et entretien
@@ -167,4 +175,4 @@ Décisions assumées, chacune marquée `shortcut:` dans le code avec son seuil (
 - 2026-11-22 : essai de la rc.1 validé sur les appareils ; version `v1.0.0`.
 - 2026-11-23 : audit de sécurité et de qualité après la 1.0 : CSRF `same-site` et retrait du TOTP corrigés (#127), `server.rs` découpé (#128), gestes du lecteur et toasts d'erreur mis en commun (#129) ; `shiori health` et `HEALTHCHECK` dans l'image Docker (Docker ne redémarre pas seul un conteneur `unhealthy`).
 - 2026-11-23 : version `v1.0.1` (correctifs de l'audit, health check Docker).
-- 2026-11-23 : backlog rangé par version (1.1 OPDS et statistiques, 1.2 lecteur, 1.3 listes et nouveautés, 1.4 invitations et métadonnées, 1.5 `Remote-User`) ; le reste attend un déclencheur.
+- 2026-11-23 : backlog rangé par version (1.1 statistiques et application Android, OPDS reporté, 1.2 lecteur, 1.3 listes et nouveautés, 1.4 invitations et métadonnées, 1.5 `Remote-User`) ; le reste attend un déclencheur.
