@@ -30,7 +30,7 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 
 ---
 
-## Prochaine phase : 1.1 (⏳ plan à valider)
+## Prochaine phase : 1.1 (⏳ plan validé, à coder)
 
 Shiori `v1.0.0` couvre l'usage visé (bibliothèque chez soi, lecture en streaming et hors ligne sur la Tab A9 et le A55, comptes de la famille). La 1.1 réunit les statistiques de lecture (onglet prévu par CLAUDE.md) et une **application Android** (enveloppe Tauri 2) qui bascule seule entre l'adresse locale et l'adresse publique. OPDS repasse au backlog (2026-11-23).
 
@@ -45,24 +45,24 @@ Constats avant le plan :
 Proposition d'architecture (Q62) : l'application est un **relais**. La WebView charge `http://shiori.localhost/` ; un gestionnaire Rust transmet chaque requête (front compris) au serveur joignable, en ajoutant `Authorization: Bearer` avec le jeton de session qu'il a relevé à la connexion. Le front est donc toujours celui du serveur (jamais de décalage de version), tout reste « same-origin » pour la WebView, et **le serveur ne change pas**. L'application n'ajoute qu'un écran de réglage des deux adresses.
 
 Lots :
-- **1.1a Statistiques, serveur** : table `reading_activity(user_id, day, volume_id, pages, seconds)` remplie à chaque progression enregistrée (pages = avance depuis l'état précédent, temps = écart entre deux enregistrements s'il est court) ; `GET /api/me/stats` (par semaine : tomes terminés, pages, temps ; séries terminées ; totaux) ; tomes terminés avant la 1.1 repris depuis `finished_at`.
-- **1.1b Statistiques, interface** : page `/stats`, entrée « Statistiques » dans la sidebar, barres en CSS (pas de bibliothèque de graphiques), i18n, e2e, captures 4 tailles, documentation FR/EN.
+- **1.1a Statistiques, serveur** : table `reading_activity(user_id, day, volume_id, pages, seconds)` remplie à chaque progression enregistrée (pages = avance depuis l'état précédent, temps = écart entre deux enregistrements s'il est court) ; `GET /api/me/stats` (par semaine : tomes terminés, pages, temps ; séries terminées ; totaux) ; tomes terminés avant la 1.1 repris depuis `finished_at` ; fuseau de l'appareil reçu avec la progression (Q59).
+- **1.1b Statistiques, interface** : page `/stats`, entrée « Statistiques » dans la sidebar et lien depuis la page Compte (Q60), barres en CSS (pas de bibliothèque de graphiques), i18n, e2e, captures 4 tailles, documentation FR/EN.
 - **1.1c Application, essai** (go / no-go) : dossier `app/` (projet Tauri 2 à part, son propre workspace cargo), relais vers une seule adresse, connexion et lecture d'un webtoon sur la Tab A9 ; mesure de fluidité à travers le relais ; job CI qui construit l'APK de debug. Arrêt et retour au split DNS si l'essai n'est pas concluant.
-- **1.1d Application, adresses et session** : écran de réglage (adresse locale, adresse publique), bascule automatique (Q66), jeton de session gardé dans le stockage privé de l'application (Q67), déconnexion qui l'efface ; logique du relais dans un module Rust testé sans Tauri (couverture ≥ 80 %).
-- **1.1e Application, hors ligne** : d'après l'essai, soit le service worker marche dans la WebView, soit le relais garde sur disque ce que « Télécharger » récupère et le sert quand aucune adresse ne répond (Q63).
+- **1.1d Application, adresses et session** : écran de réglage (adresse locale, adresse publique), bascule automatique sur Wi-Fi nommé (Q66, greffon Kotlin), jeton de session gardé dans le stockage privé de l'application (Q67), déconnexion qui l'efface ; logique du relais dans un module Rust testé sans Tauri (couverture ≥ 80 %).
+- **1.1e Application, hors ligne** : le relais garde sur disque le front et ce que « Télécharger » récupère, et le sert quand aucune adresse ne répond ; la progression lue hors ligne repart à la reconnexion, datée comme dans la PWA (`read_at`) (Q62, Q63).
 - **1.1f Application, distribution** : APK signé dans la release GitHub, attestation de provenance, mises à jour par Obtainium (Q64), documentation FR/EN (installation, réglage, mise à jour).
 
-Questions :
-- **Q58** Temps de lecture : écart compté seulement s'il est sous 5 minutes entre deux pages ; avance de plus de 50 pages d'un coup (saut au curseur) comptée 0 ?
-- **Q59** Jours en UTC (lecture après minuit comptée sur la veille ou le lendemain selon le fuseau), ou fuseau envoyé par l'appareil ?
-- **Q60** Statistiques sur mobile : lien depuis la page Compte (barre du bas inchangée) ?
-- **Q61** Statistiques strictement personnelles (l'administrateur ne voit pas celles des autres comptes) ?
-- **Q62** Application en relais (front servi par le serveur, serveur inchangé), plutôt qu'un front embarqué dans l'APK (fonctionne sans réseau au lancement, mais à mettre à jour avec le serveur et à adapter au cross-origin) ?
-- **Q63** Hors ligne dans l'application : tranché après l'essai 1.1c (service worker si la WebView le permet, sinon cache disque du relais) ?
-- **Q64** Distribution : APK dans la release GitHub et Obtainium, sans Play Store ? La clé de signature est créée par toi, rangée dans les secrets GitHub avec une copie hors ligne (perdue = désinstaller pour mettre à jour).
-- **Q65** Android seulement (Tab A9, A55) ; iOS écarté (Mac et compte Apple payant) ?
-- **Q66** Bascule : adresse locale essayée d'abord (`/api/health`, 1,5 s), sinon publique ; nouvel essai après un échec réseau et au retour au premier plan ?
-- **Q67** Jeton de session dans le stockage privé de l'application (isolé par Android), sans chiffrement par le Keystore ?
+Décisions (2026-11-23) :
+- **Q58** Temps compté seulement si moins de 5 minutes séparent deux pages ; une avance de plus de 50 pages d'un coup (saut au curseur) compte 0 page.
+- **Q59** Jours et semaines dans le fuseau de l'appareil, envoyé avec la progression.
+- **Q60** Statistiques sur mobile : lien depuis la page Compte, barre du bas inchangée ; entrée dans la sidebar à partir de `lg`.
+- **Q61** Statistiques strictement personnelles.
+- **Q62** Application en relais, avec cache disque : il garde le front et les tomes téléchargés, donc l'application s'ouvre et lit hors ligne ; besoin exprimé : hors ligne et bascule automatique par détection du réseau.
+- **Q63** Hors ligne de l'application par le cache disque du relais (pas de service worker dans la WebView).
+- **Q64** APK signé dans la release GitHub, mises à jour par Obtainium ; clé de signature créée par l'utilisateur, dans les secrets GitHub avec une copie hors ligne.
+- **Q65** Android seulement (Tab A9, A55).
+- **Q66** Adresse locale seulement sur un Wi-Fi nommé (liste réglée dans l'application) **et** si elle répond (`/api/health`, 1,5 s), sinon adresse publique ; réévalué à chaque changement de réseau (greffon Kotlin : nom du Wi-Fi et changements de réseau, permission de localisation demandée avec une explication). Raison : sur un autre Wi-Fi à la même plage d'adresses, un autre appareil recevrait la session en clair.
+- **Q67** Jeton de session dans le stockage privé de l'application, sans Keystore.
 
 ## Planning après la V1
 
@@ -175,4 +175,5 @@ Décisions assumées, chacune marquée `shortcut:` dans le code avec son seuil (
 - 2026-11-22 : essai de la rc.1 validé sur les appareils ; version `v1.0.0`.
 - 2026-11-23 : audit de sécurité et de qualité après la 1.0 : CSRF `same-site` et retrait du TOTP corrigés (#127), `server.rs` découpé (#128), gestes du lecteur et toasts d'erreur mis en commun (#129) ; `shiori health` et `HEALTHCHECK` dans l'image Docker (Docker ne redémarre pas seul un conteneur `unhealthy`).
 - 2026-11-23 : version `v1.0.1` (correctifs de l'audit, health check Docker).
+- 2026-11-23 : plan de la 1.1 validé (Q58 à Q67) : statistiques personnelles dans le fuseau de l'appareil ; application Android en relais avec cache disque, Wi-Fi nommé pour l'adresse locale, APK par GitHub et Obtainium.
 - 2026-11-23 : backlog rangé par version (1.1 statistiques et application Android, OPDS reporté, 1.2 lecteur, 1.3 listes et nouveautés, 1.4 invitations et métadonnées, 1.5 `Remote-User`) ; le reste attend un déclencheur.
