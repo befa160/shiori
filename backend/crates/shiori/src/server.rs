@@ -1,7 +1,7 @@
 //! `shiori serve` : API HTTP JSON sous `/api`.
 //!
-//! Erreurs toujours au format `{ "code", "message" }`, codes stables pour l'UI. Pas
-//! d'authentification en phase 2 : écoute sur 127.0.0.1 par défaut (Q10).
+//! Erreurs toujours au format `{ "code", "message" }`, codes stables pour l'UI. Session exigée
+//! sauf sur quelques routes (`auth::require_session`) ; écoute sur 127.0.0.1 par défaut (Q10).
 
 use std::future::Future;
 use std::net::SocketAddr;
@@ -229,6 +229,7 @@ pub async fn run(
     db.interrupt_running_runs().await?;
     db.purge_runs(args.scan_log_days).await?;
     db.purge_covers().await?;
+    db.purge_sessions().await?;
     let jobs = args
         .jobs
         .or_else(|| std::thread::available_parallelism().ok())
@@ -455,13 +456,14 @@ pub fn router(app: Arc<App>, hosts: Option<Vec<String>>) -> Router {
 }
 
 /// Parade au CSRF : un formulaire d'un autre site peut envoyer un POST sans corps JSON (annuler
-/// le scan, identifier), que CORS ne bloque pas. Le navigateur dit d'où vient la requête.
+/// le scan, restaurer), que CORS ne bloque pas. Le navigateur dit d'où vient la requête. Même
+/// `same-site` est refusé : un autre sous-domaine ou un autre port reçoit le cookie `Lax`.
 async fn same_site_writes_only(request: Request, next: Next) -> Response {
     let read = matches!(*request.method(), Method::GET | Method::HEAD);
     let cross = request
         .headers()
         .get("sec-fetch-site")
-        .is_some_and(|v| v == "cross-site");
+        .is_some_and(|v| v != "same-origin" && v != "none");
     match read || !cross {
         true => next.run(request).await,
         false => ApiError::new(
@@ -476,7 +478,7 @@ async fn same_site_writes_only(request: Request, next: Next) -> Response {
 /// Parade au DNS rebinding : sans elle, une page web malveillante peut faire pointer son
 /// propre domaine vers 127.0.0.1 et piloter l'API depuis le navigateur. Le `Host` doit donc
 /// être local ou l'un des noms autorisés (`--allowed-host`). En écoute réseau sans nom
-/// autorisé, aucune protection tant qu'il n'y a pas d'authentification.
+/// autorisé, pas de contrôle du `Host` : seule la session protège l'API.
 async fn allowed_host_only(
     State(hosts): State<Arc<[String]>>,
     request: Request,

@@ -118,8 +118,10 @@ pub(crate) async fn disable(
             "la double authentification n'est pas active",
         ));
     }
-    check_own_password(&app, &session.user, &request.password).await?;
+    // Code d'abord : un bon mot de passe remet le compteur à zéro, vérifié avant il laisserait
+    // essayer tous les codes sans pause.
     check_own_code(&app, &session.user, &request.code).await?;
+    check_own_password(&app, &session.user, &request.password).await?;
     app.db.disable_totp(session.user.id).await?;
     Ok(StatusCode::NO_CONTENT)
 }

@@ -87,6 +87,8 @@ Les sources de la documentation sont dans [`docs/`](docs/), l'avancement détail
 
 Shiori is a self-hosted manga, comics and webtoon reader: a single Rust binary (or Docker image) that reads your CBZ, CBR and PDF folders (JPEG, PNG, WebP, AVIF, BMP and GIF pages) and serves them to an installable web app, designed tablet-first, with offline reading, family accounts and metadata from your files, AniList, MangaDex and Wikipedia. Every page has a stable identity and is checked when scanned, so the reader never shows the wrong page. From 1.0, updates keep your database, volume and page IDs, and the API only grows ([what is promised](https://befa160.github.io/shiori/en/installation/#what-an-update-guarantees-from-1-0)). See the [English documentation](https://befa160.github.io/shiori/en/).
 
+Shiori is built in collaboration with [Claude Code](https://claude.com/claude-code), Anthropic's coding assistant.
+
 ## Développement
 
 Rust (axum, tokio, sqlx + SQLite) et React 19 + TypeScript + Tailwind + shadcn/ui, embarqué dans le binaire. Code portable (Linux, Windows, macOS), dépendances Rust pur de préférence, couverture de tests d'au moins 80 %.
@@ -98,6 +100,8 @@ cd web && npm run e2e   # bout en bout, contre un vrai serveur
 ```
 
 Commandes, règles et publication : [Contribuer](https://befa160.github.io/shiori/development/) ; règles complètes dans [CLAUDE.md](CLAUDE.md).
+
+Shiori est développé en collaboration avec [Claude Code](https://claude.com/claude-code), l'assistant de programmation d'Anthropic : code, tests et documentation sont écrits avec lui, puis relus et validés à chaque PR.
 
 ## Licence
 

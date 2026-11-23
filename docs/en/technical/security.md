@@ -31,7 +31,7 @@ A reader only sees the libraries open to them (404 for the rest, without saying 
 ## Protections
 
 - **DNS rebinding**: when listening locally, only a local `Host` is accepted; `--allowed-host` / `SHIORI_ALLOWED_HOSTS` adds names and enables this check when listening on the network (the Docker image does it for `localhost`). Otherwise: 403 `invalid_host`.
-- **CSRF**: writes refused if `Sec-Fetch-Site: cross-site` (403 `cross_site`), on top of the `SameSite=Lax` cookie.
+- **CSRF**: writes refused unless `Sec-Fetch-Site` is `same-origin` or `none` (403 `cross_site`), on top of the `SameSite=Lax` cookie: another subdomain or port (`same-site`) receives that cookie, so it is refused too.
 - **Paths**: a scan only targets a path under a library root, without `..` or symbolic link (`path_outside_library`).
 - **Hostile archives**: declared sizes checked, caps on entries, pixels and memory, decoder panics isolated per file.
 - **SSRF**: source covers downloaded only from their known hosts, without following redirects.

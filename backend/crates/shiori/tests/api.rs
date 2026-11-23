@@ -472,6 +472,7 @@ async fn cross_site_writes_are_refused() {
         ("DELETE", "cross-site", StatusCode::FORBIDDEN),
         ("GET", "cross-site", StatusCode::OK),
         ("HEAD", "cross-site", StatusCode::OK),
+        ("POST", "same-site", StatusCode::FORBIDDEN),
         ("POST", "same-origin", StatusCode::NOT_FOUND),
         ("POST", "none", StatusCode::NOT_FOUND),
     ] {

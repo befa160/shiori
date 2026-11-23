@@ -50,7 +50,7 @@ Route-specific codes are listed on each page.
 - **Identifiers**: numbers for libraries, series, accounts and passes; hexadecimal strings for volumes (BLAKE3, 64 characters) and pages (128 bits, 32 characters). They never change as long as the content does not.
 - **Dates**: RFC 3339 in UTC (`2026-11-18T21:57:23.374Z`).
 - **Cursor pagination**: `limit` (50 by default, 500 at most) and `before` / `after` depending on the list.
-- **Writes** refused if the browser announces a request from another site (`Sec-Fetch-Site: cross-site`).
+- **Writes** refused if the browser announces a request that does not come from Shiori itself (`Sec-Fetch-Site` other than `same-origin` or `none`: another site, but also another subdomain or port).
 - **Stability**: from 1.0, the API only grows within a major version; a client ignores fields it does not know. See [what an update guarantees](/en/installation/#what-an-update-guarantees-from-1-0).
 
 ## Server health

@@ -315,11 +315,32 @@ async fn wrong_codes_pause_the_account_and_a_disabled_account_gets_no_session() 
 }
 
 #[tokio::test]
+async fn wrong_codes_pause_the_removal_even_with_the_right_password() {
+    let f = fixture().await;
+    let (cookie, _, _) = enable(&f, "bob").await;
+    // Le bon mot de passe ne remet pas le compteur à zéro : les mauvais codes finissent en pause.
+    let wrong = json!({ "password": "mot de passe", "code": "000000" });
+    let mut last = StatusCode::OK;
+    for _ in 0..7 {
+        (last, _, _) = call(
+            &f,
+            Some(&cookie),
+            "DELETE",
+            "/api/me/totp",
+            Some(wrong.clone()),
+        )
+        .await;
+    }
+    assert_eq!(last, StatusCode::TOO_MANY_REQUESTS);
+}
+
+#[tokio::test]
 async fn disabling_needs_the_password_and_a_code_or_the_admin() {
     let f = fixture().await;
-    let (cookie, secret, _) = enable(&f, "bob").await;
+    let (cookie, _, codes) = enable(&f, "bob").await;
     let uri = "/api/me/totp";
-    let no_password = json!({ "password": "faux", "code": current_code(&secret) });
+    // Le code de l'activation a déjà servi (même pas de 30 s) : un code de secours.
+    let no_password = json!({ "password": "faux", "code": codes[0] });
     let (status, _, body) = call(&f, Some(&cookie), "DELETE", uri, Some(no_password)).await;
     assert_eq!(
         (status, body["code"].as_str()),
