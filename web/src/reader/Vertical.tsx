@@ -12,7 +12,7 @@ import type { ReaderProps } from './Reader'
 /** Mode webtoon : défilement vertical continu du document. Seules les bandes proches de l'écran
  * existent dans la page (12 760 bandes pour le webtoon réel) ; la place de chacune est réservée
  * d'après le scan, donc rien ne saute. Clavier : le défilement natif du navigateur. */
-export function VerticalPages({ volumeId, pages, title, back, resume, next, onMode, onCover, brightness, onBrightness }: ReaderProps) {
+export function VerticalPages({ volumeId, pages, title, back, resume, next, onMode, onCover, onVolumeCover, brightness, onBrightness }: ReaderProps) {
   const { t, i18n } = useTranslation()
   const number = new Intl.NumberFormat(i18n.language)
   const view = useViewport()
@@ -97,6 +97,7 @@ export function VerticalPages({ volumeId, pages, title, back, resume, next, onMo
             mode="vertical"
             onMode={onMode}
             onCover={onCover && (() => onCover(pages[current].id))}
+            onVolumeCover={onVolumeCover && (() => onVolumeCover(pages[current].id))}
             brightness={brightness}
             onBrightness={onBrightness}
           />

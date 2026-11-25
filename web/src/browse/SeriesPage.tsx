@@ -20,6 +20,7 @@ import { IdentifyDialog } from './IdentifyDialog'
 import { SeriesReadMenu } from './SeriesReadMenu'
 import { LISTS } from './series'
 import { EditSeriesDialog, SeriesAbout } from './SeriesMetadata'
+import { EditVolumeDialog } from './EditVolumeDialog'
 
 export function SeriesPage({ id }: { id: number }) {
   const { t } = useTranslation()
@@ -251,6 +252,8 @@ function VolumeMenu({
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [issuesOpen, setIssuesOpen] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const admin = useIsAdmin()
   const id = volume.volume_id
   const mark = useMutation({
     // « Lu » = la dernière page atteinte, comme dans le lecteur ; « non lu » efface la progression.
@@ -285,10 +288,14 @@ function VolumeMenu({
           {state === 'queued' && <DropdownMenuItem onSelect={() => cancel(id)}>{t('offline.cancel')}</DropdownMenuItem>}
           {state === 'downloaded' && <DropdownMenuItem onSelect={() => void remove(id)}>{t('offline.remove')}</DropdownMenuItem>}
           <DropdownMenuItem onSelect={() => setIssuesOpen(true)}>{t('series.issues')}</DropdownMenuItem>
+          {admin && <DropdownMenuItem onSelect={() => setEditing(true)}>{t('series.edit')}</DropdownMenuItem>}
         </DropdownMenuContent>
       </DropdownMenu>
       <Dialog open={issuesOpen} onOpenChange={setIssuesOpen}>
         {issuesOpen && <IssuesDialog volumeId={id} label={label} file={volume.file_name} />}
+      </Dialog>
+      <Dialog open={editing} onOpenChange={setEditing}>
+        {editing && <EditVolumeDialog volumeId={id} label={label} onDone={() => setEditing(false)} />}
       </Dialog>
     </>
   )

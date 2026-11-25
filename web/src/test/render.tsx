@@ -58,6 +58,9 @@ export function me(user: User, preferences: Partial<Me['preferences']> = {}): Me
 }
 
 /** Métadonnées d'une série dont les fichiers ne disent rien. */
+/** Tome sans métadonnée ni champ modifié. */
+export const NO_VOLUME_METADATA = { metadata: { title: null, number: null, summary: null, release_date: null, authors: [], cover_page_id: null }, locked: [] }
+
 export const NO_METADATA: SeriesMetadata = {
   title: null,
   alt_titles: [],

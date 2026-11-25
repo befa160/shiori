@@ -20,7 +20,7 @@
 
 ### `PATCH /api/volumes/{id}` <Badge text="admin" />
 
-The volume's metadata, as for a series: a field given is edited and locked, `unlock` hands it back to the files. Fields: `title`, `summary`, `release_date`, `authors`. **Response 200**: the volume detail.
+The volume's metadata, as for a series: a field given is edited and locked, `unlock` hands it back to the files. Fields: `title`, `summary`, `release_date`, `authors`, `cover_page_id` (a page of this volume, otherwise 400 `invalid_body`; without a value, its first page). **Response 200**: the volume detail.
 
 ## Pages
 

@@ -2,7 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PageInfo, VolumeDetail } from '@/api/types'
-import { NO_METADATA, json, mockApi, renderAt } from '@/test/render'
+import { NO_METADATA, NO_VOLUME_METADATA, json, mockApi, renderAt } from '@/test/render'
 
 // Le lecteur est une route `lazy` : chargé à froid (transformé, instrumenté pour la couverture),
 // il dépassait parfois le délai d'attente du premier test sur une machine chargée.
@@ -29,6 +29,7 @@ const volume: VolumeDetail = {
   issues: [],
   settings: { reading_mode: 'vertical', page_layout: 'auto', page_turn: 'reading', reading_mode_override: null, page_layout_override: null, page_turn_override: null },
   progress: null,
+  ...NO_VOLUME_METADATA,
 }
 
 let scrollTo: ReturnType<typeof vi.fn>
@@ -130,7 +131,7 @@ describe('mode webtoon', () => {
     act(() => scrollWindow(2 * 1280 + 10))
     fireEvent.click(screen.getByRole('main'))
     await userEvent.click(screen.getByRole('button', { name: 'Affichage' }))
-    await userEvent.click(await screen.findByRole('button', { name: 'Utiliser comme couverture' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Utiliser comme couverture de la série' }))
     await waitFor(() => {
       const patch = fetch.mock.calls.find(([url, init]) => url === '/api/series/7' && init?.method === 'PATCH')
       expect(JSON.parse(String(patch?.[1]?.body))).toEqual({ cover_page_id: 's3' })

@@ -20,7 +20,7 @@
 
 ### `PATCH /api/volumes/{id}` <Badge text="admin" />
 
-Métadonnées du tome, comme pour une série : champ donné = édité et verrouillé, `unlock` le rend aux fichiers. Champs : `title`, `summary`, `release_date`, `authors`. **Réponse 200** : le détail du tome.
+Métadonnées du tome, comme pour une série : champ donné = édité et verrouillé, `unlock` le rend aux fichiers. Champs : `title`, `summary`, `release_date`, `authors`, `cover_page_id` (une page de ce tome, sinon 400 `invalid_body` ; sans valeur, sa première page). **Réponse 200** : le détail du tome.
 
 ## Pages
 

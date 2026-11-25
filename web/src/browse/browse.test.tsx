@@ -1,8 +1,8 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Library, SeriesDetail, SeriesSummary } from '@/api/types'
-import { json, mockApi, renderAt, NO_METADATA } from '@/test/render'
+import type { Library, SeriesDetail, SeriesSummary, VolumeMetadata } from '@/api/types'
+import { json, mockApi, renderAt, NO_METADATA, READER } from '@/test/render'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -355,6 +355,58 @@ describe('page d’une série', () => {
     await userEvent.click(main().getByRole('button', { name: 'Actions pour Tome 1' }))
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Problèmes du scan' }))
     expect(await screen.findByText('Aucun problème relevé.')).toBeInTheDocument()
+  })
+
+  it('modifie un tome : titre envoyé seulement s’il change, titre et couverture rendus aux fichiers', async () => {
+    const meta: VolumeMetadata = { title: 'Le gourmet', number: null, summary: null, release_date: null, authors: [], cover_page_id: 'p2' }
+    let volume = { id: 'a', metadata: meta, locked: ['title', 'cover_page_id'] }
+    const fetch = mockApi({
+      '/api/series/7': () => json(detail),
+      '/api/volumes/a': (init?: RequestInit) => {
+        const patch = init?.method === 'PATCH' ? JSON.parse(String(init.body)) : null
+        if (patch?.unlock?.includes('title')) volume = { id: 'a', metadata: { ...meta, title: 'Du fichier' }, locked: ['cover_page_id'] }
+        if (patch?.unlock?.includes('cover_page_id')) volume = { id: 'a', metadata: { ...volume.metadata, cover_page_id: null }, locked: [] }
+        if (patch?.title === null) return json({ code: 'invalid_body', message: 'refusé' }, 400)
+        return json(volume)
+      },
+    })
+    const patches = () =>
+      fetch.mock.calls.filter(([url, init]) => url === '/api/volumes/a' && init?.method === 'PATCH').map(([, init]) => JSON.parse(String(init?.body)))
+    renderAt('/series/7')
+    await userEvent.click(await main().findByRole('button', { name: 'Actions pour Tome 1' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Modifier' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Modifier « Tome 1 »' })
+    const title = await within(dialog).findByRole('textbox', { name: 'Titre' })
+    expect(title).toHaveValue('Le gourmet')
+    // Rien de changé : rien n'est envoyé.
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Enregistrer' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(patches()).toEqual([])
+
+    await userEvent.click(main().getByRole('button', { name: 'Actions pour Tome 1' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Modifier' }))
+    const again = await screen.findByRole('dialog', { name: 'Modifier « Tome 1 »' })
+    await userEvent.click(await within(again).findByRole('button', { name: 'Rendre « Titre » aux fichiers' }))
+    await waitFor(() => expect(within(again).getByRole('textbox', { name: 'Titre' })).toHaveValue('Du fichier'))
+    await userEvent.click(within(again).getByRole('button', { name: 'Rendre « Couverture » aux fichiers' }))
+    expect(await screen.findByText('Couverture du tome rendue à sa première page')).toBeInTheDocument()
+    // Un titre vidé part en `null` ; le refus du serveur se dit dans la fenêtre.
+    await userEvent.clear(within(again).getByRole('textbox', { name: 'Titre' }))
+    await userEvent.click(within(again).getByRole('button', { name: 'Enregistrer' }))
+    expect(await within(again).findByRole('alert')).toHaveTextContent('Modifications non enregistrées')
+    await userEvent.type(within(again).getByRole('textbox', { name: 'Titre' }), 'Nouveau')
+    await userEvent.click(within(again).getByRole('button', { name: 'Enregistrer' }))
+    // Enregistré : la fenêtre se ferme (le toast d'un test précédent peut encore être affiché).
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(patches()).toEqual([{ unlock: ['title'] }, { unlock: ['cover_page_id'] }, { title: null }, { title: 'Nouveau' }])
+  })
+
+  it('un lecteur ne voit pas « Modifier » dans le menu d’un tome', async () => {
+    mockApi({ '/api/series/7': () => json(detail) })
+    renderAt('/series/7', { auth: { setup_required: false, user: READER } })
+    await userEvent.click(await main().findByRole('button', { name: 'Actions pour Tome 1' }))
+    await screen.findByRole('menuitem', { name: 'Problèmes du scan' })
+    expect(screen.queryByRole('menuitem', { name: 'Modifier' })).toBeNull()
   })
 
   it('signale une série sans tome', async () => {

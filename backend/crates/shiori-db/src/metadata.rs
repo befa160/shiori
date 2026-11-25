@@ -67,9 +67,17 @@ pub struct VolumeMetadata {
     pub summary: Option<String>,
     pub release_date: Option<String>,
     pub authors: Vec<Author>,
+    /// Page choisie comme couverture du tome ; vide : sa page 0.
+    pub cover_page_id: Option<String>,
 }
 
-const VOLUME_FIELDS: &[&str] = &["title", "summary", "release_date", "authors"];
+const VOLUME_FIELDS: &[&str] = &[
+    "title",
+    "summary",
+    "release_date",
+    "authors",
+    "cover_page_id",
+];
 
 #[derive(Debug, thiserror::Error)]
 pub enum EditError {
@@ -242,6 +250,7 @@ fn volume_from_locals(locals: &[(MetadataSource, LocalMetadata)]) -> VolumeMetad
         summary: m.summary.clone(),
         release_date: known_date(&m.release_date).map(str::to_owned),
         authors: m.authors.clone(),
+        cover_page_id: None,
     }
 }
 
@@ -536,7 +545,19 @@ impl Db {
         };
         let mut edited = parse_edited(row.get("edited"))?;
         apply(&mut edited, patch, VOLUME_FIELDS).map_err(EditError::Invalid)?;
-        overlay(VolumeMetadata::default(), &edited).map_err(EditError::Invalid)?;
+        let check = overlay(VolumeMetadata::default(), &edited).map_err(EditError::Invalid)?;
+        if let Some(page) = &check.cover_page_id {
+            let found = sqlx::query("SELECT 1 FROM pages WHERE id = ? AND volume_id = ?")
+                .bind(page)
+                .bind(&id)
+                .fetch_optional(&mut *tx)
+                .await?;
+            if found.is_none() {
+                return Err(EditError::Invalid(format!(
+                    "la page {page} n'est pas dans ce tome"
+                )));
+            }
+        }
         sqlx::query(
             "INSERT INTO volume_edits (volume_id, edited) VALUES (?, ?)
              ON CONFLICT (volume_id) DO UPDATE SET edited = excluded.edited",

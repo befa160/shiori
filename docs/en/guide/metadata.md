@@ -36,3 +36,5 @@ They are **off by default** (**Administration → Web metadata**). Only the seri
 ## Cover
 
 A series' cover is the first page of its first volume, or the one you choose: any page, or a source's cover (kept by the server). Without a cover, Shiori draws one with the title and the author.
+
+A volume has its own cover too: its first page, or the one chosen in the reader (**Display** panel, "Use as volume cover"). A volume's menu (**⋮** on its cover, series page) offers **Edit** to the administrator: its title, and "Restore" to hand the title or the cover back to the files. The number comes from the file name: renaming the file changes it at the next scan.

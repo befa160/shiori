@@ -132,6 +132,28 @@ function valueOf(field: keyof Form, text: string, authors: Author[]): SeriesPatc
   }
 }
 
+/** « Modifié à la main », avec le bouton qui rend le champ aux fichiers (série ou tome). */
+export function Locked({ label, disabled, onUnlock }: { label: string; disabled: boolean; onUnlock: () => void }) {
+  const { t } = useTranslation()
+  return (
+    <span className="flex items-center gap-1 text-sm text-muted-foreground">
+      <Lock aria-hidden className="size-4 text-primary" />
+      {t('series.locked')}
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="min-h-11"
+        aria-label={t('series.unlockLabel', { field: label })}
+        disabled={disabled}
+        onClick={onUnlock}
+      >
+        {t('series.unlock')}
+      </Button>
+    </span>
+  )
+}
+
 /** Fenêtre « Modifier » : un champ changé est envoyé (donc verrouillé), « Rétablir » le rend aux fichiers. */
 export function EditSeriesDialog({ series, onDone }: { series: SeriesDetail; onDone: () => void }) {
   const { t } = useTranslation()
@@ -198,23 +220,7 @@ export function EditSeriesDialog({ series, onDone }: { series: SeriesDetail; onD
           <label htmlFor={`${id}-${name}`} className="text-sm font-medium">
             {label}
           </label>
-          {locked && (
-            <span className="flex items-center gap-1 text-sm text-muted-foreground">
-              <Lock aria-hidden className="size-4 text-primary" />
-              {t('series.locked')}
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="min-h-11"
-                aria-label={t('series.unlockLabel', { field: label })}
-                disabled={unlock.isPending}
-                onClick={() => restore(name)}
-              >
-                {t('series.unlock')}
-              </Button>
-            </span>
-          )}
+          {locked && <Locked label={label} disabled={unlock.isPending} onUnlock={() => restore(name)} />}
         </div>
         {control({ id: `${id}-${name}`, 'aria-describedby': describedBy, 'aria-invalid': problem ? true : undefined })}
         {help && (
