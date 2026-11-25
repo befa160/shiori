@@ -175,5 +175,6 @@ Décisions assumées, chacune marquée `shortcut:` dans le code avec son seuil (
 - 2026-11-23 : plan de la 1.1 validé (Q58 à Q67) : statistiques personnelles dans le fuseau de l'appareil ; application Android en relais avec cache disque, Wi-Fi nommé pour l'adresse locale, APK par GitHub et Obtainium.
 - 2026-11-23 : essai de l'application Android abandonné (PR #135 fermée) : la WebView d'Android perd le corps des POST et PUT interceptés et refuse les 3xx ; retour au split DNS. La 1.1 se limite aux statistiques.
 - 2026-11-23 : version `v1.1.0` (statistiques de lecture).
+- 2026-11-25 : version `v1.1.1` (mises à jour des dépendances : notify 9, rars 0.13, qrcode 0.15, jest-dom 8).
 - 2026-11-25 : rognage des marges blanches retiré de la roadmap (pas d'intérêt pour l'utilisateur) ; la 1.2 se limite à la luminosité, l'édition d'un tome et les marque-pages.
 - 2026-11-25 : plan de la 1.2 validé (Q68 à Q71) : luminosité par appareil, numéro d'un tome non modifiable en 1.2, marque-pages dans le lecteur et sur la page de la série, en lecture seule hors ligne.

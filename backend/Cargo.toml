@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/*"]
 
 [workspace.package]
-version = "1.1.0"
+version = "1.1.1"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/befa160/shiori"
@@ -41,7 +41,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 webbrowser = { version = "1.2.7", features = ["hardened"] }
 # Surveillance des dossiers (lot 9.1) : inotify, ReadDirectoryChangesW, FSEvents.
-notify = "8.2"
+notify = "9.0"
 shiori-db = { path = "crates/shiori-db" }
 shiori-core = { path = "crates/shiori-core" }
 shiori-meta = { path = "crates/shiori-meta" }
@@ -49,8 +49,8 @@ blake3 = { version = "1.8", default-features = false, features = ["std", "pure"]
 thiserror = "2.0"
 # Double authentification (lot 7.5) : TOTP RFC 6238, et le QR de l'enrôlement en SVG (sans image).
 totp-rs = { version = "6.0", default-features = false, features = ["std", "otpauth"] }
-qrcode = { version = "0.14", default-features = false, features = ["svg"] }
-rars = { version = "0.12", default-features = false }
+qrcode = { version = "0.15", default-features = false, features = ["svg"] }
+rars = { version = "0.13", default-features = false }
 # PDF (phase 8) : analyse paresseuse et interprétation des pages, pur Rust. Les 14 polices
 # standard embarquées (300 Kio) font produire des glyphes au texte en Helvetica non inclus :
 # sans elles, ce texte visible échapperait au diagnostic `pdf_text_ignored`.
