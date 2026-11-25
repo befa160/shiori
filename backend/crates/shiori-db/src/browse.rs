@@ -200,7 +200,13 @@ macro_rules! located_volumes {
         concat!(
             "SELECT l.series_id, l.path, l.kind, l.number, l.number_end, v.id AS volume_id,
                     v.status, v.page_count,
-                    (SELECT p.id FROM pages p WHERE p.volume_id = v.id AND p.ordinal = 0) AS cover
+                    COALESCE(
+                      (SELECT p.id FROM volume_edits e
+                       JOIN pages p ON p.id = json_extract(e.edited, '$.cover_page_id')
+                                   AND p.volume_id = v.id
+                       WHERE e.volume_id = v.id),
+                      (SELECT p.id FROM pages p WHERE p.volume_id = v.id AND p.ordinal = 0)
+                    ) AS cover
              FROM file_locations l JOIN volumes v ON v.id = l.volume_id
              WHERE ",
             $filter

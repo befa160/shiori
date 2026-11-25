@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/client'
-import type { SeriesDetail, SeriesPatch } from '@/api/types'
+import type { SeriesDetail, SeriesPatch, VolumePatch } from '@/api/types'
 
 // Listes qui montrent le titre, la couverture, la progression ou le statut d'une série :
 // redemandées après un changement.
@@ -20,6 +20,18 @@ export function useSeriesAction<T>(id: number, action: (input: T) => Promise<Ser
 
 /** Modifie une série (champs édités, verrouillés). */
 export const usePatchSeries = (id: number) => useSeriesAction(id, (patch: SeriesPatch) => api.patchSeries(id, patch))
+
+/** Modifie un tome (titre, couverture) : son détail remplace le cache, les listes sont redemandées. */
+export function usePatchVolume(id: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (patch: VolumePatch) => api.patchVolume(id, patch),
+    onSuccess: (detail) => {
+      queryClient.setQueryData(['volumes', id], detail)
+      for (const queryKey of LISTS) void queryClient.invalidateQueries({ queryKey })
+    },
+  })
+}
 
 /** Adresses `http(s)` seulement : une valeur venue d'une archive n'est jamais un lien d'un autre type. */
 export function webLinks(links: string[]): URL[] {

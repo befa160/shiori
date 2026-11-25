@@ -35,6 +35,7 @@ import type {
   Settings,
   SettingsPatch,
   VolumeDetail,
+  VolumePatch,
 } from './types'
 
 /** Erreur de l'API : code stable (`page_broken`, `volume_changed`…) et message en français. */
@@ -121,6 +122,8 @@ export const api = {
   /** Toute la série lue (dernière page de chaque tome) ou non lue (progression effacée). */
   markSeries: (seriesId: number, read: boolean) =>
     must<SeriesDetail>(`/series/${seriesId}/read`, { method: read ? 'PUT' : 'DELETE' }),
+  patchVolume: (volumeId: string, patch: VolumePatch) =>
+    must<VolumeDetail>(`/volumes/${volumeId}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   patchSeries: (seriesId: number, patch: SeriesPatch) =>
     must<SeriesDetail>(`/series/${seriesId}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   searchMetadata: (seriesId: number, source: SourceId, q: string, init?: RequestInit) =>

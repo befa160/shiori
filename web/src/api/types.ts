@@ -306,7 +306,23 @@ export interface VolumeDetail {
   issues: Issue[]
   settings: ReadingSettings
   progress: Progress | null
+  metadata: VolumeMetadata
+  /** Champs modifiés à la main (verrouillés). */
+  locked: string[]
 }
+
+export interface VolumeMetadata {
+  title: string | null
+  number: string | null
+  summary: string | null
+  release_date: string | null
+  authors: Author[]
+  /** Page choisie comme couverture du tome ; `null` : sa première page. */
+  cover_page_id: string | null
+}
+
+/** Champs d'un tome modifiables dans l'interface ; `unlock` les rend aux fichiers. */
+export type VolumePatch = Partial<Pick<VolumeMetadata, 'title' | 'cover_page_id'>> & { unlock?: ('title' | 'cover_page_id')[] }
 
 export interface PageInfo {
   id: string

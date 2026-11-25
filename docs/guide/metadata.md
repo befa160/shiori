@@ -37,3 +37,5 @@ Elles sont **désactivées par défaut** (**Administration → Métadonnées web
 ## Couverture
 
 La couverture d'une série est la première page de son premier tome, ou celle que vous choisissez : n'importe quelle page, ou la couverture d'une source (gardée par le serveur). Sans couverture, Shiori en dessine une avec le titre et l'auteur.
+
+Un tome a aussi sa couverture : sa première page, ou celle choisie dans le lecteur (panneau **Affichage**, « Utiliser comme couverture du tome »). Le menu d'un tome (**⋮** sur sa couverture, page série) propose **Modifier** à l'administrateur : son titre, et « Rétablir » pour rendre le titre ou la couverture aux fichiers. Le numéro vient du nom du fichier : renommer le fichier le change au prochain scan.

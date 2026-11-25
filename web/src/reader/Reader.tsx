@@ -8,7 +8,8 @@ import { api } from '@/api/client'
 import { usePages, useSeries, useVolume } from '@/api/queries'
 import type { PageInfo, PageTurn, ReadingMode, SettingsPatch } from '@/api/types'
 import { volumeLabel } from '@/browse/labels'
-import { usePatchSeries } from '@/browse/series'
+import { usePatchSeries, usePatchVolume } from '@/browse/series'
+import { useIsAdmin } from '@/auth/session'
 import { QueryState } from '@/browse/Parts'
 import { Button } from '@/components/ui/button'
 import { Toggle } from '@/components/ui/toggle'
@@ -53,8 +54,10 @@ export interface ReaderProps {
    * erreur au dernier scan est proposé quand même mais signalé (jamais sauté, principe 4). */
   next: { id: string; label: string } | undefined
   onMode: (mode: ReadingMode) => void
-  /** Fait d'une page la couverture de la série ; absent si le tome n'est dans aucune série. */
+  /** Fait d'une page la couverture de la série ; absent hors d'une série ou sans être administrateur. */
   onCover?: (pageId: string) => void
+  /** Fait d'une page la couverture du tome ; absent sans être administrateur. */
+  onVolumeCover?: (pageId: string) => void
   /** Luminosité des pages en pourcentage, retenue par appareil. */
   brightness: number
   onBrightness: (value: number) => void
@@ -80,8 +83,21 @@ function Reader({ volumeId }: { volumeId: string }) {
   const title = [series.data?.name, entry && volumeLabel(entry, t, i18next.language)].filter(Boolean).join(' · ')
   const back = seriesId === null ? '/' : `/series/${seriesId}`
   const cover = usePatchSeries(seriesId ?? 0)
+  const volumeCover = usePatchVolume(volumeId)
+  // Modifier la série ou le tome est réservé à l'administrateur (le serveur refuse sinon).
+  const admin = useIsAdmin()
+  const onVolumeCover = admin
+    ? (pageId: string) =>
+        volumeCover.mutate(
+          { cover_page_id: pageId },
+          {
+            onSuccess: () => toast.success(t('reader.volumeCoverSet')),
+            onError: toastFailure(t('reader.coverNotSet'), t),
+          },
+        )
+    : undefined
   const onCover =
-    seriesId === null
+    seriesId === null || !admin
       ? undefined
       : (pageId: string) =>
           cover.mutate(
@@ -137,7 +153,7 @@ function Reader({ volumeId }: { volumeId: string }) {
         {(list) => {
           // Sans le tome (réglages, progression), on ne sait ni dans quel sens ni où ouvrir.
           if (volume.isPending) return null
-          const common = { volumeId, pages: list, title, back, resume, next, onMode: (m: ReadingMode) => change({ reading_mode: m }), onCover, brightness, onBrightness }
+          const common = { volumeId, pages: list, title, back, resume, next, onMode: (m: ReadingMode) => change({ reading_mode: m }), onCover, onVolumeCover, brightness, onBrightness }
           return mode === 'vertical' ? (
             <VerticalPages {...common} />
           ) : (
@@ -171,6 +187,7 @@ function Pages({
   onPageTurn,
   onMode,
   onCover,
+  onVolumeCover,
   brightness,
   onBrightness,
   title,
@@ -283,7 +300,14 @@ function Pages({
           )
         }
         display={
-          <DisplayOptions mode={direction} onMode={onMode} onCover={onCover && (() => onCover(first.id))} brightness={brightness} onBrightness={onBrightness}>
+          <DisplayOptions
+            mode={direction}
+            onMode={onMode}
+            onCover={onCover && (() => onCover(first.id))}
+            onVolumeCover={onVolumeCover && (() => onVolumeCover(first.id))}
+            brightness={brightness}
+            onBrightness={onBrightness}
+          >
             <Choice
               legend={t('reader.pageTurn')}
               value={pageTurn}

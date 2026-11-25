@@ -56,7 +56,33 @@ test('ComicInfo affiché, champ modifié gardé au rescan et au renommage, puis 
   await dialog.getByRole('button', { name: 'Rendre « Résumé » aux fichiers' }).click()
   await expect(dialog.getByLabel('Résumé', { exact: true })).toHaveValue('Résumé venu du fichier.')
   await page.keyboard.press('Escape')
+  // Fenêtre fermée (focus rendu à « Modifier ») avant d'ouvrir un menu, sinon ce focus le referme.
+  await expect(dialog).toBeHidden()
   await expect(main.getByText('Résumé venu du fichier.')).toBeVisible()
+
+  // Tome (lot 1.2b) : titre modifié depuis son menu, couverture choisie dans le lecteur.
+  await main.getByRole('button', { name: 'Actions pour Tome 1' }).click()
+  await page.getByRole('menuitem', { name: 'Modifier' }).click()
+  dialog = page.getByRole('dialog', { name: /^Modifier « / })
+  await dialog.getByRole('textbox', { name: 'Titre' }).fill('Titre du tome E2E')
+  await dialog.getByRole('button', { name: 'Enregistrer' }).click()
+  await expect(dialog).toBeHidden()
+  const card = main.getByRole('link', { name: /Titre du tome E2E/ })
+  await expect(card).toBeVisible()
+  await card.click()
+  await expect(page).toHaveURL(/\/read\//)
+  // Tome d'une seule page : la couverture choisie est la même image, l'appel au serveur est vérifié.
+  const volume = new URL(page.url()).pathname.split('/').pop()
+  const [{ id: chosen }] = await (await request.get(`/api/volumes/${volume}/pages`)).json()
+  await page.getByRole('img', { name: /^Page 1 sur 1/ }).waitFor()
+  await page.keyboard.press('Tab')
+  await page.getByRole('button', { name: 'Affichage' }).click()
+  await page.getByRole('button', { name: 'Utiliser comme couverture du tome' }).click()
+  await expect(page.getByText('Couverture du tome changée')).toBeVisible()
+  const detail = await (await request.get(`/api/volumes/${volume}`)).json()
+  expect([detail.metadata.cover_page_id, detail.locked]).toEqual([chosen, ['cover_page_id', 'title']])
+  await page.goto(url)
+  await expect(main.getByRole('link', { name: /Titre du tome E2E/ }).locator('img')).toHaveAttribute('src', new RegExp(`/api/pages/${chosen}/`))
 
   expect((await request.delete(`/api/libraries/${library}`)).ok()).toBe(true)
 })

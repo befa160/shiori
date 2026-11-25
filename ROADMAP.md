@@ -46,7 +46,7 @@ Lecteur (luminosité, marque-pages) et édition d'un tome dans l'interface. Troi
 | Lot | Contenu | Taille |
 |---|---|---|
 | 1.2a ✅ | **Luminosité** : curseur dans le panneau Affichage (30 % à 100 %), voile noir au-dessus des pages (pas de `filter` : rien à recalculer par image), retenu par appareil (Q68) ; e2e + captures | S |
-| 1.2b | **Édition d'un tome** : boîte « Modifier » dans le menu d'un tome (page de la série, administrateur) sur le modèle d'`EditSeriesDialog` : titre, résumé, date, auteurs, verrous ; **couverture du tome** par « Utiliser cette page comme couverture du tome » dans le lecteur (`cover_page_id` ajouté aux champs d'un tome, vérifié dans le tome) ; numéro non modifiable (Q69) | S |
+| 1.2b ✅ | **Édition d'un tome** : « Modifier » dans le menu d'un tome (page de la série, administrateur) : titre, verrous et « Rétablir » ; **couverture du tome** par « Utiliser comme couverture du tome » dans le lecteur (`cover_page_id` ajouté aux champs d'un tome, refusé hors du tome) ; boutons de couverture du lecteur réservés à l'administrateur ; numéro non modifiable (Q69). Résumé, date et auteurs d'un tome restent dans l'API seulement : l'interface ne les affiche nulle part | S |
 | 1.2c | **Marque-pages** : table `bookmarks` (compte, tome, page, note ≤ 500 caractères, date), routes `GET/POST /api/volumes/{id}/bookmarks`, `PATCH/DELETE /api/bookmarks/{id}` (session seulement, pas les jetons d'API) ; bouton marque-page dans la barre du lecteur (page affichée, une double page marque sa page de gauche dans le sens de lecture), panneau listant les marque-pages du tome (vignette, numéro, note, aller à, supprimer) ; liste aussi sur la page de la série (Q70) ; hors ligne : lecture seule (Q71) | M |
 
 Chaque lot : documentation FR/EN (usage du lecteur, API), ROADMAP, Ponytail, captures 4 tailles pour l'UI.
@@ -179,3 +179,4 @@ Décisions assumées, chacune marquée `shortcut:` dans le code avec son seuil (
 - 2026-11-25 : rognage des marges blanches retiré de la roadmap (pas d'intérêt pour l'utilisateur) ; la 1.2 se limite à la luminosité, l'édition d'un tome et les marque-pages.
 - 2026-11-25 : plan de la 1.2 validé (Q68 à Q71) : luminosité par appareil, numéro d'un tome non modifiable en 1.2, marque-pages dans le lecteur et sur la page de la série, en lecture seule hors ligne.
 - 2026-11-25 : luminosité du lecteur (1.2a) : voile noir au-dessus des pages, sous les commandes, retenue par appareil.
+- 2026-11-25 : édition d'un tome (1.2b) : titre et couverture seulement (résumé, date et auteurs d'un tome ne sont affichés nulle part) ; les boutons de couverture du lecteur ne s'affichent plus pour un compte lecteur, que le serveur refusait déjà.

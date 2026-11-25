@@ -2,7 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PageInfo, SeriesDetail, VolumeDetail } from '@/api/types'
-import { json, mockApi, renderAt, NO_METADATA } from '@/test/render'
+import { json, mockApi, renderAt, NO_METADATA, NO_VOLUME_METADATA, READER } from '@/test/render'
 
 // Le lecteur est une route `lazy` : chargé à froid (transformé, instrumenté pour la couverture),
 // il dépassait parfois le délai d'attente du premier test sur une machine chargée.
@@ -34,6 +34,7 @@ const volume = (mode: Mode = 'rtl', layout: Layout = 'single'): VolumeDetail => 
   issues: [],
   settings: settings(mode, layout),
   progress: null,
+  ...NO_VOLUME_METADATA,
 })
 const series: SeriesDetail = {
   id: 7,
@@ -522,10 +523,31 @@ describe('progression, réglages de la série, tome suivant', () => {
     expect(document.querySelector('[data-reader]')).not.toBeNull()
     await showControls()
     await userEvent.click(screen.getByRole('button', { name: 'Affichage' }))
-    await userEvent.click(await screen.findByRole('button', { name: 'Utiliser comme couverture' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Utiliser comme couverture de la série' }))
     expect(await screen.findByText('Couverture de la série changée')).toBeInTheDocument()
     const patch = fetch.mock.calls.find(([url, init]) => url === '/api/series/7' && init?.method === 'PATCH')
     expect(JSON.parse(String(patch?.[1]?.body))).toEqual({ cover_page_id: 'p1' })
+  })
+
+  it('fait de la page affichée la couverture du tome, et le dit', async () => {
+    const fetch = serve({}, { [`/api/volumes/${VOLUME}`]: () => json(volume('ltr')) })
+    renderAt(`/read/${VOLUME}?page=p3`)
+    await screen.findByRole('img', { name: 'Page 3 sur 3' })
+    await showControls()
+    await userEvent.click(screen.getByRole('button', { name: 'Affichage' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Utiliser comme couverture du tome' }))
+    expect(await screen.findByText('Couverture du tome changée')).toBeInTheDocument()
+    expect(sent(fetch, 'PATCH')).toEqual([[`/api/volumes/${VOLUME}`, { cover_page_id: 'p3' }]])
+  })
+
+  it('un compte lecteur ne voit pas les boutons de couverture', async () => {
+    serve()
+    renderAt(`/read/${VOLUME}`, { auth: { setup_required: false, user: READER } })
+    await screen.findByRole('img', { name: 'Page 1 sur 3' })
+    await showControls()
+    await userEvent.click(screen.getByRole('button', { name: 'Affichage' }))
+    await screen.findByRole('slider', { name: 'Luminosité' })
+    expect(screen.queryByRole('button', { name: /^Utiliser comme couverture/ })).toBeNull()
   })
 
   it('après la dernière page, les commandes proposent le tome suivant', async () => {

@@ -101,6 +101,7 @@ export function DisplayOptions({
   mode,
   onMode,
   onCover,
+  onVolumeCover,
   brightness,
   onBrightness,
   children,
@@ -109,8 +110,10 @@ export function DisplayOptions({
   onMode: (mode: ReadingMode) => void
   brightness: number
   onBrightness: (value: number) => void
-  /** « Utiliser cette page comme couverture » ; absent hors d'une série. */
+  /** « Utiliser comme couverture de la série » ; absent hors d'une série ou sans être administrateur. */
   onCover?: () => void
+  /** « Utiliser comme couverture du tome » ; absent sans être administrateur. */
+  onVolumeCover?: () => void
   children?: ReactNode
 }) {
   const { t, i18n } = useTranslation()
@@ -153,6 +156,12 @@ export function DisplayOptions({
           <Button variant="secondary" className="h-auto min-h-11 w-full whitespace-normal" onClick={onCover}>
             <ImageIcon aria-hidden />
             {t('reader.setCover')}
+          </Button>
+        )}
+        {onVolumeCover && (
+          <Button variant="secondary" className="h-auto min-h-11 w-full whitespace-normal" onClick={onVolumeCover}>
+            <ImageIcon aria-hidden />
+            {t('reader.setVolumeCover')}
           </Button>
         )}
       </PopoverContent>

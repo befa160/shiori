@@ -184,6 +184,7 @@ fn a_volume_reads_only_its_comic_info() {
             summary: Some("Tome 1".into()),
             release_date: Some("1997-07".into()),
             authors: vec![author("Oda")],
+            cover_page_id: None,
         }
     );
 }
@@ -355,6 +356,29 @@ mod db {
         ));
         let unknown: shiori_core::VolumeId = "0".repeat(64).parse().unwrap();
         assert!(!db.edit_volume(&unknown, patch(json!({}))).await.unwrap());
+
+        // Couverture du tome : une de ses pages, montrée par la liste ; rendue, la page 0 revient.
+        let cover_of = async || {
+            db.series_detail(&crate::tests::viewer(&db).await, id)
+                .await
+                .unwrap()
+                .unwrap()
+                .volumes[0]
+                .cover_page_id
+                .clone()
+        };
+        assert_eq!(cover_of().await.as_deref(), Some(pages[0].id.as_str()));
+        let edit = patch(json!({"cover_page_id": pages[1].id}));
+        assert!(db.edit_volume(&volume, edit).await.unwrap());
+        assert_eq!(cover_of().await.as_deref(), Some(pages[1].id.as_str()));
+        assert!(matches!(
+            db.edit_volume(&volume, patch(json!({"cover_page_id": "0".repeat(32)})))
+                .await,
+            Err(crate::EditError::Invalid(_))
+        ));
+        let edit = patch(json!({"unlock": ["cover_page_id"]}));
+        assert!(db.edit_volume(&volume, edit).await.unwrap());
+        assert_eq!(cover_of().await.as_deref(), Some(pages[0].id.as_str()));
 
         // Le fichier change : nouvelles pages, la couverture choisie disparaît.
         std::fs::remove_file(&file).unwrap();
