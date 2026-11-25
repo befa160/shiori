@@ -41,7 +41,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 webbrowser = { version = "1.2.7", features = ["hardened"] }
 # Surveillance des dossiers (lot 9.1) : inotify, ReadDirectoryChangesW, FSEvents.
-notify = "8.2"
+notify = "9.0"
 shiori-db = { path = "crates/shiori-db" }
 shiori-core = { path = "crates/shiori-core" }
 shiori-meta = { path = "crates/shiori-meta" }
