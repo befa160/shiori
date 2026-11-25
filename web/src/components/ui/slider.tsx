@@ -9,6 +9,7 @@ function Slider({
   min = 0,
   max = 100,
   "aria-label": label,
+  "aria-valuetext": valueText,
   ...props
 }: React.ComponentProps<typeof SliderPrimitive.Root>) {
   const _values = React.useMemo(
@@ -53,6 +54,7 @@ function Slider({
           key={index}
           // Le rôle « slider » est porté par la poignée : c'est elle qui doit avoir le nom accessible.
           aria-label={label}
+          aria-valuetext={valueText}
           // Tablette : poignée de 24 px dans une zone tactile de 44 px (pseudo-élément), focus global ambre.
           className="relative block size-6 shrink-0 rounded-full border-2 border-primary bg-white shadow-sm transition-[color,box-shadow] before:absolute before:-inset-2.5 before:content-[''] disabled:pointer-events-none disabled:opacity-50"
         />

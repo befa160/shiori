@@ -303,6 +303,7 @@ export const en: Translations = {
     mode: 'Reading direction',
     modes: { rtl: 'Manga', ltr: 'Comics', vertical: 'Webtoon' },
     pageTurn: 'Turn pages',
+    brightness: 'Brightness',
     pageTurns: { reading: 'Like the reading direction', ltr: 'Tap right to go forward', rtl: 'Tap left to go forward' },
     nextVolume: 'Next volume',
     nextVolumeBroken: 'Next volume (has errors)',

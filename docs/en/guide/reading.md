@@ -20,6 +20,8 @@ The **Display** panel sets, for the series:
 - the **layout**: single page, double page, or automatic (double in landscape); in single page, a double-page spread is split into two halves read in order;
 - the direction to **turn pages** ("like the reading direction", or tap right / left to go forward), with a general default in the administration and in the account preferences.
 
+It also sets the pages' **brightness** (30 % to 100 %), for reading in the evening: a veil darkens the pages, not the controls. It is kept per device, not for the series or the account: the evening tablet keeps its setting without changing the phone's.
+
 ![Reader Display panel: reading direction, turning pages, layout, spreads](/screens/en/ecran_lecteur_affichage.jpg)
 
 The page you read is saved on the server and follows you from one device to another. At the end of a volume, Shiori offers the next one; if it had errors at the last scan, the button says so ("Next volume (has errors)"), and that volume shows its unreadable pages as errors.

@@ -20,6 +20,8 @@ Le panneau **Affichage** règle, pour la série :
 - la **disposition** : page simple, double page, ou automatique (double en paysage) ; en page simple, une double page est coupée en deux moitiés lues dans l'ordre ;
 - le sens pour **tourner les pages** (« comme le sens de lecture », ou toucher à droite / à gauche pour avancer), avec un défaut général dans l'administration et dans les préférences du compte.
 
+Il règle aussi la **luminosité** des pages (de 30 % à 100 %), pour lire le soir : un voile assombrit les pages, pas les commandes. Elle est retenue par appareil, pas pour la série ni pour le compte : la tablette du soir garde son réglage sans toucher à celui du téléphone.
+
 ![Panneau Affichage du lecteur : sens de lecture, tourner les pages, disposition, doubles pages](/screens/fr/ecran_lecteur_affichage.jpg)
 
 

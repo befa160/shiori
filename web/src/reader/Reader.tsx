@@ -19,6 +19,7 @@ import { useTheme } from '@/lib/theme'
 import { cn } from '@/lib/utils'
 import { NotFound } from '@/pages/NotFound'
 import { type Direction, type Move, keyMove, moveIndex, pageUrl, preloadAhead } from './controls'
+import { useBrightness } from './brightness'
 import { useGestures } from './gestures'
 import { Choice, DisplayOptions, PageSlider, Toolbar } from './Chrome'
 import { useChromeKeys, useSaveProgress, useViewport } from './hooks'
@@ -54,6 +55,9 @@ export interface ReaderProps {
   onMode: (mode: ReadingMode) => void
   /** Fait d'une page la couverture de la série ; absent si le tome n'est dans aucune série. */
   onCover?: (pageId: string) => void
+  /** Luminosité des pages en pourcentage, retenue par appareil. */
+  brightness: number
+  onBrightness: (value: number) => void
 }
 
 /** Lecteur plein écran, hors du cadre commun : il applique lui-même la langue enregistrée. */
@@ -90,6 +94,7 @@ function Reader({ volumeId }: { volumeId: string }) {
   // Choix de la séance par-dessus les réglages du serveur : un échec d'enregistrement ne les
   // annule pas quand le tome est redemandé au serveur.
   const [chosen, setChosen] = useState<SettingsPatch>({})
+  const [brightness, onBrightness] = useBrightness()
   const settings = volume.data && { ...volume.data.settings, ...chosen }
   const progress = volume.data?.progress
   const resume = progress && progress.ordinal < progress.page_count - 1 ? progress.page_id : null
@@ -132,7 +137,7 @@ function Reader({ volumeId }: { volumeId: string }) {
         {(list) => {
           // Sans le tome (réglages, progression), on ne sait ni dans quel sens ni où ouvrir.
           if (volume.isPending) return null
-          const common = { volumeId, pages: list, title, back, resume, next, onMode: (m: ReadingMode) => change({ reading_mode: m }), onCover }
+          const common = { volumeId, pages: list, title, back, resume, next, onMode: (m: ReadingMode) => change({ reading_mode: m }), onCover, brightness, onBrightness }
           return mode === 'vertical' ? (
             <VerticalPages {...common} />
           ) : (
@@ -147,6 +152,11 @@ function Reader({ volumeId }: { volumeId: string }) {
           )
         }}
       </QueryState>
+      {/* Voile au-dessus des pages, sous les commandes (z-20) : un `filter` serait recalculé à
+          chaque image ; le voile ne laisse passer ni clic ni geste. */}
+      {brightness < 100 && (
+        <div aria-hidden className="pointer-events-none fixed inset-0 z-10 bg-black" style={{ opacity: 1 - brightness / 100 }} />
+      )}
     </div>
   )
 }
@@ -161,6 +171,8 @@ function Pages({
   onPageTurn,
   onMode,
   onCover,
+  brightness,
+  onBrightness,
   title,
   back,
   resume,
@@ -271,7 +283,7 @@ function Pages({
           )
         }
         display={
-          <DisplayOptions mode={direction} onMode={onMode} onCover={onCover && (() => onCover(first.id))}>
+          <DisplayOptions mode={direction} onMode={onMode} onCover={onCover && (() => onCover(first.id))} brightness={brightness} onBrightness={onBrightness}>
             <Choice
               legend={t('reader.pageTurn')}
               value={pageTurn}
