@@ -304,6 +304,7 @@ export const fr = {
     mode: 'Sens de lecture',
     modes: { rtl: 'Manga', ltr: 'BD', vertical: 'Webtoon' },
     pageTurn: 'Tourner les pages',
+    brightness: 'Luminosité',
     pageTurns: { reading: 'Comme le sens de lecture', ltr: 'Toucher à droite avance', rtl: 'Toucher à gauche avance' },
     nextVolume: 'Tome suivant',
     nextVolumeBroken: 'Tome suivant (en erreur)',

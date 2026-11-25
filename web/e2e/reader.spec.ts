@@ -262,6 +262,27 @@ test.describe('tablette 8" tactile, en portrait', () => {
     await expect(main).toHaveCSS('touch-action', 'pinch-zoom')
     await expect(live).toHaveText('Page 2 sur 12')
   })
+
+  test('luminosité : un voile sur les pages, que le tap traverse, retenu sur l’appareil', async ({ page }) => {
+    await page.goto(`/read/${all['E2E Manga T01.cbz'].volume_id}`)
+    await checkShown(page, 'E2E Manga T01.cbz')
+    await page.touchscreen.tap(400, 640)
+    await page.getByRole('button', { name: 'Affichage' }).tap()
+    const slider = page.getByRole('slider', { name: 'Luminosité' })
+    await slider.focus()
+    for (let i = 0; i < 4; i++) await slider.press('ArrowLeft')
+    await expect(slider).toHaveAttribute('aria-valuetext', /^80\s%$/)
+    const veil = page.locator('[data-reader] > div[aria-hidden].bg-black')
+    await expect(veil).toHaveCSS('opacity', '0.2')
+    // Commandes au-dessus du voile, donc pas assombries.
+    await expect(page.getByRole('toolbar')).toHaveCSS('z-index', '20')
+    await page.reload()
+    await checkShown(page, 'E2E Manga T01.cbz')
+    await expect(veil).toHaveCSS('opacity', '0.2')
+    // Le voile ne retient pas les gestes : le tiers gauche avance toujours.
+    await page.touchscreen.tap(60, 640)
+    await expect(page.locator('p.sr-only[aria-live]')).toHaveText('Page 2 sur 12')
+  })
 })
 
 test.describe('à la souris', () => {

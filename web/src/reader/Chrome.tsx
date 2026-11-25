@@ -1,6 +1,6 @@
 // Composants que les deux modes du lecteur (paginé, vertical) partagent : barre de commandes et
 // curseur de pages. Leurs crochets (taille de l'écran, touches) sont dans `hooks.ts`.
-import { ChevronLeft, Columns2, ImageIcon } from 'lucide-react'
+import { ChevronLeft, Columns2, ImageIcon, Sun } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
@@ -10,6 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Slider } from '@/components/ui/slider'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
+import { MIN_BRIGHTNESS } from './brightness'
 
 /** Barre de commandes : retour, titre et réglages en haut ; `children` en bas. */
 export function Toolbar({
@@ -33,7 +34,7 @@ export function Toolbar({
     <div
       role="toolbar"
       aria-label={t('reader.controls')}
-      className={cn('pointer-events-none fixed inset-0 flex flex-col justify-between', !chrome && 'invisible')}
+      className={cn('pointer-events-none fixed inset-0 z-20 flex flex-col justify-between', !chrome && 'invisible')}
     >
       {/* Marges de 8 px sur les côtés, 4 px en haut et en bas (l'anneau de focus reste à l'écran),
           ou la zone sûre si elle est plus grande (encoche, coins arrondis). */}
@@ -100,15 +101,20 @@ export function DisplayOptions({
   mode,
   onMode,
   onCover,
+  brightness,
+  onBrightness,
   children,
 }: {
   mode: ReadingMode
   onMode: (mode: ReadingMode) => void
+  brightness: number
+  onBrightness: (value: number) => void
   /** « Utiliser cette page comme couverture » ; absent hors d'une série. */
   onCover?: () => void
   children?: ReactNode
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const percent = new Intl.NumberFormat(i18n.language, { style: 'percent' }).format(brightness / 100)
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -125,6 +131,24 @@ export function DisplayOptions({
           onChange={onMode}
         />
         {children}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <Sun aria-hidden className="size-4" />
+              {t('reader.brightness')}
+            </span>
+            <span className="tabular-nums">{percent}</span>
+          </div>
+          <Slider
+            aria-label={t('reader.brightness')}
+            aria-valuetext={percent}
+            min={MIN_BRIGHTNESS}
+            max={100}
+            step={5}
+            value={[brightness]}
+            onValueChange={([v]) => onBrightness(v)}
+          />
+        </div>
         {onCover && (
           <Button variant="secondary" className="h-auto min-h-11 w-full whitespace-normal" onClick={onCover}>
             <ImageIcon aria-hidden />

@@ -328,6 +328,28 @@ describe('panneau Affichage ouvert', () => {
     fireEvent.pointerUp(main(), { pointerType: 'touch', pointerId: 9, clientX: 850, clientY: 300 })
     expect(img()).toHaveAccessibleName('Page 1 sur 3')
   })
+
+  it('la luminosité assombrit les pages, pas les commandes, et reste sur l’appareil', async () => {
+    localStorage.setItem('shiori.brightness', '20')
+    api('ltr', [page(1), page(2), page(3)], 'single')
+    renderAt(`/read/${VOLUME}`)
+    await screen.findByRole('img', { name: 'Page 1 sur 3' })
+    const veil = () => document.querySelector<HTMLElement>('[data-reader] > [aria-hidden].bg-black')
+    // Valeur gardée sous le minimum : ramenée à 30 %.
+    expect(veil()?.style.opacity).toBe('0.7')
+    expect(veil()).toHaveClass('pointer-events-none', 'z-10')
+    expect(screen.getByRole('toolbar', { hidden: true })).toHaveClass('z-20')
+    await showControls()
+    await userEvent.click(screen.getByRole('button', { name: 'Affichage' }))
+    const slider = await screen.findByRole('slider', { name: 'Luminosité' })
+    expect(slider).toHaveAttribute('aria-valuetext', expect.stringMatching(/^30\s%$/))
+    fireEvent.keyDown(slider, { key: 'End' })
+    expect(slider).toHaveAttribute('aria-valuetext', expect.stringMatching(/^100\s%$/))
+    expect(veil()).toBeNull()
+    fireEvent.keyDown(slider, { key: 'ArrowLeft' })
+    expect(veil()?.style.opacity).toBe('0.05')
+    expect(localStorage.getItem('shiori.brightness')).toBe('95')
+  })
 })
 
 describe('progression, réglages de la série, tome suivant', () => {
