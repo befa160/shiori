@@ -50,7 +50,7 @@ thiserror = "2.0"
 # Double authentification (lot 7.5) : TOTP RFC 6238, et le QR de l'enrôlement en SVG (sans image).
 totp-rs = { version = "6.0", default-features = false, features = ["std", "otpauth"] }
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }
-rars = { version = "0.12", default-features = false }
+rars = { version = "0.13", default-features = false }
 # PDF (phase 8) : analyse paresseuse et interprétation des pages, pur Rust. Les 14 polices
 # standard embarquées (300 Kio) font produire des glyphes au texte en Helvetica non inclus :
 # sans elles, ce texte visible échapperait au diagnostic `pdf_text_ignored`.
