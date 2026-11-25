@@ -30,9 +30,33 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 
 ---
 
-## Prochaine phase (❓ à décider)
+## Prochaine phase : 1.2 (🚧 plan validé le 2026-11-25)
 
-La 1.1 est terminée : statistiques de lecture (#133, #134) ; l'essai de l'application Android est abandonné (no-go le 2026-11-23, constats dans l'historique), le split DNS reste la façon de passer de l'adresse locale à l'adresse publique. Version `1.1.0` ; prochaine étape proposée : le plan de la 1.2 (lecteur : luminosité, rognage des marges, marque-pages, édition d'un tome).
+Lecteur (luminosité, marque-pages) et édition d'un tome dans l'interface. Trois lots, une PR chacun, dans cet ordre (du plus petit au plus gros).
+
+### Ce qui existe
+
+- `PATCH /api/volumes/{id}` (administrateur) : titre, résumé, date de sortie, auteurs, avec verrouillage par champ (`volume_edits`) ; aucune interface ne l'appelle.
+- Couverture d'un tome = sa page d'ordre 0 ; numéro = celui lu dans le nom du fichier (`file_locations.number`, tri des tomes).
+- Panneau Affichage du lecteur (`DisplayOptions`, `Chrome.tsx`) : sens, disposition, sens du tap, « Utiliser cette page comme couverture » (de la série).
+- La progression est liée au tome (hash du fichier) et à la page (ID stable) : un fichier modifié repart de zéro ; les marque-pages suivront la même règle.
+
+### Lots
+
+| Lot | Contenu | Taille |
+|---|---|---|
+| 1.2a | **Luminosité** : curseur dans le panneau Affichage (30 % à 100 %), voile noir au-dessus des pages (pas de `filter` : rien à recalculer par image), retenu par appareil (Q68) ; e2e + captures | S |
+| 1.2b | **Édition d'un tome** : boîte « Modifier » dans le menu d'un tome (page de la série, administrateur) sur le modèle d'`EditSeriesDialog` : titre, résumé, date, auteurs, verrous ; **couverture du tome** par « Utiliser cette page comme couverture du tome » dans le lecteur (`cover_page_id` ajouté aux champs d'un tome, vérifié dans le tome) ; numéro non modifiable (Q69) | S |
+| 1.2c | **Marque-pages** : table `bookmarks` (compte, tome, page, note ≤ 500 caractères, date), routes `GET/POST /api/volumes/{id}/bookmarks`, `PATCH/DELETE /api/bookmarks/{id}` (session seulement, pas les jetons d'API) ; bouton marque-page dans la barre du lecteur (page affichée, une double page marque sa page de gauche dans le sens de lecture), panneau listant les marque-pages du tome (vignette, numéro, note, aller à, supprimer) ; liste aussi sur la page de la série (Q70) ; hors ligne : lecture seule (Q71) | M |
+
+Chaque lot : documentation FR/EN (usage du lecteur, API), ROADMAP, Ponytail, captures 4 tailles pour l'UI.
+
+### Questions (propositions retenues)
+
+- **Q68** Luminosité retenue **par appareil** (stockage local) plutôt que par compte : le soir sur la Tab A9 n'est pas le jour sur l'A55. Proposition : par appareil.
+- **Q69** Numéro d'un tome modifiable ? Il vient du nom du fichier et ordonne les tomes ; le surcharger touche le tri partout (requêtes de séries, « tome suivant »). Proposition : **non** en 1.2 (renommer le fichier suffit, le scan suit), noté au backlog.
+- **Q70** Marque-pages visibles aussi hors du lecteur ? Proposition : panneau dans le lecteur, plus une section repliable « Marque-pages » sur la page de la série quand il y en a ; pas de page globale.
+- **Q71** Hors ligne : créer un marque-page sans réseau demanderait une file d'attente comme la progression. Proposition : lecture seule hors ligne (bouton désactivé avec explication) ; la file viendra si le besoin apparaît.
 
 ## Planning après la V1
 
@@ -41,7 +65,7 @@ Le backlog ci-dessous, rangé par version (S : une PR, M : 2 ou 3 PR, L : une ph
 | Version | Contenu | Taille |
 |---|---|---|
 | 1.1 ✅ | Statistiques de lecture (application Android abandonnée après essai) | M |
-| 1.2 | Lecteur : luminosité, rognage des marges blanches (calculé côté serveur, principe 3), marque-pages ; édition d'un tome dans l'interface | S + M + M + S |
+| 1.2 | Lecteur : luminosité, marque-pages ; édition d'un tome dans l'interface | S + S + M |
 | 1.3 | Nouveautés suivies ; listes « À lire » par compte, puis collections partagées et relations entre séries | M + S + M |
 | 1.4 | Liens d'invitation ; sources MangaUpdates et Comic Vine ; actualisation périodique des fiches | M + M + S |
 | 1.5 | En-tête `Remote-User` (pour les autres installations, inutile ici) | S |
@@ -61,10 +85,12 @@ Regroupe tout ce qui a été noté « plus tard » pendant les phases 1 à 11 (l
 - **Listes** : « À lire » par compte, collections partagées choisies par l'administrateur, relations entre séries (suite, édition, spin-off).
 - **Nouveautés suivies** : marquer une série comme suivie et voir à l'accueil les tomes ajoutés depuis la dernière visite.
 - **Marque-pages** dans un tome (plusieurs par tome, avec une note), en plus de la progression.
-- **Réglages d'image du lecteur** : luminosité (lecture le soir sur l'écran LCD de la Tab A9), rognage des marges blanches d'un scan.
-- **Édition d'un tome** dans l'interface (titre, numéro, couverture) : l'API existe.
+- **Réglages d'image du lecteur** : luminosité (lecture le soir sur l'écran LCD de la Tab A9).
+- **Édition d'un tome** dans l'interface (titre, couverture) : prévue en 1.2.
+- **Numéro d'un tome modifiable** (aujourd'hui tiré du nom du fichier, qui ordonne les tomes) : écarté de la 1.2 (Q69), renommer le fichier suffit.
 - **Pagination de la liste des séries**, quand une bibliothèque dépasse quelques milliers de séries (voir les limites connues).
 - Non retenu : EPUB (Shiori lit des images ; le PDF l'est depuis la phase 8).
+- Non retenu : rognage des marges blanches (2026-11-25).
 
 ### Accès et comptes
 
@@ -149,3 +175,5 @@ Décisions assumées, chacune marquée `shortcut:` dans le code avec son seuil (
 - 2026-11-23 : plan de la 1.1 validé (Q58 à Q67) : statistiques personnelles dans le fuseau de l'appareil ; application Android en relais avec cache disque, Wi-Fi nommé pour l'adresse locale, APK par GitHub et Obtainium.
 - 2026-11-23 : essai de l'application Android abandonné (PR #135 fermée) : la WebView d'Android perd le corps des POST et PUT interceptés et refuse les 3xx ; retour au split DNS. La 1.1 se limite aux statistiques.
 - 2026-11-23 : version `v1.1.0` (statistiques de lecture).
+- 2026-11-25 : rognage des marges blanches retiré de la roadmap (pas d'intérêt pour l'utilisateur) ; la 1.2 se limite à la luminosité, l'édition d'un tome et les marque-pages.
+- 2026-11-25 : plan de la 1.2 validé (Q68 à Q71) : luminosité par appareil, numéro d'un tome non modifiable en 1.2, marque-pages dans le lecteur et sur la page de la série, en lecture seule hors ligne.
