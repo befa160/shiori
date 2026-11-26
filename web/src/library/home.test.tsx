@@ -1,7 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ContinueItem, Library, SeriesSummary, SeriesVolume } from '@/api/types'
+import type { ContinueItem, Library, NewVolume, SeriesSummary, SeriesVolume } from '@/api/types'
 import { json, mockApi, renderAt } from '@/test/render'
 import { titleHue } from './titleHue'
 
@@ -108,6 +108,37 @@ describe('accueil', () => {
     expect(img).toHaveAttribute('loading', 'lazy')
     fireEvent.error(img)
     expect(within(card).getByTestId('fallback-cover')).toHaveTextContent('Récente')
+  })
+
+  it('montre en tête les nouveautés des séries suivies, jusqu’à « Tout marquer comme vu »', async () => {
+    const added: NewVolume[] = [{ series_id: 8, series_name: 'Récente', library_id: 1, added_at: '2026-11-26T09:00:00.000Z', volume: { ...volume, volume_id: 'v4', number: 4 } }]
+    let items = added
+    const fetch = mockApi({
+      ...api(),
+      '/api/me/new': () => json(items),
+      '/api/me/new/seen': () => {
+        items = []
+        return new Response(null, { status: 204 })
+      },
+    })
+    renderAt('/')
+    const section = await screen.findByRole('region', { name: 'Nouveautés' })
+    const regions = screen.getAllByRole('region')
+    expect(regions[0]).toBe(section)
+    const card = within(section).getByRole('link', { name: /Récente/ })
+    expect(card).toHaveAttribute('href', '/read/v4')
+    expect(card).toHaveTextContent('Tome 4')
+    expect(card).toHaveTextContent('Nouveau')
+    await userEvent.click(within(section).getByRole('button', { name: 'Tout marquer comme vu' }))
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Nouveautés' })).toBeNull())
+    expect(fetch.mock.calls.some(([url, init]) => url === '/api/me/new/seen' && init?.method === 'POST')).toBe(true)
+  })
+
+  it('sans nouveauté, pas de section', async () => {
+    mockApi(api())
+    renderAt('/')
+    await screen.findByRole('region', { name: 'Continuer la lecture' })
+    expect(screen.queryByRole('region', { name: 'Nouveautés' })).toBeNull()
   })
 
   it('explique quoi faire sans bibliothèque', async () => {

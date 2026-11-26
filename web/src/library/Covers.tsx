@@ -3,7 +3,7 @@ import { type ReactNode, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { type Width, coverImageUrl, pageImageUrl } from '@/api/client'
-import type { ContinueItem, SeriesSummary } from '@/api/types'
+import type { ContinueItem, NewVolume, SeriesSummary } from '@/api/types'
 import { volumeLabel } from '@/browse/labels'
 import { cn } from '@/lib/utils'
 import { titleHue } from './titleHue'
@@ -214,6 +214,23 @@ export function SeriesCard({ series, eager }: { series: SeriesSummary; eager?: b
 }
 
 /** Une entrée de « Continuer la lecture » : le tome en cours (avec sa page) ou le suivant. */
+/** Tome nouveau d'une série suivie : il ouvre le tome. */
+export function NewCard({ item, eager }: { item: NewVolume; eager?: boolean }) {
+  const { t, i18n } = useTranslation()
+  const { volume } = item
+  return (
+    <CoverCard
+      to={`/read/${volume.volume_id}`}
+      title={item.series_name}
+      subtitle={volumeLabel(volume, t, i18n.language)}
+      coverPageId={volume.cover_page_id}
+      progress={null}
+      badges={[{ text: t('home.newBadge') }]}
+      eager={eager}
+    />
+  )
+}
+
 export function ContinueCard({ item, eager }: { item: ContinueItem; eager?: boolean }) {
   const { t, i18n } = useTranslation()
   const { volume } = item

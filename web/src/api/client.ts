@@ -6,6 +6,7 @@ import type {
   ApiToken,
   AuthState,
   ContinueItem,
+  NewVolume,
   Device,
   Enrollment,
   LoginResult,
@@ -87,6 +88,9 @@ export const api = {
   librarySeries: (id: number, init?: RequestInit) => must<SeriesSummary[]>(`/libraries/${id}/series`, init),
   allSeries: (init?: RequestInit) => must<SeriesSummary[]>('/series', init),
   continueReading: (init?: RequestInit) => must<ContinueItem[]>('/continue', init),
+  newVolumes: (init?: RequestInit) => must<NewVolume[]>('/me/new', init),
+  markNewSeen: () => request<null>('/me/new/seen', { method: 'POST' }),
+  follow: (seriesId: number, on: boolean) => request<null>(`/series/${seriesId}/follow`, { method: on ? 'PUT' : 'DELETE' }),
   /** Statistiques du compte sur `days` jours, « aujourd'hui » étant celui de l'appareil. */
   readingStats: (days: number, init?: RequestInit) =>
     must<ReadingStats>(`/me/stats?days=${days}&utc_offset=${-new Date().getTimezoneOffset()}`, init),

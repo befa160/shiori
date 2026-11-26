@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Download, EllipsisVertical, Pencil, Play, ScanSearch } from 'lucide-react'
+import { Bell, BellRing, Download, EllipsisVertical, Pencil, Play, ScanSearch } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation } from 'react-router'
+import { toast } from 'sonner'
 import { api } from '@/api/client'
 import { useLibraries, useSeries, useVolume } from '@/api/queries'
 import type { SeriesDetail, SeriesVolume } from '@/api/types'
@@ -125,6 +126,7 @@ function SeriesHeader({ series }: { series: SeriesDetail }) {
               </Link>
             </Button>
           )}
+          <FollowButton series={series} />
           {admin && (
             <Button size="lg" variant="secondary" onClick={() => setEditing(true)}>
               <Pencil aria-hidden />
@@ -163,6 +165,34 @@ function SeriesHeader({ series }: { series: SeriesDetail }) {
         </Dialog>
       </div>
     </div>
+  )
+}
+
+/** « Suivre » (1.3) : bouton à bascule, libellé fixe ; l'état se lit à l'icône et à `aria-pressed`. */
+function FollowButton({ series }: { series: SeriesDetail }) {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const follow = useMutation({
+    mutationFn: (on: boolean) => api.follow(series.id, on),
+    onSuccess: (_, on) => {
+      queryClient.setQueryData<SeriesDetail>(['series', series.id], (old) => old && { ...old, followed: on })
+      void queryClient.invalidateQueries({ queryKey: ['new'] })
+      toast.success(t(on ? 'series.followed' : 'series.unfollowed'))
+    },
+    onError: toastFailure(t('series.followFailed'), t),
+  })
+  const Icon = series.followed ? BellRing : Bell
+  return (
+    <Button
+      size="lg"
+      variant="secondary"
+      aria-pressed={series.followed}
+      disabled={follow.isPending}
+      onClick={() => follow.mutate(!series.followed)}
+    >
+      <Icon aria-hidden className={series.followed ? 'text-primary' : undefined} />
+      {t('series.follow')}
+    </Button>
   )
 }
 

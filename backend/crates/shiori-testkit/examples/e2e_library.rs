@@ -118,6 +118,16 @@ fn main() {
     ];
     write_zip(&meta, "E2E Meta T01.cbz", &files);
 
+    // Nouveautés (1.3) : une série d'un tome, hors des bibliothèques du setup, et son tome 2 à
+    // part (`follow-later`), que `follows.spec.ts` y dépose après l'avoir suivie.
+    for (dir, volume, hue) in [("follow/E2E Suivie", 1, 3), ("follow-later", 2, 5)] {
+        let dir = root.join(dir);
+        fs::create_dir_all(&dir).unwrap();
+        let cover = png(600, 900, color(hue));
+        let files = [("001.png", cover.as_slice(), DEFLATED)];
+        write_zip(&dir, &format!("E2E Suivie T{volume:02}.cbz"), &files);
+    }
+
     let mut json = String::from("{");
     for (k, (name, count)) in manifest.iter().enumerate() {
         let colors: Vec<String> = (0..*count).map(|i| format!("{:?}", color(i))).collect();

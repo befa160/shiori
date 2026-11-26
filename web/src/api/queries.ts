@@ -17,6 +17,10 @@ export const useAllSeries = () =>
 export const useContinue = () =>
   useQuery({ queryKey: ['continue'], queryFn: ({ signal }) => api.continueReading({ signal }), staleTime: 0 })
 
+// Comme « Continuer la lecture » : un tome ouvert ailleurs en sort dès le retour à l'accueil.
+export const useNewVolumes = () =>
+  useQuery({ queryKey: ['new'], queryFn: ({ signal }) => api.newVolumes({ signal }), staleTime: 0 })
+
 export const useSeries = (id: number | null) =>
   useQuery({
     queryKey: ['series', id],

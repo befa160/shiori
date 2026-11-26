@@ -20,6 +20,7 @@ const detail: SeriesDetail = {
   metadata: NO_METADATA,
   locked: [],
   sources: [],
+  followed: false,
   resume_volume_id: null,
   page_count: 4,
   pages_read: 0,
@@ -47,7 +48,7 @@ function serve({ hold = false } = {}) {
       if (url.endsWith('/pages')) return json(pages)
       if (url === '/api/settings') return json({ language: 'fr', theme: 'dark' })
       if (url === '/api/me') return json(me(ADMIN))
-      if (['/api/libraries', '/api/series', '/api/continue', '/api/series/7/bookmarks'].includes(url)) return json([])
+      if (['/api/libraries', '/api/series', '/api/continue', '/api/me/new', '/api/series/7/bookmarks'].includes(url)) return json([])
       if (url === '/api/admin/scans/current') return new Response(null, { status: 204 })
       return json({ id: url })
     }),

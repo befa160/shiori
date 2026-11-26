@@ -4,7 +4,7 @@ import type { SeriesDetail, SeriesPatch, VolumePatch } from '@/api/types'
 
 // Listes qui montrent le titre, la couverture, la progression ou le statut d'une série :
 // redemandées après un changement.
-export const LISTS = [['series'], ['libraries'], ['continue']]
+export const LISTS = [['series'], ['libraries'], ['continue'], ['new']]
 
 /** Action sur une série qui renvoie son détail : il remplace le cache, les listes sont redemandées. */
 export function useSeriesAction<T>(id: number, action: (input: T) => Promise<SeriesDetail>) {
