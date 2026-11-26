@@ -53,6 +53,45 @@ pub(super) async fn continue_reading(
     Ok(Json(app.db.continue_reading(&me, limit).await?))
 }
 
+/// Nouveautés des séries suivies (1.3a), voir [`shiori_db::Db::new_volumes`].
+pub(super) async fn new_volumes(
+    State(app): State<Arc<App>>,
+    Me(me): Me,
+) -> ApiResult<Vec<shiori_db::NewVolume>> {
+    Ok(Json(app.db.new_volumes(&me).await?))
+}
+
+/// « Tout marquer comme vu ».
+pub(super) async fn mark_new_seen(
+    State(app): State<Arc<App>>,
+    Me(me): Me,
+) -> Result<StatusCode, ApiError> {
+    app.db.mark_new_seen(&me).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub(super) async fn follow(
+    State(app): State<Arc<App>>,
+    Me(me): Me,
+    Path(id): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    match app.db.follow(&me, int_id(&id)?).await? {
+        true => Ok(StatusCode::NO_CONTENT),
+        false => Err(ApiError::not_found("série")),
+    }
+}
+
+pub(super) async fn unfollow(
+    State(app): State<Arc<App>>,
+    Me(me): Me,
+    Path(id): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    match app.db.unfollow(&me, int_id(&id)?).await? {
+        true => Ok(StatusCode::NO_CONTENT),
+        false => Err(ApiError::not_found("série")),
+    }
+}
+
 impl From<EditError> for ApiError {
     fn from(e: EditError) -> Self {
         match e {

@@ -24,6 +24,21 @@ pub struct Viewer {
 
 /// Condition SQL : la bibliothèque `$col` est visible du compte (`$admin` : est-il
 /// administrateur, `$user` : son id ; des paramètres numérotés, comme `"?3"`).
+/// Avant d'effacer la progression du compte `?1` (filtre sur `volume_id`) : garde la trace des
+/// tomes datés déjà ouverts, qui ne redeviennent pas nouveaux (1.3a). Requête à part : les
+/// paramètres ne sont pas partagés entre deux instructions d'une même requête.
+macro_rules! keep_opened {
+    ($filter:literal) => {
+        concat!(
+            "INSERT OR IGNORE INTO volumes_opened (user_id, volume_id)
+             SELECT r.user_id, r.volume_id FROM reading_progress r
+             JOIN volumes v ON v.id = r.volume_id AND v.added_at IS NOT NULL
+             WHERE r.user_id = ?1 AND r.",
+            $filter
+        )
+    };
+}
+
 macro_rules! visible {
     ($col:literal, $admin:literal, $user:literal) => {
         concat!(
@@ -453,11 +468,16 @@ impl Db {
 
     /// « Marquer comme non lu ». `false` si le tome n'existe pas.
     pub async fn clear_progress(&self, viewer: &Viewer, volume: &VolumeId) -> Result<bool, Error> {
-        sqlx::query("DELETE FROM reading_progress WHERE user_id = ? AND volume_id = ?")
-            .bind(viewer.user)
-            .bind(volume.to_string())
-            .execute(&self.pool)
-            .await?;
+        for sql in [
+            keep_opened!("volume_id = ?2"),
+            "DELETE FROM reading_progress WHERE user_id = ?1 AND volume_id = ?2",
+        ] {
+            sqlx::query(sql)
+                .bind(viewer.user)
+                .bind(volume.to_string())
+                .execute(&self.pool)
+                .await?;
+        }
         self.volume_visible(viewer, volume).await
     }
 
@@ -465,8 +485,8 @@ impl Db {
     /// première date) ou « non lue » (progression effacée), pour ce compte. La série doit lui être
     /// visible (vérifié par l'appelant).
     pub async fn mark_series(&self, viewer: &Viewer, series: i64, read: bool) -> Result<(), Error> {
-        let sql = if read {
-            concat!(
+        let sql: &[&'static str] = if read {
+            &[concat!(
                 "INSERT INTO reading_progress
                    (user_id, volume_id, page_id, ordinal, finished_at, updated_at)
                  SELECT ?1, p.volume_id, p.id, p.ordinal, ",
@@ -479,16 +499,23 @@ impl Db {
                  ON CONFLICT (user_id, volume_id) DO UPDATE SET page_id = excluded.page_id,
                    ordinal = excluded.ordinal, updated_at = excluded.updated_at,
                    finished_at = COALESCE(reading_progress.finished_at, excluded.finished_at)"
-            )
+            )]
         } else {
-            "DELETE FROM reading_progress WHERE user_id = ?1
-               AND volume_id IN (SELECT volume_id FROM file_locations WHERE series_id = ?2)"
+            &[
+                keep_opened!(
+                    "volume_id IN (SELECT volume_id FROM file_locations WHERE series_id = ?2)"
+                ),
+                "DELETE FROM reading_progress WHERE user_id = ?1
+                   AND volume_id IN (SELECT volume_id FROM file_locations WHERE series_id = ?2)",
+            ]
         };
-        sqlx::query(sql)
-            .bind(viewer.user)
-            .bind(series)
-            .execute(&self.pool)
-            .await?;
+        for &sql in sql {
+            sqlx::query(sql)
+                .bind(viewer.user)
+                .bind(series)
+                .execute(&self.pool)
+                .await?;
+        }
         Ok(())
     }
 
