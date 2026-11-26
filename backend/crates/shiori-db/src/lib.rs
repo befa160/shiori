@@ -43,6 +43,7 @@ mod reading;
 mod runs;
 mod settings;
 mod stats;
+mod to_read;
 mod tokens;
 mod totp;
 mod web;

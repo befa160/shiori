@@ -66,8 +66,9 @@ use scans::{
     cancel_scan, current_scan, files_to_repair, health_summary, scan, scan_logs, scans, start_scan,
 };
 use series::{
-    all_series, continue_reading, follow, mark_new_seen, mark_series_read, mark_series_unread,
-    new_volumes, patch_series, series, series_settings, unfollow,
+    add_to_read, all_series, continue_reading, follow, mark_new_seen, mark_series_read,
+    mark_series_unread, new_volumes, patch_series, remove_to_read, series, series_settings,
+    unfollow,
 };
 use settings::{save_settings, settings};
 use volumes::{
@@ -412,6 +413,10 @@ pub fn router(app: Arc<App>, hosts: Option<Vec<String>>) -> Router {
             put(mark_series_read).delete(mark_series_unread),
         )
         .route("/api/series/{id}/follow", put(follow).delete(unfollow))
+        .route(
+            "/api/series/{id}/to-read",
+            put(add_to_read).delete(remove_to_read),
+        )
         .route("/api/series/{id}/metadata/search", get(search_metadata))
         .route(
             "/api/series/{id}/metadata/links/{source}",

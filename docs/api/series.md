@@ -12,7 +12,7 @@ Toutes les séries visibles, triées par nom (tri naturel). `?library_id=` restr
   "alt_titles": ["ワンピース"], "authors": ["Eiichiro Oda"], "tags": ["Aventure", "Shōnen"],
   "volume_count": 3, "read_count": 1, "page_count": 612, "pages_read": 250,
   "reading_status": "in_progress", "publication_status": "ongoing",
-  "created_at": "…", "last_read_at": "…",
+  "created_at": "…", "last_read_at": "…", "to_read_at": null,
   "cover_page_id": "3f9c…", "cover_image_id": null, "resume_volume_id": "a41b…"
 }]
 ```
@@ -24,6 +24,7 @@ Toutes les séries visibles, triées par nom (tri naturel). `?library_id=` restr
 | `publication_status` | `ongoing`, `completed`, `hiatus`, `cancelled`, ou `null` |
 | `cover_page_id` / `cover_image_id` | page de couverture ([image](/api/volumes#get-api-pages-id-image)), ou couverture d'une source ([`/api/covers/{id}`](/api/volumes#get-api-covers-id)), qui l'emporte |
 | `resume_volume_id` | tome qu'ouvre « Lire » : la suite, sinon le premier non lu, sinon le premier |
+| `to_read_at` | date de mise dans « À lire » par le compte ([`PUT …/to-read`](#put-api-series-id-to-read)), `null` sinon ; l'accueil trie la liste sur cette date |
 
 ### `GET /api/continue`
 
@@ -60,7 +61,7 @@ Nouveautés des séries suivies par le compte : les tomes ajoutés depuis le sui
   "sources": [],
   "publication_status": "ongoing",
   "settings": { "reading_mode": "rtl", "page_layout": "auto", "page_turn": "reading", "reading_mode_override": null, "page_layout_override": null, "page_turn_override": null },
-  "followed": false, "resume_volume_id": "a41b…", "page_count": 612, "pages_read": 250,
+  "followed": false, "to_read": false, "resume_volume_id": "a41b…", "page_count": 612, "pages_read": 250,
   "volumes": [{ "volume_id": "a41b…", "kind": "volume", "number": 1, "number_end": null, "status": "ok", "page_count": 204, "cover_page_id": "…", "file_name": "One Piece T01.cbz", "title": "Romance Dawn", "progress": { "…": "…" } }]
 }
 ```
@@ -70,6 +71,7 @@ Nouveautés des séries suivies par le compte : les tomes ajoutés depuis le sui
 - `sources` : état des sources web ([métadonnées](/api/metadata)).
 - `settings` : réglages de lecture appliqués pour le compte ; `*_override` : ce que la série impose (`null` : défaut de la bibliothèque, ou défaut global pour `page_turn`).
 - `followed` : série suivie par le compte ([nouveautés](#get-api-me-new)).
+- `to_read` : série dans « À lire » pour le compte.
 - `volumes` : dans l'ordre de lecture ; `kind` : `volume`, `chapter`, `special`, `unknown` ; `progress` absent si le tome n'a jamais été ouvert.
 
 ### `PATCH /api/series/{id}` <Badge text="admin" />
@@ -107,3 +109,11 @@ Suit la série pour le compte : ses tomes ajoutés ensuite apparaissent dans les
 ### `DELETE /api/series/{id}/follow`
 
 Ne suit plus la série. **Réponse 204.** **Erreur** : 404 `not_found`.
+
+### `PUT /api/series/{id}/to-read`
+
+Met la série dans « À lire », pour le compte ; déjà dedans, la date d'ajout ne change pas. Elle en sort d'elle-même dès qu'une de ses pages est lue, ou qu'elle est marquée lue. **Réponse 204.** **Erreur** : 404 `not_found`.
+
+### `DELETE /api/series/{id}/to-read`
+
+Retire la série de « À lire ». **Réponse 204.** **Erreur** : 404 `not_found`.

@@ -21,6 +21,7 @@ const detail: SeriesDetail = {
   locked: [],
   sources: [],
   followed: false,
+  to_read: false,
   resume_volume_id: null,
   page_count: 4,
   pages_read: 0,

@@ -19,7 +19,7 @@ const base = {
   reading_status: 'unread',
   publication_status: null,
   created_at: '2026-01-01T00:00:00.000Z',
-  last_read_at: null,
+  last_read_at: null, to_read_at: null,
   cover_page_id: null,
   resume_volume_id: null,
   cover_image_id: null,

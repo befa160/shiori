@@ -17,6 +17,7 @@ const base: SeriesDetail = {
   locked: [],
   sources: [],
   followed: false,
+  to_read: false,
   resume_volume_id: null,
   page_count: 0,
   pages_read: 0,

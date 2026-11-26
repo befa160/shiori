@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Bell, BellRing, Download, EllipsisVertical, Pencil, Play, ScanSearch } from 'lucide-react'
+import { Bell, BellRing, BookmarkCheck, BookmarkPlus, Download, EllipsisVertical, Pencil, Play, ScanSearch, type LucideIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation } from 'react-router'
@@ -126,7 +126,27 @@ function SeriesHeader({ series }: { series: SeriesDetail }) {
               </Link>
             </Button>
           )}
-          <FollowButton series={series} />
+          <SeriesToggle
+            series={series}
+            field="followed"
+            label={t('series.follow')}
+            icons={[Bell, BellRing]}
+            send={api.follow}
+            messages={[t('series.followed'), t('series.unfollowed'), t('series.followFailed')]}
+            refresh={['new']}
+          />
+          {/* Une série commencée quitte « À lire » (Q74) : on ne propose pas de l'y mettre. */}
+          {(series.to_read || !series.volumes.some((v) => v.progress)) && (
+            <SeriesToggle
+              series={series}
+              field="to_read"
+              label={t('series.toRead')}
+              icons={[BookmarkPlus, BookmarkCheck]}
+              send={api.toRead}
+              messages={[t('series.toReadAdded'), t('series.toReadRemoved'), t('series.toReadFailed')]}
+              refresh={['series']}
+            />
+          )}
           {admin && (
             <Button size="lg" variant="secondary" onClick={() => setEditing(true)}>
               <Pencil aria-hidden />
@@ -168,30 +188,42 @@ function SeriesHeader({ series }: { series: SeriesDetail }) {
   )
 }
 
-/** « Suivre » (1.3) : bouton à bascule, libellé fixe ; l'état se lit à l'icône et à `aria-pressed`. */
-function FollowButton({ series }: { series: SeriesDetail }) {
+/** Bouton à bascule d'une liste personnelle (« Suivre », « À lire ») : libellé fixe, l'état se lit
+ * à l'icône et à `aria-pressed` ; un message confirme. Textes déjà traduits. */
+function SeriesToggle({
+  series,
+  field,
+  label,
+  icons: [Off, On],
+  send,
+  messages: [added, removed, failed],
+  refresh,
+}: {
+  series: SeriesDetail
+  field: 'followed' | 'to_read'
+  label: string
+  icons: [LucideIcon, LucideIcon]
+  send: (id: number, on: boolean) => Promise<unknown>
+  messages: [string, string, string]
+  refresh: string[]
+}) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const follow = useMutation({
-    mutationFn: (on: boolean) => api.follow(series.id, on),
-    onSuccess: (_, on) => {
-      queryClient.setQueryData<SeriesDetail>(['series', series.id], (old) => old && { ...old, followed: on })
-      void queryClient.invalidateQueries({ queryKey: ['new'] })
-      toast.success(t(on ? 'series.followed' : 'series.unfollowed'))
+  const on = series[field]
+  const toggle = useMutation({
+    mutationFn: (next: boolean) => send(series.id, next),
+    onSuccess: (_, next) => {
+      queryClient.setQueryData<SeriesDetail>(['series', series.id], (old) => old && { ...old, [field]: next })
+      void queryClient.invalidateQueries({ queryKey: refresh, exact: true })
+      toast.success(next ? added : removed)
     },
-    onError: toastFailure(t('series.followFailed'), t),
+    onError: toastFailure(failed, t),
   })
-  const Icon = series.followed ? BellRing : Bell
+  const Icon = on ? On : Off
   return (
-    <Button
-      size="lg"
-      variant="secondary"
-      aria-pressed={series.followed}
-      disabled={follow.isPending}
-      onClick={() => follow.mutate(!series.followed)}
-    >
-      <Icon aria-hidden className={series.followed ? 'text-primary' : undefined} />
-      {t('series.follow')}
+    <Button size="lg" variant="secondary" aria-pressed={on} disabled={toggle.isPending} onClick={() => toggle.mutate(!on)}>
+      <Icon aria-hidden className={on ? 'text-primary' : undefined} />
+      {label}
     </Button>
   )
 }

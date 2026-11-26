@@ -437,6 +437,15 @@ impl Db {
             .bind(&at)
             .execute(&mut *tx)
             .await?;
+        // Commencée : la série quitte « À lire » (Q74).
+        sqlx::query(
+            "DELETE FROM to_read WHERE user_id = ?1
+               AND series_id IN (SELECT series_id FROM file_locations WHERE volume_id = ?2)",
+        )
+        .bind(viewer.user)
+        .bind(&volume)
+        .execute(&mut *tx)
+        .await?;
         if let Some(utc_offset) = utc_offset
             && (pages > 0 || seconds > 0 || finished)
         {
@@ -486,20 +495,23 @@ impl Db {
     /// visible (vérifié par l'appelant).
     pub async fn mark_series(&self, viewer: &Viewer, series: i64, read: bool) -> Result<(), Error> {
         let sql: &[&'static str] = if read {
-            &[concat!(
-                "INSERT INTO reading_progress
+            &[
+                "DELETE FROM to_read WHERE user_id = ?1 AND series_id = ?2",
+                concat!(
+                    "INSERT INTO reading_progress
                    (user_id, volume_id, page_id, ordinal, finished_at, updated_at)
                  SELECT ?1, p.volume_id, p.id, p.ordinal, ",
-                now!(),
-                ", ",
-                now!(),
-                " FROM pages p
+                    now!(),
+                    ", ",
+                    now!(),
+                    " FROM pages p
                  WHERE p.volume_id IN (SELECT volume_id FROM file_locations WHERE series_id = ?2)
                    AND p.ordinal = (SELECT MAX(ordinal) FROM pages WHERE volume_id = p.volume_id)
                  ON CONFLICT (user_id, volume_id) DO UPDATE SET page_id = excluded.page_id,
                    ordinal = excluded.ordinal, updated_at = excluded.updated_at,
                    finished_at = COALESCE(reading_progress.finished_at, excluded.finished_at)"
-            )]
+                ),
+            ]
         } else {
             &[
                 keep_opened!(

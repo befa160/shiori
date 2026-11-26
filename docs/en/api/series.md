@@ -12,7 +12,7 @@ All visible series, sorted by name (natural sort). `?library_id=` restricts to o
   "alt_titles": ["ワンピース"], "authors": ["Eiichiro Oda"], "tags": ["Adventure", "Shōnen"],
   "volume_count": 3, "read_count": 1, "page_count": 612, "pages_read": 250,
   "reading_status": "in_progress", "publication_status": "ongoing",
-  "created_at": "…", "last_read_at": "…",
+  "created_at": "…", "last_read_at": "…", "to_read_at": null,
   "cover_page_id": "3f9c…", "cover_image_id": null, "resume_volume_id": "a41b…"
 }]
 ```
@@ -24,6 +24,7 @@ All visible series, sorted by name (natural sort). `?library_id=` restricts to o
 | `publication_status` | `ongoing`, `completed`, `hiatus`, `cancelled`, or `null` |
 | `cover_page_id` / `cover_image_id` | cover page ([image](/en/api/volumes#get-api-pages-id-image)), or a source's cover ([`/api/covers/{id}`](/en/api/volumes#get-api-covers-id)), which wins |
 | `resume_volume_id` | volume that "Read" opens: the one in progress, otherwise the first unread, otherwise the first |
+| `to_read_at` | when the account put the series in "To read" ([`PUT …/to-read`](#put-api-series-id-to-read)), otherwise `null`; the home page sorts the list on it |
 
 ### `GET /api/continue`
 
@@ -60,7 +61,7 @@ New volumes in the series the account follows: volumes added since it followed t
   "sources": [],
   "publication_status": "ongoing",
   "settings": { "reading_mode": "rtl", "page_layout": "auto", "page_turn": "reading", "reading_mode_override": null, "page_layout_override": null, "page_turn_override": null },
-  "followed": false, "resume_volume_id": "a41b…", "page_count": 612, "pages_read": 250,
+  "followed": false, "to_read": false, "resume_volume_id": "a41b…", "page_count": 612, "pages_read": 250,
   "volumes": [{ "volume_id": "a41b…", "kind": "volume", "number": 1, "number_end": null, "status": "ok", "page_count": 204, "cover_page_id": "…", "file_name": "One Piece T01.cbz", "title": "Romance Dawn", "progress": { "…": "…" } }]
 }
 ```
@@ -70,6 +71,7 @@ New volumes in the series the account follows: volumes added since it followed t
 - `sources`: state of the web sources ([metadata](/en/api/metadata)).
 - `settings`: reading settings applied for the account; `*_override`: what the series imposes (`null`: library default, or global default for `page_turn`).
 - `followed`: the account follows the series ([new volumes](#get-api-me-new)).
+- `to_read`: the series is in the account's "To read" list.
 - `volumes`: in reading order; `kind`: `volume`, `chapter`, `special`, `unknown`; `progress` missing if the volume was never opened.
 
 ### `PATCH /api/series/{id}` <Badge text="admin" />
@@ -107,3 +109,11 @@ Follows the series for the account: volumes added afterwards show up in [new vol
 ### `DELETE /api/series/{id}/follow`
 
 Stops following the series. **Response 204.** **Error**: 404 `not_found`.
+
+### `PUT /api/series/{id}/to-read`
+
+Puts the series in "To read", for the account; if it is already there, the date it was added does not change. It leaves on its own as soon as one of its pages is read, or it is marked read. **Response 204.** **Error**: 404 `not_found`.
+
+### `DELETE /api/series/{id}/to-read`
+
+Removes the series from "To read". **Response 204.** **Error**: 404 `not_found`.
