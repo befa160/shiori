@@ -311,6 +311,16 @@ export interface VolumeDetail {
   locked: string[]
 }
 
+/** Marque-page du compte : au plus un par page, avec une note. */
+export interface Bookmark {
+  id: number
+  volume_id: string
+  page_id: string
+  ordinal: number
+  note: string
+  created_at: string
+}
+
 export interface VolumeMetadata {
   title: string | null
   number: string | null

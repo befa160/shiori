@@ -28,6 +28,10 @@ The page you read is saved on the server and follows you from one device to anot
 
 A damaged page in the archive shows an **explicit error in its place**, never another image. If the file changed since the scan, the reader says so and asks for a new scan.
 
+## Bookmarks
+
+In the reader's bar, the **Bookmark this page** button puts a bookmark on the page shown (on a double page, the first one in reading order); pressed again, it removes it, and "Undo" puts it back with its note. The button next to it opens the **volume bookmarks**: go to the page, write a note (500 characters at most), remove. A series page gathers them in a **Bookmarks** section, collapsed, in reading order. They belong to each account and follow its devices; offline, they can be read but not changed. A modified file takes its bookmarks away, like its progress.
+
 ## Pages fitted to the screen
 
 Pages are served at the width of the screen (in real pixels), in AVIF, and kept in cache on the server and on the device. A page narrower than the screen is served as is, never enlarged. The next four pages are preloaded (two on a slow connection or with data saver on), and the server prepares the next five in advance: flipping quickly no longer waits for each page to be encoded.

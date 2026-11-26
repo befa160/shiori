@@ -123,7 +123,8 @@ export function DisplayOptions({
       <PopoverTrigger asChild>
         <Button variant="ghost">
           <Columns2 aria-hidden />
-          {t('reader.display')}
+          {/* Sur un téléphone, l'icône seule : le titre garde de la place à côté des marque-pages. */}
+          <span className="max-sm:sr-only">{t('reader.display')}</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-72 space-y-4">

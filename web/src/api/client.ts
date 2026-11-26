@@ -36,6 +36,7 @@ import type {
   SettingsPatch,
   VolumeDetail,
   VolumePatch,
+  Bookmark,
 } from './types'
 
 /** Erreur de l'API : code stable (`page_broken`, `volume_changed`…) et message en français. */
@@ -122,6 +123,12 @@ export const api = {
   /** Toute la série lue (dernière page de chaque tome) ou non lue (progression effacée). */
   markSeries: (seriesId: number, read: boolean) =>
     must<SeriesDetail>(`/series/${seriesId}/read`, { method: read ? 'PUT' : 'DELETE' }),
+  bookmarks: (volumeId: string, init?: RequestInit) => must<Bookmark[]>(`/volumes/${volumeId}/bookmarks`, init),
+  seriesBookmarks: (seriesId: number, init?: RequestInit) => must<Bookmark[]>(`/series/${seriesId}/bookmarks`, init),
+  addBookmark: (volumeId: string, pageId: string, note = '') =>
+    must<Bookmark>(`/volumes/${volumeId}/bookmarks`, { method: 'POST', body: JSON.stringify({ page_id: pageId, note }) }),
+  setBookmarkNote: (id: number, note: string) => must<Bookmark>(`/bookmarks/${id}`, { method: 'PATCH', body: JSON.stringify({ note }) }),
+  deleteBookmark: (id: number) => request<null>(`/bookmarks/${id}`, { method: 'DELETE' }),
   patchVolume: (volumeId: string, patch: VolumePatch) =>
     must<VolumeDetail>(`/volumes/${volumeId}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   patchSeries: (seriesId: number, patch: SeriesPatch) =>

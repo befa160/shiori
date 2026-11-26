@@ -24,10 +24,13 @@ Il règle aussi la **luminosité** des pages (de 30 % à 100 %), pour lire le so
 
 ![Panneau Affichage du lecteur : sens de lecture, tourner les pages, disposition, doubles pages](/screens/fr/ecran_lecteur_affichage.jpg)
 
-
 La page lue est enregistrée sur le serveur et suit d'un appareil à l'autre. En fin de tome, Shiori propose le tome suivant ; s'il est en erreur au dernier scan, le bouton le dit (« Tome suivant (en erreur) »), et le tome affiche ses pages illisibles en erreur.
 
 Une page abîmée dans l'archive affiche une **erreur explicite à sa place**, jamais une autre image. Si le fichier a changé depuis le scan, le lecteur le dit et demande un nouveau scan.
+
+## Marque-pages
+
+Dans la barre du lecteur, le bouton **Marquer cette page** pose un marque-page sur la page affichée (en double page, la première dans le sens de lecture) ; appuyé de nouveau, il le retire, et « Annuler » le remet avec sa note. Le bouton voisin ouvre les **marque-pages du tome** : aller à la page, écrire une note (500 caractères au plus), retirer. La page d'une série les rassemble dans une section **Marque-pages**, repliée, dans l'ordre de lecture. Ils sont propres à chaque compte et suivent ses appareils ; hors ligne, ils se consultent sans se modifier. Un fichier modifié emporte ses marque-pages, comme sa progression.
 
 ## Pages adaptées à l'écran
 
@@ -44,7 +47,6 @@ Un tome peut être **gardé sur l'appareil** pour lire sans réseau. Depuis la p
 - Installez l'application **depuis le navigateur où vous lisez, à l'adresse habituelle**, et ouvrez-la une fois en ligne avant de partir. Une autre adresse ou un autre navigateur (Samsung Internet au lieu de Chrome, par exemple), c'est une autre application, avec son propre stockage. Si la lecture hors ligne ne peut pas marcher sur cette installation, **Tomes téléchargés** le dit et le téléchargement est refusé.
 
 ![Page Tomes téléchargés : place utilisée, téléchargement en cours et tome gardé](/screens/fr/ecran_telecharges.jpg)
-
 
 Hors téléchargements, l'application garde aussi les pages déjà vues : revenir en arrière ou une courte coupure ne redemandent rien au réseau.
 

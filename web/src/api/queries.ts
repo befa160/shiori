@@ -32,6 +32,13 @@ export const usePages = (volumeId: string) =>
 
 /** Passe de scan en cours (`null` : rien ne tourne), redemandée chaque seconde tant qu'elle tourne.
  * `idlePoll` : au repos aussi, pour voir un scan lancé ailleurs (autre appareil) là où il s'affiche. */
+/** Marque-pages du compte : sous `['bookmarks']`, redemandés ensemble après chaque changement. */
+export const useVolumeBookmarks = (volumeId: string) =>
+  useQuery({ queryKey: ['bookmarks', 'volume', volumeId], queryFn: ({ signal }) => api.bookmarks(volumeId, { signal }) })
+
+export const useSeriesBookmarks = (seriesId: number) =>
+  useQuery({ queryKey: ['bookmarks', 'series', seriesId], queryFn: ({ signal }) => api.seriesBookmarks(seriesId, { signal }) })
+
 export const useCurrentScan = (idlePoll: number | false = false) =>
   useQuery({
     queryKey: ['scans', 'current'],

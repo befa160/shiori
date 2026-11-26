@@ -321,3 +321,43 @@ test.describe('à la souris', () => {
     await expect(main).toHaveClass(/overflow-hidden/)
   })
 })
+
+test('marque-pages : marquer, annoter, retrouver depuis la page de la série', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  const volume = all['E2E Manga T02.cbr']
+  await page.goto(`/read/${volume.volume_id}`)
+  await checkShown(page, 'E2E Manga T02.cbr')
+  await page.keyboard.press('ArrowLeft')
+  await expect(page.locator('p.sr-only[aria-live]')).toHaveText(/^Pages? 2 /)
+  await page.keyboard.press('Tab')
+  await page.getByRole('button', { name: 'Marquer cette page' }).click()
+  await expect(page.getByRole('button', { name: 'Retirer le marque-page de cette page' })).toHaveAttribute('aria-pressed', 'true')
+  await page.getByRole('button', { name: 'Marque-pages du tome (1)' }).click()
+  const note = page.getByRole('textbox', { name: 'Note de la page 2' })
+  await note.fill('Note e2e')
+  const saved = page.waitForResponse((r) => r.request().method() === 'PATCH' && r.url().includes('/api/bookmarks/'))
+  await note.press('Enter')
+  expect((await saved).ok()).toBe(true)
+  // Panneau ouvert, aux quatre tailles (il suit le bouton quand la fenêtre change).
+  for (const [width, height] of SIZES) {
+    await page.setViewportSize({ width, height })
+    await expect(note).toBeVisible()
+    await page.screenshot({ path: `${CAPTURES}lecteur-marque-pages-${width}x${height}.png` })
+  }
+  await page.setViewportSize({ width: 1280, height: 800 })
+
+  await page.goto(`/series/${volume.series}`)
+  const main = page.getByRole('main')
+  await main.getByRole('button', { name: 'Marque-page (1)' }).click()
+  await main.getByRole('link', { name: /page 2.*Note e2e/ }).click()
+  await expect(page).toHaveURL(new RegExp(`/read/${volume.volume_id}\\?page=`))
+  await expect(page.locator('p.sr-only[aria-live]')).toHaveText(/^Pages? 2 /)
+
+  // Retiré : la section disparaît de la page de la série.
+  await page.keyboard.press('Tab')
+  await page.getByRole('button', { name: 'Retirer le marque-page de cette page' }).click()
+  await expect(page.getByRole('button', { name: 'Marquer cette page' })).toBeVisible()
+  await page.goto(`/series/${volume.series}`)
+  await main.getByRole('heading', { name: 'Tomes' }).waitFor()
+  await expect(main.getByRole('button', { name: /^Marque-page/ })).toHaveCount(0)
+})
