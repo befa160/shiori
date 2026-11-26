@@ -92,6 +92,16 @@ pub struct ContinueItem {
     pub updated_at: String,
 }
 
+/// Un tome nouveau d'une série suivie (1.3a) : voir [`Db::new_volumes`].
+#[derive(Debug, Serialize)]
+pub struct NewVolume {
+    pub series_id: i64,
+    pub series_name: String,
+    pub library_id: i64,
+    pub volume: SeriesVolume,
+    pub added_at: String,
+}
+
 #[derive(Debug, Serialize)]
 pub struct SeriesDetail {
     pub id: i64,
@@ -106,6 +116,8 @@ pub struct SeriesDetail {
     pub sources: Vec<crate::SourceState>,
     pub publication_status: Option<PublicationStatus>,
     pub settings: ReadingSettings,
+    /// Suivie par ce compte : ses tomes ajoutés apparaissent dans les nouveautés.
+    pub followed: bool,
     /// Tome qu'ouvre « Lire » : même règle que dans [`SeriesSummary`].
     pub resume_volume_id: Option<String>,
     /// Comme dans [`SeriesSummary`].
@@ -199,7 +211,7 @@ macro_rules! located_volumes {
     ($filter:literal) => {
         concat!(
             "SELECT l.series_id, l.path, l.kind, l.number, l.number_end, v.id AS volume_id,
-                    v.status, v.page_count,
+                    v.status, v.page_count, v.added_at,
                     COALESCE(
                       (SELECT p.id FROM volume_edits e
                        JOIN pages p ON p.id = json_extract(e.edited, '$.cover_page_id')
@@ -216,6 +228,7 @@ macro_rules! located_volumes {
 
 struct Located {
     series_id: i64,
+    added_at: Option<String>,
     path: String,
     parsed: ParsedName,
     volume: SeriesVolume,
@@ -228,6 +241,7 @@ fn located(row: &SqliteRow) -> Result<Located, Error> {
     let file_name = path.rsplit('/').next().unwrap_or_default().to_owned();
     Ok(Located {
         series_id: row.get("series_id"),
+        added_at: row.get("added_at"),
         parsed: ParsedName {
             folder: None,
             series: String::new(),
@@ -249,6 +263,16 @@ fn located(row: &SqliteRow) -> Result<Located, Error> {
         },
         path,
     })
+}
+
+/// Id, bibliothèque et titre affiché des séries, dans la langue `?2` ; à suivre d'un filtre.
+macro_rules! series_names {
+    () => {
+        "SELECT s.id, s.library_id, COALESCE(json_extract(
+                  CASE WHEN ?2 = 'en' THEN m.merged_en ELSE m.merged END, '$.title'),
+                s.name) AS name
+         FROM series s LEFT JOIN series_metadata m ON m.series_id = s.id WHERE "
+    };
 }
 
 /// Trie dans l'ordre de la série et garde une seule entrée par tome.
@@ -500,10 +524,7 @@ impl Db {
             };
         }
         let series = sqlx::query(concat!(
-            "SELECT s.id, s.library_id, COALESCE(json_extract(
-                      CASE WHEN ?2 = 'en' THEN m.merged_en ELSE m.merged END, '$.title'),
-                    s.name) AS name
-             FROM series s LEFT JOIN series_metadata m ON m.series_id = s.id WHERE ",
+            series_names!(),
             visible!("s.library_id", "?3", "?1"),
             " AND s.id IN ",
             started!()
@@ -546,6 +567,67 @@ impl Db {
                 .then(a.series_id.cmp(&b.series_id))
         });
         out.truncate(limit);
+        Ok(out)
+    }
+
+    /// Nouveautés du compte (Q72) : tomes des séries qu'il suit et voit, ajoutés après le
+    /// dernier « Tout marquer comme vu » (ou le suivi) et qu'il n'a jamais ouverts (même si leur
+    /// progression a été effacée depuis). Les séries
+    /// viennent de la plus récemment complétée à la plus ancienne, chacune dans son ordre.
+    pub async fn new_volumes(&self, viewer: &Viewer) -> Result<Vec<NewVolume>, Error> {
+        let rows = sqlx::query(located_volumes!(
+            "(?2 OR l.library_id IN (SELECT library_id FROM user_libraries WHERE user_id = ?1))
+             AND EXISTS (SELECT 1 FROM series_follows f WHERE f.user_id = ?1
+                         AND f.series_id = l.series_id AND v.added_at > f.seen_at)
+             AND NOT EXISTS (SELECT 1 FROM reading_progress r
+                             WHERE r.user_id = ?1 AND r.volume_id = v.id)
+             AND NOT EXISTS (SELECT 1 FROM volumes_opened o
+                             WHERE o.user_id = ?1 AND o.volume_id = v.id)"
+        ))
+        .bind(viewer.user)
+        .bind(viewer.admin)
+        .fetch_all(&self.pool)
+        .await?
+        .iter()
+        .map(located)
+        .collect::<Result<Vec<_>, _>>()?;
+        let names: HashMap<i64, (i64, String)> = sqlx::query(concat!(
+            series_names!(),
+            "s.id IN (SELECT series_id FROM series_follows WHERE user_id = ?1)"
+        ))
+        .bind(viewer.user)
+        .bind(to_db(&viewer.language))
+        .fetch_all(&self.pool)
+        .await?
+        .iter()
+        .map(|r| (r.get("id"), (r.get("library_id"), r.get("name"))))
+        .collect();
+        let rows = in_series_order(rows);
+        let mut latest: HashMap<i64, &str> = HashMap::new();
+        for r in &rows {
+            let at = r.added_at.as_deref().unwrap_or_default();
+            let e = latest.entry(r.series_id).or_default();
+            *e = (*e).max(at);
+        }
+        let mut out: Vec<NewVolume> = rows
+            .iter()
+            .filter_map(|r| {
+                let (library_id, name) = names.get(&r.series_id)?;
+                Some(NewVolume {
+                    series_id: r.series_id,
+                    series_name: name.clone(),
+                    library_id: *library_id,
+                    volume: r.volume.clone(),
+                    added_at: r.added_at.clone()?,
+                })
+            })
+            .collect();
+        // Tri stable : l'ordre de la série tient à l'intérieur de chaque série.
+        out.sort_by(|a, b| {
+            latest[&b.series_id]
+                .cmp(latest[&a.series_id])
+                .then(a.series_id.cmp(&b.series_id))
+        });
         Ok(out)
     }
 
@@ -594,6 +676,7 @@ impl Db {
                 .map(from_db)
                 .transpose()?,
             settings,
+            followed: self.followed(viewer, id).await?,
             resume_volume_id,
             page_count,
             pages_read,

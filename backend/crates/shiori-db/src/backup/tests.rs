@@ -11,11 +11,13 @@ async fn previous_version(path: &Path) {
     db.create_user("ancien", "mot de passe", Role::Admin)
         .await
         .unwrap();
-    // Défait la dernière migration (24) : sa table est neuve. À recaler sur chaque nouvelle
-    // migration.
+    // Défait la dernière migration (25). À recaler sur chaque nouvelle migration.
     for undo in [
-        "DROP TABLE bookmarks",
-        "DELETE FROM _sqlx_migrations WHERE version = 24",
+        "DROP TABLE volumes_opened",
+        "DROP TABLE series_follows",
+        "DROP INDEX volumes_added",
+        "ALTER TABLE volumes DROP COLUMN added_at",
+        "DELETE FROM _sqlx_migrations WHERE version = 25",
     ] {
         sqlx::query(undo).execute(db.pool()).await.unwrap();
     }
@@ -147,7 +149,7 @@ async fn a_migration_is_preceded_by_a_backup_and_old_backups_still_restore() {
         .collect();
     assert_eq!(saved.len(), 1);
     let name = saved[0].file_name().unwrap().to_str().unwrap();
-    assert!(name.starts_with("shiori-avant-0024-"), "{name}");
+    assert!(name.starts_with("shiori-avant-0025-"), "{name}");
 
     // Base à jour : pas de nouvelle sauvegarde ; base neuve non plus.
     db.pool().close().await;

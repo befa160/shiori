@@ -493,6 +493,64 @@ async fn a_series_is_marked_read_then_unread() {
     }
 }
 
+/// Suivre une série, voir ses tomes ajoutés dans les nouveautés, puis « Tout marquer comme vu ».
+#[tokio::test]
+async fn followed_series_list_their_new_volumes() {
+    let f = fixture(None).await;
+    let uri = format!("/api/series/{}/follow", f.series);
+    let detail = format!("/api/series/{}", f.series);
+    assert_eq!(
+        call(&f.app, "GET", &detail, None).await.1["followed"],
+        false
+    );
+    assert_eq!(
+        call(&f.app, "PUT", &uri, None).await.0,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(call(&f.app, "GET", &detail, None).await.1["followed"], true);
+    tokio::time::sleep(std::time::Duration::from_millis(3)).await;
+
+    let folder = f._dir.path().join("bibliotheque/Série");
+    let file = fixtures::unpadded(&folder);
+    let library = f.db.libraries().await.unwrap().remove(0);
+    let run = f.db.start_run("/", "{}").await.unwrap();
+    let scanned =
+        f.db.scan(run, &file, ScanOptions::default(), false)
+            .await
+            .unwrap();
+    f.db.attach(&library, &file).await.unwrap();
+    f.db.refresh_series(&library).await.unwrap();
+    let (status, new) = call(&f.app, "GET", "/api/me/new", None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(new.as_array().unwrap().len(), 1, "{new}");
+    assert_eq!(
+        new[0]["volume"]["volume_id"],
+        scanned.report.volume_id.unwrap().to_string()
+    );
+    assert_eq!(new[0]["series_id"], f.series);
+    assert!(new[0]["added_at"].is_string());
+
+    let seen = call(&f.app, "POST", "/api/me/new/seen", None).await;
+    assert_eq!(seen.0, StatusCode::NO_CONTENT);
+    assert_eq!(call(&f.app, "GET", "/api/me/new", None).await.1, json!([]));
+    assert_eq!(
+        call(&f.app, "DELETE", &uri, None).await.0,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        call(&f.app, "GET", &detail, None).await.1["followed"],
+        false
+    );
+    for method in ["PUT", "DELETE"] {
+        let (status, err) = call(&f.app, method, "/api/series/999999/follow", None).await;
+        assert_eq!(
+            (status, err["code"].as_str()),
+            (StatusCode::NOT_FOUND, Some("not_found")),
+            "{method}"
+        );
+    }
+}
+
 #[tokio::test]
 async fn reading_stats_follow_the_progress() {
     let f = fixture(None).await;

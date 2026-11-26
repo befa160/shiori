@@ -35,6 +35,7 @@ mod accounts;
 mod backup;
 mod bookmarks;
 mod browse;
+mod follows;
 mod health;
 mod library;
 mod metadata;
@@ -53,8 +54,8 @@ pub use accounts::{
 pub use backup::{RestoreError, temp_file};
 pub use bookmarks::{AddBookmark, Bookmark, MAX_NOTE, clean_note};
 pub use browse::{
-    ContinueItem, LibrarySummary, PageFile, PageInfo, PageSource, PublicationStatus, ReadingStatus,
-    SeriesDetail, SeriesSummary, SeriesVolume, VolumeDetail, VolumeLocation,
+    ContinueItem, LibrarySummary, NewVolume, PageFile, PageInfo, PageSource, PublicationStatus,
+    ReadingStatus, SeriesDetail, SeriesSummary, SeriesVolume, VolumeDetail, VolumeLocation,
 };
 pub use health::{CodeCount, FileHealth, FileIssue, Health, HealthFilter, LibraryHealth};
 pub use library::{Library, LibraryError};
@@ -457,8 +458,10 @@ async fn save_volume(
     report: &FileReport,
 ) -> Result<(), Error> {
     let sql = concat!(
-        "INSERT INTO volumes (id, size, format, status, page_count, scanner_version, scanned_at)
+        "INSERT INTO volumes (id, size, format, status, page_count, scanner_version, scanned_at, added_at)
          VALUES (?, ?, ?, ?, ?, ?, ",
+        now!(),
+        ", ",
         now!(),
         ")
          ON CONFLICT (id) DO UPDATE SET size = excluded.size, format = excluded.format, status = excluded.status,

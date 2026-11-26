@@ -33,6 +33,18 @@ All visible series, sorted by name (natural sort). `?library_id=` restricts to o
 [{ "series_id": 7, "series_name": "One Piece", "library_id": 1, "volume": { "volume_id": "a41b…", "kind": "volume", "number": 2, "number_end": null, "status": "ok", "page_count": 204, "cover_page_id": "…", "file_name": "One Piece T02.cbz", "progress": { "page_id": "…", "ordinal": 45, "page_count": 204, "finished": false, "updated_at": "…" } }, "updated_at": "…" }]
 ```
 
+### `GET /api/me/new`
+
+New volumes in the series the account follows: volumes added since it followed the series or since the last "Mark all as seen", and never opened by the account. A moved or renamed file is not new (same volume), a modified file is (new volume); volumes already there before 1.3 never are. Once opened, a volume is never new again, even if its progress is cleared ("Mark as unread"). Series go from the most recently added to the oldest, each in volume order. Session only, like all of `/api/me`.
+
+```json
+[{ "series_id": 7, "series_name": "One Piece", "library_id": 1, "volume": { "volume_id": "c07e…", "kind": "volume", "number": 108, "…": "…" }, "added_at": "2026-11-26T09:12:44.512Z" }]
+```
+
+### `POST /api/me/new/seen`
+
+"Mark all as seen": no volume already there is new for the account anymore. **Response 204.**
+
 ## A series
 
 ### `GET /api/series/{id}`
@@ -48,7 +60,7 @@ All visible series, sorted by name (natural sort). `?library_id=` restricts to o
   "sources": [],
   "publication_status": "ongoing",
   "settings": { "reading_mode": "rtl", "page_layout": "auto", "page_turn": "reading", "reading_mode_override": null, "page_layout_override": null, "page_turn_override": null },
-  "resume_volume_id": "a41b…", "page_count": 612, "pages_read": 250,
+  "followed": false, "resume_volume_id": "a41b…", "page_count": 612, "pages_read": 250,
   "volumes": [{ "volume_id": "a41b…", "kind": "volume", "number": 1, "number_end": null, "status": "ok", "page_count": 204, "cover_page_id": "…", "file_name": "One Piece T01.cbz", "title": "Romance Dawn", "progress": { "…": "…" } }]
 }
 ```
@@ -57,6 +69,7 @@ All visible series, sorted by name (natural sort). `?library_id=` restricts to o
 - `locked`: edited fields, that sources no longer replace.
 - `sources`: state of the web sources ([metadata](/en/api/metadata)).
 - `settings`: reading settings applied for the account; `*_override`: what the series imposes (`null`: library default, or global default for `page_turn`).
+- `followed`: the account follows the series ([new volumes](#get-api-me-new)).
 - `volumes`: in reading order; `kind`: `volume`, `chapter`, `special`, `unknown`; `progress` missing if the volume was never opened.
 
 ### `PATCH /api/series/{id}` <Badge text="admin" />
@@ -86,3 +99,11 @@ The series' reading settings for the account; `null` goes back to the default.
 ### `DELETE /api/series/{id}/read`
 
 "Mark the series as unread", for the account: the progress of all its volumes is cleared. **Response 200**: the series detail. **Error**: 404 `not_found`.
+
+### `PUT /api/series/{id}/follow`
+
+Follows the series for the account: volumes added afterwards show up in [new volumes](#get-api-me-new); those already there do not. Following twice changes nothing. **Response 204.** **Error**: 404 `not_found`.
+
+### `DELETE /api/series/{id}/follow`
+
+Stops following the series. **Response 204.** **Error**: 404 `not_found`.

@@ -66,8 +66,8 @@ use scans::{
     cancel_scan, current_scan, files_to_repair, health_summary, scan, scan_logs, scans, start_scan,
 };
 use series::{
-    all_series, continue_reading, mark_series_read, mark_series_unread, patch_series, series,
-    series_settings,
+    all_series, continue_reading, follow, mark_new_seen, mark_series_read, mark_series_unread,
+    new_volumes, patch_series, series, series_settings, unfollow,
 };
 use settings::{save_settings, settings};
 use volumes::{
@@ -372,6 +372,8 @@ pub fn router(app: Arc<App>, hosts: Option<Vec<String>>) -> Router {
         .route("/api/me/password", post(auth::change_password))
         .route("/api/me/sessions", get(accounts::devices))
         .route("/api/me/stats", get(reading_stats))
+        .route("/api/me/new", get(new_volumes))
+        .route("/api/me/new/seen", post(mark_new_seen))
         .route("/api/me/totp", post(totp::start).delete(totp::disable))
         .route("/api/me/totp/confirm", post(totp::confirm))
         .route("/api/me/tokens", get(tokens::list).post(tokens::create))
@@ -409,6 +411,7 @@ pub fn router(app: Arc<App>, hosts: Option<Vec<String>>) -> Router {
             "/api/series/{id}/read",
             put(mark_series_read).delete(mark_series_unread),
         )
+        .route("/api/series/{id}/follow", put(follow).delete(unfollow))
         .route("/api/series/{id}/metadata/search", get(search_metadata))
         .route(
             "/api/series/{id}/metadata/links/{source}",
