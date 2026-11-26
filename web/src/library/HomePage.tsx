@@ -14,8 +14,8 @@ import { ContinueCard, CoverSkeletons, NewCard, SeriesCard, Shelf } from './Cove
 // Séries par étagère : au-delà, « Tout voir » mène à la grille de la bibliothèque.
 const SHELF_SIZE = 20
 
-/** Accueil : nouveautés des séries suivies, « Continuer la lecture », puis les derniers ajouts de
- * chaque bibliothèque. */
+/** Accueil : « Continuer la lecture » (toujours en premier), nouveautés des séries suivies, puis
+ * les derniers ajouts de chaque bibliothèque. */
 export function HomePage() {
   const { t } = useTranslation()
   const libraries = useLibraries()
@@ -26,7 +26,6 @@ export function HomePage() {
     <div className="space-y-8">
       <title>{`${t('home.title')} · Shiori`}</title>
       <h1 className="text-2xl font-semibold">{t('home.title')}</h1>
-      <NewShelf />
       {/* Rien à continuer : pas de section vide. */}
       {!(reading.isSuccess && reading.data.length === 0) && (
         <section aria-labelledby="home-continue" className="space-y-3">
@@ -46,6 +45,7 @@ export function HomePage() {
           </QueryState>
         </section>
       )}
+      <NewShelf />
       <QueryState
         query={libraries}
         isEmpty={(list) => list.length === 0}

@@ -1,4 +1,4 @@
-// Nouveautés (1.3) : suivre une série, y déposer un tome, le voir en tête de l'accueil, puis
+// Nouveautés (1.3) : suivre une série, y déposer un tome, le voir à l'accueil, puis
 // « Tout marquer comme vu ». La bibliothèque est préparée par l'API ; le reste par l'interface.
 import { cpSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -24,7 +24,7 @@ async function scan(request: APIRequestContext, library: number) {
   await expect.poll(async () => (await request.get('/api/admin/scans/current')).status(), { timeout: 60_000 }).toBe(204)
 }
 
-test('suivre une série : son nouveau tome en tête de l’accueil, jusqu’à « Tout marquer comme vu »', async ({ page, request }) => {
+test('suivre une série : son nouveau tome à l’accueil, jusqu’à « Tout marquer comme vu »', async ({ page, request }) => {
   await page.setViewportSize({ width: 1280, height: 800 })
   const created = await request.post('/api/libraries', { data: { name: `Suivie ${RUN}`, root: ROOT, kind: 'manga' } })
   const library: number = (await created.json()).id

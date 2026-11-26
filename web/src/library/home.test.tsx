@@ -110,7 +110,7 @@ describe('accueil', () => {
     expect(within(card).getByTestId('fallback-cover')).toHaveTextContent('Récente')
   })
 
-  it('montre en tête les nouveautés des séries suivies, jusqu’à « Tout marquer comme vu »', async () => {
+  it('montre les nouveautés des séries suivies après « Continuer la lecture », jusqu’à « Tout marquer comme vu »', async () => {
     const added: NewVolume[] = [{ series_id: 8, series_name: 'Récente', library_id: 1, added_at: '2026-11-26T09:00:00.000Z', volume: { ...volume, volume_id: 'v4', number: 4 } }]
     let items = added
     const fetch = mockApi({
@@ -124,7 +124,8 @@ describe('accueil', () => {
     renderAt('/')
     const section = await screen.findByRole('region', { name: 'Nouveautés' })
     const regions = screen.getAllByRole('region')
-    expect(regions[0]).toBe(section)
+    expect(regions[0]).toHaveAccessibleName('Continuer la lecture')
+    expect(regions[1]).toBe(section)
     const card = within(section).getByRole('link', { name: /Récente/ })
     expect(card).toHaveAttribute('href', '/read/v4')
     expect(card).toHaveTextContent('Tome 4')

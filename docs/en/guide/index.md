@@ -18,7 +18,7 @@ This guide describes Shiori screen by screen. To install it: [quick start](/en/i
 
 - **Large screens**: a collapsible sidebar (Home, Series, Search, your libraries, Documentation, Downloads, Administration, Account). On phones, the documentation opens from the **Account** page.
 - **Phones and tablets in portrait**: a tab bar at the bottom (Home, Series, Search, Account).
-- **Home**: "New volumes" (volumes added to the series you follow, until you open them or click "Mark all as seen"; hidden when there are none), "Continue reading" (the volume in progress in each series, or the next one when a volume is finished), then one shelf per library.
+- **Home**: "Continue reading" (the volume in progress in each series, or the next one when a volume is finished), "New volumes" (volumes added to the series you follow, until you open them or click "Mark all as seen"; hidden when there are none), then one shelf per library.
 - **Series**: all series as covers, filtered by reading state (unread, in progress, read), publication status, library and **tags** (several tags = series that have them all), sorted by title, last read or recently added.
 - **Search**: by title, alternative title, author or tag, ignoring accents and case.
 
