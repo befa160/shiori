@@ -17,7 +17,7 @@ const summary = {
   reading_status: 'unread',
   publication_status: null,
   created_at: '2026-11-12T00:00:00.000Z',
-  last_read_at: null,
+  last_read_at: null, to_read_at: null,
   cover_page_id: null,
   resume_volume_id: null,
   cover_image_id: null,
@@ -40,6 +40,7 @@ const detail: SeriesDetail = {
   locked: [],
   sources: [],
   followed: false,
+  to_read: false,
   resume_volume_id: 'b',
   page_count: 392,
   pages_read: 245,
@@ -317,6 +318,8 @@ describe('page d’une série', () => {
     renderAt('/series/7')
     const follow = await main().findByRole('button', { name: 'Suivre' })
     expect(follow).toHaveAttribute('aria-pressed', 'false')
+    // Commencée : pas de bouton « À lire » (elle en sortirait aussitôt).
+    expect(main().queryByRole('button', { name: 'À lire' })).toBeNull()
     await userEvent.click(follow)
     await waitFor(() => expect(follow).toHaveAttribute('aria-pressed', 'true'))
     expect(fetch.mock.calls.some(([url, init]) => url === '/api/series/7/follow' && init?.method === 'PUT')).toBe(true)
@@ -328,6 +331,20 @@ describe('page d’une série', () => {
     await userEvent.click(follow)
     expect(await screen.findByText('Suivi non modifié')).toBeInTheDocument()
     expect(follow).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('met une série pas commencée dans « À lire », puis l’en retire', async () => {
+    const fresh = { ...detail, volumes: detail.volumes.map((v) => ({ ...v, progress: undefined })) }
+    const fetch = mockApi({ '/api/series/7': () => json(fresh), '/api/series/7/to-read': () => new Response(null, { status: 204 }) })
+    renderAt('/series/7')
+    const button = await main().findByRole('button', { name: 'À lire' })
+    expect(button).toHaveAttribute('aria-pressed', 'false')
+    await userEvent.click(button)
+    await waitFor(() => expect(button).toHaveAttribute('aria-pressed', 'true'))
+    expect(await screen.findByText('Série ajoutée à « À lire »')).toBeInTheDocument()
+    await userEvent.click(button)
+    await waitFor(() => expect(button).toHaveAttribute('aria-pressed', 'false'))
+    expect(fetch.mock.calls.filter(([url]) => url === '/api/series/7/to-read').map(([, init]) => init?.method)).toEqual(['PUT', 'DELETE'])
   })
 
   it('compte une série lue quand tout ce qui se lit est lu, malgré un tome illisible', async () => {

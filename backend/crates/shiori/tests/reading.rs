@@ -551,6 +551,46 @@ async fn followed_series_list_their_new_volumes() {
     }
 }
 
+/// « À lire » : mise de côté, visible dans la liste des séries, puis retirée en commençant.
+#[tokio::test]
+async fn a_series_goes_to_read_then_leaves_when_started() {
+    let f = fixture(None).await;
+    let uri = format!("/api/series/{}/to-read", f.series);
+    let detail = format!("/api/series/{}", f.series);
+    assert_eq!(
+        call(&f.app, "PUT", &uri, None).await.0,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(call(&f.app, "GET", &detail, None).await.1["to_read"], true);
+    let (_, list) = call(&f.app, "GET", "/api/series", None).await;
+    assert!(list[0]["to_read_at"].is_string(), "{list}");
+
+    let progress = format!("/api/volumes/{}/progress", f.volume);
+    let body = json!({ "page_id": f.pages[1] });
+    assert_eq!(
+        call(&f.app, "PUT", &progress, Some(body)).await.0,
+        StatusCode::OK
+    );
+    assert_eq!(call(&f.app, "GET", &detail, None).await.1["to_read"], false);
+    let (_, list) = call(&f.app, "GET", "/api/series", None).await;
+    assert!(list[0]["to_read_at"].is_null(), "{list}");
+
+    call(&f.app, "PUT", &uri, None).await;
+    assert_eq!(
+        call(&f.app, "DELETE", &uri, None).await.0,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(call(&f.app, "GET", &detail, None).await.1["to_read"], false);
+    for method in ["PUT", "DELETE"] {
+        let (status, err) = call(&f.app, method, "/api/series/999999/to-read", None).await;
+        assert_eq!(
+            (status, err["code"].as_str()),
+            (StatusCode::NOT_FOUND, Some("not_found")),
+            "{method}"
+        );
+    }
+}
+
 #[tokio::test]
 async fn reading_stats_follow_the_progress() {
     let f = fixture(None).await;

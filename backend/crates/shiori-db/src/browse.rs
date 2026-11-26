@@ -53,6 +53,8 @@ pub struct SeriesSummary {
     pub created_at: String,
     /// Dernière page enregistrée dans un tome de la série.
     pub last_read_at: Option<String>,
+    /// Mise dans « À lire » par ce compte, à cette date (1.3c) ; `None` sinon.
+    pub to_read_at: Option<String>,
     /// Page choisie comme couverture, sinon page 0 du premier tome de la série.
     pub cover_page_id: Option<String>,
     /// Couverture d'une source choisie (`/api/covers/{id}`) : l'emporte sur la page.
@@ -118,6 +120,8 @@ pub struct SeriesDetail {
     pub settings: ReadingSettings,
     /// Suivie par ce compte : ses tomes ajoutés apparaissent dans les nouveautés.
     pub followed: bool,
+    /// Dans « À lire » pour ce compte (1.3c).
+    pub to_read: bool,
     /// Tome qu'ouvre « Lire » : même règle que dans [`SeriesSummary`].
     pub resume_volume_id: Option<String>,
     /// Comme dans [`SeriesSummary`].
@@ -423,7 +427,9 @@ impl Db {
     ) -> Result<Vec<SeriesSummary>, Error> {
         let series = sqlx::query(concat!(
             "SELECT s.id, s.library_id, s.name, s.publication_status, s.created_at,
-                    CASE WHEN ?2 = 'en' THEN m.merged_en ELSE m.merged END AS merged
+                    CASE WHEN ?2 = 'en' THEN m.merged_en ELSE m.merged END AS merged,
+                    (SELECT t.added_at FROM to_read t WHERE t.user_id = ?4 AND t.series_id = s.id)
+                      AS to_read_at
              FROM series s LEFT JOIN series_metadata m ON m.series_id = s.id
              WHERE (?1 IS NULL OR s.library_id = ?1) AND ",
             visible!("s.library_id", "?3", "?4")
@@ -497,6 +503,7 @@ impl Db {
                         .transpose()?,
                     created_at: s.get("created_at"),
                     last_read_at: read_at.cloned(),
+                    to_read_at: s.get("to_read_at"),
                     cover_image_id: meta.cover_image_id,
                     cover_page_id: meta
                         .cover_page_id
@@ -677,6 +684,7 @@ impl Db {
                 .transpose()?,
             settings,
             followed: self.followed(viewer, id).await?,
+            to_read: self.in_to_read(viewer, id).await?,
             resume_volume_id,
             page_count,
             pages_read,

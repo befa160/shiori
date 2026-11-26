@@ -179,6 +179,8 @@ export interface SeriesSummary {
   publication_status: PublicationStatus | null
   created_at: string
   last_read_at: string | null
+  /** Mise dans « À lire » par le compte, à cette date ; `null` sinon (1.3). */
+  to_read_at: string | null
   /** Page choisie comme couverture, sinon page 0 du premier tome. */
   cover_page_id: string | null
   /** Couverture d'une source choisie (`/api/covers/{id}`) : l'emporte sur la page. */
@@ -290,6 +292,8 @@ export interface SeriesDetail {
   settings: ReadingSettings
   /** Suivie par le compte : ses tomes ajoutés apparaissent dans les nouveautés (1.3). */
   followed: boolean
+  /** Dans « À lire » pour le compte. */
+  to_read: boolean
   /** Tome qu'ouvre « Lire » (même règle que dans `SeriesSummary`). */
   resume_volume_id: string | null
   /** Comme dans `SeriesSummary`. */

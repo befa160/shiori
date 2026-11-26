@@ -19,7 +19,7 @@ const summary = {
   pages_read: 0,
   reading_status: 'unread',
   publication_status: null,
-  last_read_at: null,
+  last_read_at: null, to_read_at: null,
   cover_page_id: null,
   resume_volume_id: null,
   cover_image_id: null,
@@ -135,11 +135,24 @@ describe('accueil', () => {
     expect(fetch.mock.calls.some(([url, init]) => url === '/api/me/new/seen' && init?.method === 'POST')).toBe(true)
   })
 
+  it('montre « À lire » dans l’ordre d’ajout, après les nouveautés', async () => {
+    const marked = [
+      { ...series[0], to_read_at: '2026-11-20T00:00:00.000Z' },
+      { ...series[1], to_read_at: '2026-11-10T00:00:00.000Z' },
+    ]
+    mockApi({ ...api(), '/api/series': () => json(marked) })
+    renderAt('/')
+    const section = within(await screen.findByRole('region', { name: 'À lire' }))
+    expect(section.getAllByRole('link', { name: /Récente|Ancienne/ }).map((l) => l.getAttribute('href'))).toEqual(['/series/8', '/series/7'])
+    expect(screen.getAllByRole('region')[1]).toHaveAccessibleName('À lire')
+  })
+
   it('sans nouveauté, pas de section', async () => {
     mockApi(api())
     renderAt('/')
     await screen.findByRole('region', { name: 'Continuer la lecture' })
     expect(screen.queryByRole('region', { name: 'Nouveautés' })).toBeNull()
+    expect(screen.queryByRole('region', { name: 'À lire' })).toBeNull()
   })
 
   it('explique quoi faire sans bibliothèque', async () => {

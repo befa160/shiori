@@ -92,6 +92,28 @@ pub(super) async fn unfollow(
     }
 }
 
+pub(super) async fn add_to_read(
+    State(app): State<Arc<App>>,
+    Me(me): Me,
+    Path(id): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    match app.db.add_to_read(&me, int_id(&id)?).await? {
+        true => Ok(StatusCode::NO_CONTENT),
+        false => Err(ApiError::not_found("série")),
+    }
+}
+
+pub(super) async fn remove_to_read(
+    State(app): State<Arc<App>>,
+    Me(me): Me,
+    Path(id): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    match app.db.remove_to_read(&me, int_id(&id)?).await? {
+        true => Ok(StatusCode::NO_CONTENT),
+        false => Err(ApiError::not_found("série")),
+    }
+}
+
 impl From<EditError> for ApiError {
     fn from(e: EditError) -> Self {
         match e {

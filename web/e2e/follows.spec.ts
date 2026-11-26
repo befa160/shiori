@@ -1,5 +1,6 @@
-// Nouveautés (1.3) : suivre une série, y déposer un tome, le voir à l'accueil, puis
-// « Tout marquer comme vu ». La bibliothèque est préparée par l'API ; le reste par l'interface.
+// Listes personnelles (1.3) : suivre une série, y déposer un tome, le voir à l'accueil, puis
+// « Tout marquer comme vu » ; puis « À lire », quitté en commençant. La bibliothèque est préparée
+// par l'API ; le reste par l'interface.
 import { cpSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { type APIRequestContext, expect, test } from '@playwright/test'
@@ -16,7 +17,13 @@ const RUN = Date.now()
 const ROOT = `${DATA}/follow-${RUN}`
 
 test.beforeAll(() => cpSync(`${DATA}/library/follow`, ROOT, { recursive: true }))
-test.afterAll(() => rmSync(ROOT, { recursive: true, force: true }))
+let library = 0
+// Bibliothèque retirée avant ses fichiers : surveillée, elle lancerait sinon un scan qui gênerait
+// le parcours suivant (un seul scan à la fois).
+test.afterAll(async ({ request }) => {
+  if (library) await request.delete(`/api/libraries/${library}`)
+  rmSync(ROOT, { recursive: true, force: true })
+})
 
 /** Passe complète de la bibliothèque, attendue jusqu'au bout. */
 async function scan(request: APIRequestContext, library: number) {
@@ -27,7 +34,7 @@ async function scan(request: APIRequestContext, library: number) {
 test('suivre une série : son nouveau tome à l’accueil, jusqu’à « Tout marquer comme vu »', async ({ page, request }) => {
   await page.setViewportSize({ width: 1280, height: 800 })
   const created = await request.post('/api/libraries', { data: { name: `Suivie ${RUN}`, root: ROOT, kind: 'manga' } })
-  const library: number = (await created.json()).id
+  library = (await created.json()).id
   await scan(request, library)
   const main = page.getByRole('main')
 
@@ -60,4 +67,27 @@ test('suivre une série : son nouveau tome à l’accueil, jusqu’à « Tout ma
   await page.reload()
   await expect(main.getByRole('heading', { level: 1, name: 'Accueil' })).toBeVisible()
   await expect(main.getByRole('region', { name: 'Nouveautés' })).toHaveCount(0)
+
+  // « À lire » (1.3c) : depuis la page de la série, puis l'étagère de l'accueil.
+  await page.goto(`/libraries/${library}`)
+  await main.getByRole('link', { name: /^E2E Suivie/ }).click()
+  const toRead = main.getByRole('button', { name: 'À lire' })
+  await toRead.click()
+  await expect(toRead).toHaveAttribute('aria-pressed', 'true')
+  await page.goto('/')
+  const waiting = main.getByRole('region', { name: 'À lire' })
+  await expect(waiting.getByRole('link', { name: /^E2E Suivie/ })).toBeVisible()
+  for (const [width, height] of SIZES) {
+    await page.setViewportSize({ width, height })
+    await waiting.scrollIntoViewIfNeeded()
+    await page.screenshot({ path: `${CAPTURES}accueil-a-lire-${width}x${height}.png` })
+  }
+  // Commencée : elle quitte « À lire ».
+  await waiting.getByRole('link', { name: /^E2E Suivie/ }).click()
+  const saved = page.waitForResponse((r) => r.request().method() === 'PUT' && r.url().endsWith('/progress'))
+  await main.getByRole('link', { name: /Lire · Tome 1/ }).click()
+  await saved
+  await page.goto('/')
+  await expect(main.getByRole('heading', { level: 1, name: 'Accueil' })).toBeVisible()
+  await expect(main.getByRole('region', { name: 'À lire' })).toHaveCount(0)
 })

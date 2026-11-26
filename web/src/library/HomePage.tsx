@@ -14,8 +14,8 @@ import { ContinueCard, CoverSkeletons, NewCard, SeriesCard, Shelf } from './Cove
 // Séries par étagère : au-delà, « Tout voir » mène à la grille de la bibliothèque.
 const SHELF_SIZE = 20
 
-/** Accueil : « Continuer la lecture » (toujours en premier), nouveautés des séries suivies, puis
- * les derniers ajouts de chaque bibliothèque. */
+/** Accueil : « Continuer la lecture » (toujours en premier), nouveautés des séries suivies,
+ * « À lire », puis les derniers ajouts de chaque bibliothèque. */
 export function HomePage() {
   const { t } = useTranslation()
   const libraries = useLibraries()
@@ -46,6 +46,7 @@ export function HomePage() {
         </section>
       )}
       <NewShelf />
+      <ToReadShelf series={series.data ?? []} />
       <QueryState
         query={libraries}
         isEmpty={(list) => list.length === 0}
@@ -101,6 +102,32 @@ function NewShelf() {
         {items.map((item, i) => (
           <li key={item.volume.volume_id}>
             <NewCard item={item} eager={i < 6} />
+          </li>
+        ))}
+      </Shelf>
+    </section>
+  )
+}
+
+/** « À lire » (1.3), dans l'ordre d'ajout ; absente quand la liste est vide. */
+function ToReadShelf({ series }: { series: SeriesSummary[] }) {
+  const { t } = useTranslation()
+  const list = series
+    .filter((s) => s.to_read_at)
+    .sort((a, b) => (a.to_read_at as string).localeCompare(b.to_read_at as string) || a.id - b.id)
+  if (list.length === 0) return null
+  return (
+    <section aria-labelledby="home-to-read" className="space-y-3">
+      <div>
+        <h2 id="home-to-read" className="text-lg font-semibold">
+          {t('home.toRead')}
+        </h2>
+        <p className="text-sm text-muted-foreground">{t('home.toReadHint')}</p>
+      </div>
+      <Shelf>
+        {list.map((s) => (
+          <li key={s.id}>
+            <SeriesCard series={s} />
           </li>
         ))}
       </Shelf>

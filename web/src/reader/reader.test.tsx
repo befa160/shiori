@@ -46,6 +46,7 @@ const series: SeriesDetail = {
   locked: [],
   sources: [],
   followed: false,
+  to_read: false,
   resume_volume_id: null,
   page_count: 3,
   pages_read: 0,
