@@ -18,13 +18,13 @@ This guide describes Shiori screen by screen. To install it: [quick start](/en/i
 
 - **Large screens**: a collapsible sidebar (Home, Series, Search, your libraries, Documentation, Downloads, Administration, Account). On phones, the documentation opens from the **Account** page.
 - **Phones and tablets in portrait**: a tab bar at the bottom (Home, Series, Search, Account).
-- **Home**: "Continue reading" (the volume in progress in each series, or the next one when a volume is finished), then one shelf per library.
+- **Home**: "Continue reading" (the volume in progress in each series, or the next one when a volume is finished), "New volumes" (volumes added to the series you follow, until you open them or click "Mark all as seen"; hidden when there are none), then one shelf per library.
 - **Series**: all series as covers, filtered by reading state (unread, in progress, read), publication status, library and **tags** (several tags = series that have them all), sorted by title, last read or recently added.
 - **Search**: by title, alternative title, author or tag, ignoring accents and case.
 
 ![Series page: search, filters (reading, publication, tags, library), sort and covers](/screens/en/ecran_series.jpg)
 
-- **Series page**: cover, summary, authors, genres and tags (each leads to the series that have it), progress, a button to resume or start, and the list of volumes. A volume's menu marks it read or unread, downloads it for offline reading and shows the problems of its last scan. The series menu (on its page, or on its card in lists) marks the **whole** series read or unread, for your account only; "unread" clears the progress of all its volumes, so it asks for confirmation. A series is "Read" as soon as everything readable is read: an unreadable volume (in error) does not hold it back, it stays flagged by its badge.
+- **Series page**: cover, summary, authors, genres and tags (each leads to the series that have it), progress, a button to resume or start, a **Follow** button (volumes added afterwards show up in "New volumes"; those already there do not; for your account only, on all your devices), and the list of volumes. A volume's menu marks it read or unread, downloads it for offline reading and shows the problems of its last scan. The series menu (on its page, or on its card in lists) marks the **whole** series read or unread, for your account only; "unread" clears the progress of all its volumes, so it asks for confirmation. A series is "Read" as soon as everything readable is read: an unreadable volume (in error) does not hold it back, it stays flagged by its badge.
 
 An amber bar at the bottom of a cover shows the progress of a volume in progress.
 

@@ -39,6 +39,7 @@ const detail: SeriesDetail = {
   metadata: NO_METADATA,
   locked: [],
   sources: [],
+  followed: false,
   resume_volume_id: 'b',
   page_count: 392,
   pages_read: 245,
@@ -305,6 +306,28 @@ describe('page d’une série', () => {
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Marquer comme non lu' }))
     await userEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Marquer comme non lu' }))
     await waitFor(() => expect(fetch.mock.calls.some(([url, init]) => url === '/api/series/7/read' && init?.method === 'DELETE')).toBe(true))
+  })
+
+  it('suit la série puis ne la suit plus ; un refus se dit et ne change rien', async () => {
+    let status = 204
+    const fetch = mockApi({
+      '/api/series/7': () => json(detail),
+      '/api/series/7/follow': () => (status === 204 ? new Response(null, { status }) : json({ code: 'internal', message: 'x' }, status)),
+    })
+    renderAt('/series/7')
+    const follow = await main().findByRole('button', { name: 'Suivre' })
+    expect(follow).toHaveAttribute('aria-pressed', 'false')
+    await userEvent.click(follow)
+    await waitFor(() => expect(follow).toHaveAttribute('aria-pressed', 'true'))
+    expect(fetch.mock.calls.some(([url, init]) => url === '/api/series/7/follow' && init?.method === 'PUT')).toBe(true)
+    expect(await screen.findByText('Série suivie : ses nouveaux tomes s’afficheront à l’accueil')).toBeInTheDocument()
+    await userEvent.click(follow)
+    await waitFor(() => expect(follow).toHaveAttribute('aria-pressed', 'false'))
+    expect(fetch.mock.calls.some(([url, init]) => url === '/api/series/7/follow' && init?.method === 'DELETE')).toBe(true)
+    status = 500
+    await userEvent.click(follow)
+    expect(await screen.findByText('Suivi non modifié')).toBeInTheDocument()
+    expect(follow).toHaveAttribute('aria-pressed', 'false')
   })
 
   it('compte une série lue quand tout ce qui se lit est lu, malgré un tome illisible', async () => {

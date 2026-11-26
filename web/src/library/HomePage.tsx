@@ -1,17 +1,21 @@
-import { ChevronRight } from 'lucide-react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { CheckCheck, ChevronRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
-import { useAllSeries, useContinue, useLibraries } from '@/api/queries'
+import { api } from '@/api/client'
+import { useAllSeries, useContinue, useLibraries, useNewVolumes } from '@/api/queries'
 import type { Library, SeriesSummary } from '@/api/types'
 import { useIsAdmin } from '@/auth/session'
 import { QueryState } from '@/browse/Parts'
 import { Button } from '@/components/ui/button'
-import { ContinueCard, CoverSkeletons, SeriesCard, Shelf } from './Covers'
+import { toastFailure } from '@/i18n/errors'
+import { ContinueCard, CoverSkeletons, NewCard, SeriesCard, Shelf } from './Covers'
 
 // Séries par étagère : au-delà, « Tout voir » mène à la grille de la bibliothèque.
 const SHELF_SIZE = 20
 
-/** Accueil : « Continuer la lecture », puis les derniers ajouts de chaque bibliothèque. */
+/** Accueil : « Continuer la lecture » (toujours en premier), nouveautés des séries suivies, puis
+ * les derniers ajouts de chaque bibliothèque. */
 export function HomePage() {
   const { t } = useTranslation()
   const libraries = useLibraries()
@@ -41,6 +45,7 @@ export function HomePage() {
           </QueryState>
         </section>
       )}
+      <NewShelf />
       <QueryState
         query={libraries}
         isEmpty={(list) => list.length === 0}
@@ -63,6 +68,43 @@ export function HomePage() {
         )}
       </QueryState>
     </div>
+  )
+}
+
+/** Nouveautés (1.3) : rien tant qu'il n'y en a pas, ni squelette (le plus souvent vide). */
+function NewShelf() {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const items = useNewVolumes().data ?? []
+  const seen = useMutation({
+    mutationFn: api.markNewSeen,
+    onSuccess: () => queryClient.setQueryData(['new'], []),
+    onError: toastFailure(t('home.markSeenFailed'), t),
+  })
+  if (items.length === 0) return null
+  return (
+    <section aria-labelledby="home-new" className="space-y-3">
+      {/* Titre et bouton sur une ligne, aide dessous : sur téléphone, l'aide ne serre pas le bouton. */}
+      <div>
+        <div className="flex items-center justify-between gap-4">
+          <h2 id="home-new" className="text-lg font-semibold">
+            {t('home.new')}
+          </h2>
+          <Button variant="ghost" className="-mr-2 h-11 shrink-0 px-2 text-muted-foreground" disabled={seen.isPending} onClick={() => seen.mutate()}>
+            <CheckCheck aria-hidden />
+            {t('home.markSeen')}
+          </Button>
+        </div>
+        <p className="text-sm text-muted-foreground">{t('home.newHint')}</p>
+      </div>
+      <Shelf>
+        {items.map((item, i) => (
+          <li key={item.volume.volume_id}>
+            <NewCard item={item} eager={i < 6} />
+          </li>
+        ))}
+      </Shelf>
+    </section>
   )
 }
 

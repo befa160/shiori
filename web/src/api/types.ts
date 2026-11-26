@@ -209,6 +209,15 @@ export interface ReadingStats {
 }
 
 /** Une entrée de « Continuer la lecture » (`GET /api/continue`), une par série. */
+/** Tome nouveau d'une série suivie (`/api/me/new`), jamais ouvert par le compte. */
+export interface NewVolume {
+  series_id: number
+  series_name: string
+  library_id: number
+  volume: SeriesVolume
+  added_at: string
+}
+
 export interface ContinueItem {
   series_id: number
   series_name: string
@@ -279,6 +288,8 @@ export interface SeriesDetail {
   sources: SourceState[]
   publication_status: PublicationStatus | null
   settings: ReadingSettings
+  /** Suivie par le compte : ses tomes ajoutés apparaissent dans les nouveautés (1.3). */
+  followed: boolean
   /** Tome qu'ouvre « Lire » (même règle que dans `SeriesSummary`). */
   resume_volume_id: string | null
   /** Comme dans `SeriesSummary`. */
