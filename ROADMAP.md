@@ -101,6 +101,7 @@ Regroupe tout ce qui a été noté « plus tard » pendant les phases 1 à 11 (l
 
 - **Sources** : MangaUpdates, Comic Vine.
 - **Actualisation périodique** des fiches liées (aujourd'hui : à la demande, bouton Actualiser).
+- **Séries incomplètes** (demandé le 2026-11-26) : repérer une série terminée dont il manque des tomes. Nombre de tomes officiel à lire et garder (aujourd'hui ignoré) : AniList `volumes` (rempli surtout quand la série est finie), MangaDex `lastVolume` (souvent vide), ComicInfo `<Count>` ; Wikipédia ne le donne pas. Comparer aux numéros présents (trous compris), afficher « 12 / 15 » sur la page de la série et un filtre « Incomplètes ».
 
 ### Distribution
 
