@@ -90,3 +90,35 @@ Saves the page read. Allowed to API tokens.
 ### `DELETE /api/volumes/{id}/progress`
 
 "Mark as unread". **Response 204**.
+
+## Bookmarks
+
+The signed-in account's own: at most one per page, with a note (500 characters at most, surrounding spaces removed). They point to the page by its ID: a modified file takes its bookmarks away, like its progress. An API token can read them, not change them.
+
+```json
+{ "id": 12, "volume_id": "a41f…", "page_id": "3f9c…", "ordinal": 45, "note": "The fight", "created_at": "…" }
+```
+
+### `GET /api/volumes/{id}/bookmarks`
+
+The volume's bookmarks, in page order. **Error**: 404 `not_found`.
+
+### `GET /api/series/{id}/bookmarks`
+
+Those of the series' volumes, sorted by `volume_id` then by page (the volume order is the one of `GET /api/series/{id}`). **Error**: 404 `not_found`.
+
+### `POST /api/volumes/{id}/bookmarks`
+
+```json
+{ "page_id": "3f9c…", "note": "The fight" }
+```
+
+`note` is optional. **Response 201**: the bookmark; **200** and the existing one if the page was already bookmarked (its note does not change). **Errors**: 400 `invalid_body`, 404 `not_found`, 422 `page_not_in_volume`.
+
+### `PATCH /api/bookmarks/{id}`
+
+`{ "note": "…" }`. **Response 200**: the bookmark. **Errors**: 400 `invalid_body`, 404 `not_found` (also for another account's).
+
+### `DELETE /api/bookmarks/{id}`
+
+**Response 204**. **Error**: 404 `not_found`.

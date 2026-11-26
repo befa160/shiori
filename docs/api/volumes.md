@@ -90,3 +90,35 @@ Enregistre la page lue. Permis aux jetons d'API.
 ### `DELETE /api/volumes/{id}/progress`
 
 « Marquer comme non lu ». **Réponse 204**.
+
+## Marque-pages
+
+Ceux du compte connecté : au plus un par page, avec une note (500 caractères au plus, espaces des bords retirés). Ils désignent la page par son ID : un fichier modifié emporte ses marque-pages, comme sa progression. Un jeton d'API peut les lire, pas les changer.
+
+```json
+{ "id": 12, "volume_id": "a41f…", "page_id": "3f9c…", "ordinal": 45, "note": "Le combat", "created_at": "…" }
+```
+
+### `GET /api/volumes/{id}/bookmarks`
+
+Les marque-pages du tome, dans l'ordre des pages. **Erreur** : 404 `not_found`.
+
+### `GET /api/series/{id}/bookmarks`
+
+Ceux des tomes de la série, rangés par `volume_id` puis par page (l'ordre des tomes est celui de `GET /api/series/{id}`). **Erreur** : 404 `not_found`.
+
+### `POST /api/volumes/{id}/bookmarks`
+
+```json
+{ "page_id": "3f9c…", "note": "Le combat" }
+```
+
+`note` facultative. **Réponse 201** : le marque-page ; **200** et celui qui existait si la page était déjà marquée (sa note ne change pas). **Erreurs** : 400 `invalid_body`, 404 `not_found`, 422 `page_not_in_volume`.
+
+### `PATCH /api/bookmarks/{id}`
+
+`{ "note": "…" }`. **Réponse 200** : le marque-page. **Erreurs** : 400 `invalid_body`, 404 `not_found` (aussi pour celui d'un autre compte).
+
+### `DELETE /api/bookmarks/{id}`
+
+**Réponse 204**. **Erreur** : 404 `not_found`.
