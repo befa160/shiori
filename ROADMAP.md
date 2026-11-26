@@ -30,33 +30,9 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 
 ---
 
-## Prochaine phase : 1.2 (🚧 plan validé le 2026-11-25)
+## Prochaine phase (❓ à décider)
 
-Lecteur (luminosité, marque-pages) et édition d'un tome dans l'interface. Trois lots, une PR chacun, dans cet ordre (du plus petit au plus gros).
-
-### Ce qui existe
-
-- `PATCH /api/volumes/{id}` (administrateur) : titre, résumé, date de sortie, auteurs, avec verrouillage par champ (`volume_edits`) ; aucune interface ne l'appelle.
-- Couverture d'un tome = sa page d'ordre 0 ; numéro = celui lu dans le nom du fichier (`file_locations.number`, tri des tomes).
-- Panneau Affichage du lecteur (`DisplayOptions`, `Chrome.tsx`) : sens, disposition, sens du tap, « Utiliser cette page comme couverture » (de la série).
-- La progression est liée au tome (hash du fichier) et à la page (ID stable) : un fichier modifié repart de zéro ; les marque-pages suivront la même règle.
-
-### Lots
-
-| Lot | Contenu | Taille |
-|---|---|---|
-| 1.2a ✅ | **Luminosité** : curseur dans le panneau Affichage (30 % à 100 %), voile noir au-dessus des pages (pas de `filter` : rien à recalculer par image), retenu par appareil (Q68) ; e2e + captures | S |
-| 1.2b ✅ | **Édition d'un tome** : « Modifier » dans le menu d'un tome (page de la série, administrateur) : titre, verrous et « Rétablir » ; **couverture du tome** par « Utiliser comme couverture du tome » dans le lecteur (`cover_page_id` ajouté aux champs d'un tome, refusé hors du tome) ; boutons de couverture du lecteur réservés à l'administrateur ; numéro non modifiable (Q69). Résumé, date et auteurs d'un tome restent dans l'API seulement : l'interface ne les affiche nulle part | S |
-| 1.2c ✅ | **Marque-pages**, en deux PR (API, puis interface) : table `bookmarks` (compte, tome, page, note ≤ 500 caractères, date), routes `GET/POST /api/volumes/{id}/bookmarks`, `GET /api/series/{id}/bookmarks`, `PATCH/DELETE /api/bookmarks/{id}` (modifiables par une session seulement) ; bouton marque-page dans la barre du lecteur (page affichée, une double page marque sa page de gauche dans le sens de lecture), panneau listant les marque-pages du tome (vignette, numéro, note, aller à, supprimer) ; liste aussi sur la page de la série (Q70) ; hors ligne : lecture seule (Q71) | M |
-
-Chaque lot : documentation FR/EN (usage du lecteur, API), ROADMAP, Ponytail, captures 4 tailles pour l'UI.
-
-### Questions (propositions retenues)
-
-- **Q68** Luminosité retenue **par appareil** (stockage local) plutôt que par compte : le soir sur la Tab A9 n'est pas le jour sur l'A55. Proposition : par appareil.
-- **Q69** Numéro d'un tome modifiable ? Il vient du nom du fichier et ordonne les tomes ; le surcharger touche le tri partout (requêtes de séries, « tome suivant »). Proposition : **non** en 1.2 (renommer le fichier suffit, le scan suit), noté au backlog.
-- **Q70** Marque-pages visibles aussi hors du lecteur ? Proposition : panneau dans le lecteur, plus une section repliable « Marque-pages » sur la page de la série quand il y en a ; pas de page globale.
-- **Q71** Hors ligne : créer un marque-page sans réseau demanderait une file d'attente comme la progression. Proposition : lecture seule hors ligne (bouton désactivé avec explication) ; la file viendra si le besoin apparaît.
+La 1.2 est terminée : luminosité du lecteur (#146), édition d'un tome (#147), marque-pages (#148, #149) ; plan et bilan dans l'historique. Version `1.2.0` ; prochaine étape proposée : le plan de la 1.3 (nouveautés suivies ; listes « À lire », collections partagées, relations entre séries).
 
 ## Planning après la V1
 
@@ -65,7 +41,7 @@ Le backlog ci-dessous, rangé par version (S : une PR, M : 2 ou 3 PR, L : une ph
 | Version | Contenu | Taille |
 |---|---|---|
 | 1.1 ✅ | Statistiques de lecture (application Android abandonnée après essai) | M |
-| 1.2 | Lecteur : luminosité, marque-pages ; édition d'un tome dans l'interface | S + S + M |
+| 1.2 ✅ | Lecteur : luminosité, marque-pages ; édition d'un tome dans l'interface | S + S + M |
 | 1.3 | Nouveautés suivies ; listes « À lire » par compte, puis collections partagées et relations entre séries | M + S + M |
 | 1.4 | Liens d'invitation ; sources MangaUpdates et Comic Vine ; actualisation périodique des fiches | M + M + S |
 | 1.5 | En-tête `Remote-User` (pour les autres installations, inutile ici) | S |
@@ -81,12 +57,8 @@ Regroupe tout ce qui a été noté « plus tard » pendant les phases 1 à 11 (l
 
 ### Lecture et bibliothèque
 
-- **Statistiques de lecture** : tomes et pages lus par semaine, séries terminées, temps de lecture estimé ; la progression est déjà horodatée par compte. Candidat 1.1.
 - **Listes** : « À lire » par compte, collections partagées choisies par l'administrateur, relations entre séries (suite, édition, spin-off).
 - **Nouveautés suivies** : marquer une série comme suivie et voir à l'accueil les tomes ajoutés depuis la dernière visite.
-- **Marque-pages** dans un tome (plusieurs par tome, avec une note), en plus de la progression.
-- **Réglages d'image du lecteur** : luminosité (lecture le soir sur l'écran LCD de la Tab A9).
-- **Édition d'un tome** dans l'interface (titre, couverture) : prévue en 1.2.
 - **Numéro d'un tome modifiable** (aujourd'hui tiré du nom du fichier, qui ordonne les tomes) : écarté de la 1.2 (Q69), renommer le fichier suffit.
 - **Pagination de la liste des séries**, quand une bibliothèque dépasse quelques milliers de séries (voir les limites connues).
 - Non retenu : EPUB (Shiori lit des images ; le PDF l'est depuis la phase 8).
@@ -182,3 +154,4 @@ Décisions assumées, chacune marquée `shortcut:` dans le code avec son seuil (
 - 2026-11-25 : édition d'un tome (1.2b) : titre et couverture seulement (résumé, date et auteurs d'un tome ne sont affichés nulle part) ; les boutons de couverture du lecteur ne s'affichent plus pour un compte lecteur, que le serveur refusait déjà.
 - 2026-11-26 : marque-pages, API (1.2c) : un par page et par compte, avec une note de 500 caractères au plus ; supprimés avec leur page (fichier modifié) ou leur compte ; lisibles par un jeton d'API (règle commune des `GET`), pas modifiables.
 - 2026-11-26 : marque-pages, interface (1.2c) : bouton « Marquer cette page » (la première page d'une double page dans le sens de lecture), « Annuler » après un retrait, panneau du tome (aller à, note, retirer), section repliée sur la page de la série ; lecture seule hors ligne.
+- 2026-11-26 : 1.2 terminée (luminosité, édition d'un tome, marque-pages) ; version `1.2.0`.

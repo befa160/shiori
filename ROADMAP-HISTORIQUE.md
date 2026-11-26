@@ -1602,6 +1602,40 @@ Bilan :
 - Statistiques (1.1a #133, 1.1b #134) : journal `reading_activity` rempli à chaque page enregistrée, `GET /api/me/stats`, page Statistiques (tuiles, 12 semaines en colonnes CSS, tableau), dans la barre latérale et la page Compte.
 - Application Android : **no-go** le 2026-11-23, retour au split DNS. Sur la Tab A9, la WebView d'Android limite trop les requêtes qu'un protocole maison intercepte (relais Tauri) : pas de `Sec-Fetch-Site`, réponses 3xx refusées (la WebView charge alors l'adresse sur le réseau, `ERR_CONNECTION_REFUSED`), et surtout **corps des POST et PUT perdus** (connexion impossible sans faire passer le corps autrement, par un script injecté dans chaque page). Les GET passaient vers l'adresse publique. L'adresse IP locale n'a pas abouti dans l'application (cause non établie : elle marche dans le navigateur). Le code de l'essai reste sur la branche `feat/android-spike`.
 
+## Version 1.2 : lecteur (luminosité, marque-pages) et édition d'un tome (plan validé le 2026-11-25, terminée le 2026-11-26)
+
+Lecteur (luminosité, marque-pages) et édition d'un tome dans l'interface. Trois lots, dans cet ordre (du plus petit au plus gros) ; le rognage des marges blanches, prévu au départ, a été retiré avant le plan (pas d'intérêt pour l'utilisateur).
+
+### Ce qui existe
+
+- `PATCH /api/volumes/{id}` (administrateur) : titre, résumé, date de sortie, auteurs, avec verrouillage par champ (`volume_edits`) ; aucune interface ne l'appelle.
+- Couverture d'un tome = sa page d'ordre 0 ; numéro = celui lu dans le nom du fichier (`file_locations.number`, tri des tomes).
+- Panneau Affichage du lecteur (`DisplayOptions`, `Chrome.tsx`) : sens, disposition, sens du tap, « Utiliser cette page comme couverture » (de la série).
+- La progression est liée au tome (hash du fichier) et à la page (ID stable) : un fichier modifié repart de zéro ; les marque-pages suivront la même règle.
+
+### Lots
+
+| Lot | Contenu | Taille |
+|---|---|---|
+| 1.2a ✅ | **Luminosité** : curseur dans le panneau Affichage (30 % à 100 %), voile noir au-dessus des pages (pas de `filter` : rien à recalculer par image), retenu par appareil (Q68) ; e2e + captures | S |
+| 1.2b ✅ | **Édition d'un tome** : « Modifier » dans le menu d'un tome (page de la série, administrateur) : titre, verrous et « Rétablir » ; **couverture du tome** par « Utiliser comme couverture du tome » dans le lecteur (`cover_page_id` ajouté aux champs d'un tome, refusé hors du tome) ; boutons de couverture du lecteur réservés à l'administrateur ; numéro non modifiable (Q69). Résumé, date et auteurs d'un tome restent dans l'API seulement : l'interface ne les affiche nulle part | S |
+| 1.2c ✅ | **Marque-pages**, en deux PR (API, puis interface) : table `bookmarks` (compte, tome, page, note ≤ 500 caractères, date), routes `GET/POST /api/volumes/{id}/bookmarks`, `GET /api/series/{id}/bookmarks`, `PATCH/DELETE /api/bookmarks/{id}` (modifiables par une session seulement) ; bouton marque-page dans la barre du lecteur (page affichée, une double page marque sa première page dans le sens de lecture), panneau listant les marque-pages du tome (numéro, note, aller à, supprimer) ; liste aussi sur la page de la série (Q70) ; hors ligne : lecture seule (Q71) | M |
+
+Chaque lot : documentation FR/EN (usage du lecteur, API), ROADMAP, Ponytail, captures 4 tailles pour l'UI.
+
+### Décisions (2026-11-25, propositions retenues)
+
+- **Q68** Luminosité retenue **par appareil** (stockage local) plutôt que par compte : le soir sur la Tab A9 n'est pas le jour sur l'A55. Proposition : par appareil.
+- **Q69** Numéro d'un tome modifiable ? Il vient du nom du fichier et ordonne les tomes ; le surcharger touche le tri partout (requêtes de séries, « tome suivant »). Proposition : **non** en 1.2 (renommer le fichier suffit, le scan suit), noté au backlog.
+- **Q70** Marque-pages visibles aussi hors du lecteur ? Proposition : panneau dans le lecteur, plus une section repliable « Marque-pages » sur la page de la série quand il y en a ; pas de page globale.
+- **Q71** Hors ligne : créer un marque-page sans réseau demanderait une file d'attente comme la progression. Proposition : lecture seule hors ligne (bouton désactivé avec explication) ; la file viendra si le besoin apparaît.
+
+Bilan :
+- 1.2a luminosité (#146) : curseur dans le panneau Affichage, voile noir sous les commandes, valeur gardée sur l'appareil.
+- 1.2b édition d'un tome (#147) : titre et couverture seulement, car résumé, date et auteurs d'un tome ne sont affichés nulle part (ils restent dans l'API) ; boutons de couverture du lecteur masqués pour un compte lecteur, que le serveur refusait déjà.
+- 1.2c marque-pages (#148 API, #149 interface) : un par page et par compte, avec une note ; supprimés avec leur page (fichier modifié) ou leur compte ; lisibles par un jeton d'API (règle commune des `GET`), modifiables par une session seulement ; « Annuler » après un retrait ; section repliée sur la page de la série ; lecture seule hors ligne. Bouton Affichage en icône seule sur téléphone, pour garder le titre lisible à côté des deux nouveaux boutons.
+- Reste à faire par l'utilisateur : reprendre la capture `ecran_lecteur_affichage.jpg` de la documentation (curseur de luminosité absent), et essayer sur la Tab A9 la luminosité minimale (30 %) et la place des boutons dans la barre.
+
 ## Fonctionnalités ajoutées en cours de route
 
 ### Menu d'administration des scans (demandé le 2026-11-11)
