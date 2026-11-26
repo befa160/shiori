@@ -21,6 +21,7 @@ import { SeriesReadMenu } from './SeriesReadMenu'
 import { LISTS } from './series'
 import { EditSeriesDialog, SeriesAbout } from './SeriesMetadata'
 import { EditVolumeDialog } from './EditVolumeDialog'
+import { SeriesBookmarks } from './SeriesBookmarks'
 
 export function SeriesPage({ id }: { id: number }) {
   const { t } = useTranslation()
@@ -50,6 +51,7 @@ export function SeriesPage({ id }: { id: number }) {
         {(s) => (
           <>
             <SeriesHeader series={s} />
+            <SeriesBookmarks series={s} />
             <section aria-labelledby="series-volumes" className="space-y-3">
               <h2 id="series-volumes" className="text-lg font-semibold">
                 {t('series.volumes')}

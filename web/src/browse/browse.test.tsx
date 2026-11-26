@@ -409,6 +409,32 @@ describe('page d’une série', () => {
     expect(screen.queryByRole('menuitem', { name: 'Modifier' })).toBeNull()
   })
 
+  it('montre les marque-pages de la série, repliés, dans l’ordre de lecture', async () => {
+    const mark = (id: number, volume_id: string, ordinal: number, note = '') => ({ id, volume_id, page_id: `${volume_id}${ordinal}`, ordinal, note, created_at: '' })
+    mockApi({
+      '/api/series/7': () => json(detail),
+      // Rangés par identifiant de tome côté serveur ; un tome sorti de la série est ignoré.
+      '/api/series/7/bookmarks': () => json([mark(1, 'b', 9), mark(2, 'a', 50, 'Le gourmet'), mark(3, 'a', 4), mark(4, 'z', 1)]),
+    })
+    renderAt('/series/7')
+    const toggle = await main().findByRole('button', { name: 'Marque-pages (3)' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    await userEvent.click(toggle)
+    const links = within(main().getByRole('list', { name: 'Marque-pages (3)' })).getAllByRole('link')
+    expect(links.map((l) => [l.textContent, l.getAttribute('href')])).toEqual([
+      ['Tome 1 · page 5', '/read/a?page=a4'],
+      ['Tome 1 · page 51Le gourmet', '/read/a?page=a50'],
+      ['Tome 2 · page 10', '/read/b?page=b9'],
+    ])
+  })
+
+  it('sans marque-page, pas de section', async () => {
+    mockApi({ '/api/series/7': () => json(detail), '/api/series/7/bookmarks': () => json([]) })
+    renderAt('/series/7')
+    await main().findByRole('heading', { name: 'Tomes' })
+    expect(main().queryByRole('button', { name: /^Marque-page/ })).toBeNull()
+  })
+
   it('signale une série sans tome', async () => {
     mockApi({ '/api/series/7': () => json({ ...detail, volumes: [], resume_volume_id: null }) })
     renderAt('/series/7')

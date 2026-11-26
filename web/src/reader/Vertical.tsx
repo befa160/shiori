@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router'
 import { Button } from '@/components/ui/button'
+import { BookmarkControls } from './Bookmarks'
 import { DisplayOptions, PageSlider, Toolbar } from './Chrome'
 import { MAX_COLUMN, stripHeight } from './controls'
 import { useChromeKeys, useSaveProgress, useViewport } from './hooks'
@@ -92,16 +93,24 @@ export function VerticalPages({ volumeId, pages, title, back, resume, next, onMo
       <p className="sr-only" aria-live="polite">
         {t('reader.pageOf', { current: Math.max(0, pages.findIndex((p) => p.id === params.get('page'))) + 1, total: pages.length })}
       </p>
-      <Toolbar chrome={chrome} title={title} back={back} display={
-          <DisplayOptions
-            mode="vertical"
-            onMode={onMode}
-            onCover={onCover && (() => onCover(pages[current].id))}
-            onVolumeCover={onVolumeCover && (() => onVolumeCover(pages[current].id))}
-            brightness={brightness}
-            onBrightness={onBrightness}
-          />
-        }>
+      <Toolbar
+        chrome={chrome}
+        title={title}
+        back={back}
+        display={
+          <>
+            <BookmarkControls volumeId={volumeId} pageId={pages[current].id} onGo={jump} />
+            <DisplayOptions
+              mode="vertical"
+              onMode={onMode}
+              onCover={onCover && (() => onCover(pages[current].id))}
+              onVolumeCover={onVolumeCover && (() => onVolumeCover(pages[current].id))}
+              brightness={brightness}
+              onBrightness={onBrightness}
+            />
+          </>
+        }
+      >
         <PageSlider
           dir="ltr"
           total={pages.length}

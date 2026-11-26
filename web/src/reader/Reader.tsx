@@ -20,6 +20,7 @@ import { useTheme } from '@/lib/theme'
 import { cn } from '@/lib/utils'
 import { NotFound } from '@/pages/NotFound'
 import { type Direction, type Move, keyMove, moveIndex, pageUrl, preloadAhead } from './controls'
+import { BookmarkControls } from './Bookmarks'
 import { useBrightness } from './brightness'
 import { useGestures } from './gestures'
 import { Choice, DisplayOptions, PageSlider, Toolbar } from './Chrome'
@@ -300,43 +301,46 @@ function Pages({
           )
         }
         display={
-          <DisplayOptions
-            mode={direction}
-            onMode={onMode}
-            onCover={onCover && (() => onCover(first.id))}
-            onVolumeCover={onVolumeCover && (() => onVolumeCover(first.id))}
-            brightness={brightness}
-            onBrightness={onBrightness}
-          >
-            <Choice
-              legend={t('reader.pageTurn')}
-              value={pageTurn}
-              options={(['reading', 'ltr', 'rtl'] as const).map((p) => [p, t(`reader.pageTurns.${p}`)])}
-              onChange={onPageTurn}
-              vertical
-            />
-            <Choice
-              legend={t('reader.layout')}
-              value={layout}
-              options={(['single', 'double', 'auto'] as const).map((l) => [l, t(`reader.layouts.${l}`)])}
-              onChange={onLayout}
-            />
-            {shown === 'double' ? (
-              <Toggle pressed={offset} onPressedChange={setOffset} className="w-full">
-                {t('reader.offset')}
-              </Toggle>
-            ) : (
+          <>
+            <BookmarkControls volumeId={volumeId} pageId={first.id} onGo={goToPage} />
+            <DisplayOptions
+              mode={direction}
+              onMode={onMode}
+              onCover={onCover && (() => onCover(first.id))}
+              onVolumeCover={onVolumeCover && (() => onVolumeCover(first.id))}
+              brightness={brightness}
+              onBrightness={onBrightness}
+            >
               <Choice
-                legend={t('reader.spreads')}
-                value={split ? 'split' : 'whole'}
-                options={[
-                  ['split', t('reader.split')],
-                  ['whole', t('reader.whole')],
-                ]}
-                onChange={(v) => setSplit(v === 'split')}
+                legend={t('reader.pageTurn')}
+                value={pageTurn}
+                options={(['reading', 'ltr', 'rtl'] as const).map((p) => [p, t(`reader.pageTurns.${p}`)])}
+                onChange={onPageTurn}
+                vertical
               />
-            )}
-          </DisplayOptions>
+              <Choice
+                legend={t('reader.layout')}
+                value={layout}
+                options={(['single', 'double', 'auto'] as const).map((l) => [l, t(`reader.layouts.${l}`)])}
+                onChange={onLayout}
+              />
+              {shown === 'double' ? (
+                <Toggle pressed={offset} onPressedChange={setOffset} className="w-full">
+                  {t('reader.offset')}
+                </Toggle>
+              ) : (
+                <Choice
+                  legend={t('reader.spreads')}
+                  value={split ? 'split' : 'whole'}
+                  options={[
+                    ['split', t('reader.split')],
+                    ['whole', t('reader.whole')],
+                  ]}
+                  onChange={(v) => setSplit(v === 'split')}
+                />
+              )}
+            </DisplayOptions>
+          </>
         }
       >
         <Button variant="ghost" size="icon" aria-label={t(`reader.${left}`)} onClick={() => go(left)}>

@@ -650,6 +650,116 @@ describe('zoom', () => {
   })
 })
 
+describe('marque-pages', () => {
+  /** Marque-pages tenus par le faux serveur, comme le vrai : un par page. */
+  function bookmarksApi(initial: { id: number; page: number; note: string }[] = []) {
+    let list = initial.map(({ id, page, note }) => ({ id, volume_id: VOLUME, page_id: `p${page}`, ordinal: page - 1, note, created_at: '' }))
+    let next = 100
+    const fetch = mockApi({
+      [`/api/volumes/${VOLUME}`]: () => json(volume('ltr')),
+      [`/api/volumes/${VOLUME}/pages`]: () => json([page(1), page(2), page(3)]),
+      '/api/series/7': () => json(series),
+      [`/api/volumes/${VOLUME}/bookmarks`]: (init?: RequestInit) => {
+        if (init?.method !== 'POST') return json(list)
+        const body = JSON.parse(String(init.body))
+        const added = { id: next++, volume_id: VOLUME, page_id: body.page_id, ordinal: Number(body.page_id.slice(1)) - 1, note: body.note, created_at: '' }
+        list = [...list, added].sort((a, b) => a.ordinal - b.ordinal)
+        return json(added, 201)
+      },
+    })
+    // `/api/bookmarks/{id}` : la route dépend du numéro, servie à part.
+    const base = fetch.getMockImplementation()!
+    fetch.mockImplementation(async (input, init) => {
+      const match = String(input).match(/^\/api\/bookmarks\/(\d+)$/)
+      if (!match) return base(input, init)
+      const id = Number(match[1])
+      if (init?.method === 'DELETE') {
+        list = list.filter((b) => b.id !== id)
+        return new Response(null, { status: 204 })
+      }
+      const note = JSON.parse(String(init?.body)).note
+      list = list.map((b) => (b.id === id ? { ...b, note } : b))
+      return json(list.find((b) => b.id === id))
+    })
+    return fetch
+  }
+  const calls = (fetch: ReturnType<typeof mockApi>) =>
+    fetch.mock.calls
+      .filter(([url, init]) => String(url).includes('bookmarks') && init?.method !== undefined && init.method !== 'GET')
+      .map(([url, init]) => `${init?.method} ${url}${init?.body ? ` ${init.body}` : ''}`)
+
+  it('marque la page affichée, la retrouve dans le panneau, annote, y va et retire', async () => {
+    const fetch = bookmarksApi([{ id: 1, page: 3, note: 'fin' }])
+    renderAt(`/read/${VOLUME}`)
+    await screen.findByRole('img', { name: 'Page 1 sur 3' })
+    await showControls()
+    const mark = screen.getByRole('button', { name: 'Marquer cette page' })
+    expect(mark).toHaveAttribute('aria-pressed', 'false')
+    await userEvent.click(mark)
+    expect(await screen.findByText('Page marquée')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Retirer le marque-page de cette page' })).toHaveAttribute('aria-pressed', 'true')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Marque-pages du tome (2)' }))
+    const note = await screen.findByRole('textbox', { name: 'Note de la page 1' })
+    expect(screen.getByRole('textbox', { name: 'Note de la page 3' })).toHaveValue('fin')
+    await userEvent.type(note, '  début {Enter}')
+    await waitFor(() => expect(calls(fetch)).toContain('PATCH /api/bookmarks/100 {"note":"début"}'))
+    // Sans changement, rien n'est envoyé.
+    await userEvent.click(screen.getByRole('textbox', { name: 'Note de la page 3' }))
+    await userEvent.tab()
+    await userEvent.click(screen.getByRole('button', { name: 'Page 3' }))
+    expect(await screen.findByRole('img', { name: 'Page 3 sur 3' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Retirer le marque-page de la page 3' }))
+    await waitFor(() => expect(screen.queryByRole('textbox', { name: 'Note de la page 3' })).toBeNull())
+    expect(calls(fetch)).toEqual([
+      `POST /api/volumes/${VOLUME}/bookmarks {"page_id":"p1","note":""}`,
+      'PATCH /api/bookmarks/100 {"note":"début"}',
+      'DELETE /api/bookmarks/1',
+    ])
+  })
+
+  it('retirer depuis la barre se rattrape avec « Annuler », note comprise', async () => {
+    const fetch = bookmarksApi([{ id: 1, page: 1, note: 'à relire' }])
+    renderAt(`/read/${VOLUME}`)
+    await screen.findByRole('img', { name: 'Page 1 sur 3' })
+    await showControls()
+    await userEvent.click(await screen.findByRole('button', { name: 'Retirer le marque-page de cette page' }))
+    // Clic seul : sonner capture le pointeur au `pointerdown`, que jsdom ne connaît pas.
+    fireEvent.click(await screen.findByRole('button', { name: 'Annuler' }))
+    expect(await screen.findByRole('button', { name: 'Retirer le marque-page de cette page' })).toBeInTheDocument()
+    expect(calls(fetch)).toEqual(['DELETE /api/bookmarks/1', `POST /api/volumes/${VOLUME}/bookmarks {"page_id":"p1","note":"à relire"}`])
+  })
+
+  it('hors ligne : lecture seule', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    bookmarksApi([{ id: 1, page: 2, note: 'note' }])
+    renderAt(`/read/${VOLUME}`)
+    await screen.findByRole('img', { name: 'Page 1 sur 3' })
+    await showControls()
+    expect(screen.getByRole('button', { name: 'Marquer cette page' })).toBeDisabled()
+    await userEvent.click(screen.getByRole('button', { name: /^Marque-pages du tome/ }))
+    expect(await screen.findByText('Hors ligne : les marque-pages sont en lecture seule.')).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Note de la page 2' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Retirer le marque-page de la page 2' })).toBeDisabled()
+  })
+
+  it('un échec se dit, et un tome sans marque-page le dit aussi', async () => {
+    const fetch = bookmarksApi()
+    const base = fetch.getMockImplementation()!
+    fetch.mockImplementation(async (input, init) =>
+      init?.method === 'POST' ? json({ code: 'internal', message: 'x' }, 500) : base(input, init),
+    )
+    renderAt(`/read/${VOLUME}`)
+    await screen.findByRole('img', { name: 'Page 1 sur 3' })
+    await showControls()
+    await userEvent.click(screen.getByRole('button', { name: 'Marque-pages du tome (0)' }))
+    expect(await screen.findByText('Aucun marque-page dans ce tome.')).toBeInTheDocument()
+    await userEvent.keyboard('{Escape}')
+    await userEvent.click(screen.getByRole('button', { name: 'Marquer cette page' }))
+    expect(await screen.findByText('Marque-page non enregistré')).toBeInTheDocument()
+  })
+})
+
 describe('tome absent ou vide', () => {
   it('identifiant invalide : page introuvable', async () => {
     mockApi({})
