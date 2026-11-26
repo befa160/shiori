@@ -1,4 +1,4 @@
-//! Lecture par HTTP : progression d'un tome, réglages d'une série, type de bibliothèque.
+//! Lecture par HTTP : progression d'un tome, marque-pages, réglages d'une série, type de bibliothèque.
 
 mod common;
 
@@ -546,5 +546,143 @@ async fn reading_stats_follow_the_progress() {
     assert_eq!(
         (status, &error["code"]),
         (StatusCode::BAD_REQUEST, &json!("invalid_query"))
+    );
+}
+
+#[tokio::test]
+async fn bookmarks_round_trip() {
+    let f = fixture(None).await;
+    let list = format!("/api/volumes/{}/bookmarks", f.volume);
+    assert_eq!(
+        call(&f.app, "GET", &list, None).await,
+        (StatusCode::OK, json!([]))
+    );
+
+    let (status, late) = call(
+        &f.app,
+        "POST",
+        &list,
+        Some(json!({ "page_id": f.pages[9], "note": "  combat " })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{late}");
+    assert_eq!(
+        (
+            late["page_id"].as_str(),
+            late["ordinal"].as_i64(),
+            late["note"].as_str()
+        ),
+        (Some(&*f.pages[9]), Some(9), Some("combat"))
+    );
+    assert_eq!(late["volume_id"], f.volume);
+    // Page déjà marquée : 200 et le marque-page d'origine.
+    let again = call(
+        &f.app,
+        "POST",
+        &list,
+        Some(json!({ "page_id": f.pages[9], "note": "autre" })),
+    )
+    .await;
+    assert_eq!(again, (StatusCode::OK, late.clone()));
+    let (_, early) = call(
+        &f.app,
+        "POST",
+        &list,
+        Some(json!({ "page_id": f.pages[1] })),
+    )
+    .await;
+    assert_eq!(early["note"], "");
+
+    let (_, listed) = call(&f.app, "GET", &list, None).await;
+    assert_eq!(listed, json!([early, late]));
+    let (_, of_series) = call(
+        &f.app,
+        "GET",
+        &format!("/api/series/{}/bookmarks", f.series),
+        None,
+    )
+    .await;
+    assert_eq!(of_series, listed);
+
+    let one = format!("/api/bookmarks/{}", early["id"]);
+    let (status, noted) = call(&f.app, "PATCH", &one, Some(json!({ "note": "début" }))).await;
+    assert_eq!(
+        (status, noted["note"].as_str()),
+        (StatusCode::OK, Some("début"))
+    );
+    assert_eq!(
+        call(&f.app, "DELETE", &one, None).await,
+        (StatusCode::NO_CONTENT, Value::Null)
+    );
+    assert_eq!(
+        call(&f.app, "DELETE", &one, None).await.0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        call(&f.app, "PATCH", &one, Some(json!({ "note": "x" })))
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
+
+    // Refus : note trop longue, page d'un autre tome, champ inconnu, identifiants invalides.
+    let long = "x".repeat(shiori_db::MAX_NOTE + 1);
+    for (body, status, code) in [
+        (
+            json!({ "page_id": f.pages[2], "note": long }),
+            StatusCode::BAD_REQUEST,
+            "invalid_body",
+        ),
+        (
+            json!({ "page_id": "0".repeat(32) }),
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "page_not_in_volume",
+        ),
+        (
+            json!({ "page_id": "pas un id" }),
+            StatusCode::BAD_REQUEST,
+            "invalid_body",
+        ),
+        (
+            json!({ "page_id": f.pages[2], "nope": 1 }),
+            StatusCode::BAD_REQUEST,
+            "invalid_body",
+        ),
+    ] {
+        let (got, error) = call(&f.app, "POST", &list, Some(body)).await;
+        assert_eq!(
+            (got, error["code"].as_str()),
+            (status, Some(code)),
+            "{error}"
+        );
+    }
+    let late_uri = format!("/api/bookmarks/{}", late["id"]);
+    let (got, error) = call(&f.app, "PATCH", &late_uri, Some(json!({ "note": long }))).await;
+    assert_eq!(
+        (got, error["code"].as_str()),
+        (StatusCode::BAD_REQUEST, Some("invalid_body"))
+    );
+    assert_eq!(
+        call(&f.app, "DELETE", "/api/bookmarks/abc", None).await.0,
+        StatusCode::BAD_REQUEST
+    );
+    let unknown = format!("/api/volumes/{}/bookmarks", "0".repeat(64));
+    assert_eq!(
+        call(&f.app, "GET", &unknown, None).await.0,
+        StatusCode::NOT_FOUND
+    );
+    let (got, _) = call(
+        &f.app,
+        "POST",
+        &unknown,
+        Some(json!({ "page_id": f.pages[2] })),
+    )
+    .await;
+    assert_eq!(got, StatusCode::NOT_FOUND);
+    assert_eq!(
+        call(&f.app, "GET", "/api/series/999/bookmarks", None)
+            .await
+            .0,
+        StatusCode::NOT_FOUND
     );
 }

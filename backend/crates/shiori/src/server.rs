@@ -43,6 +43,7 @@ use crate::meta::{Metadata, web_sources};
 mod accounts;
 mod auth;
 mod backups;
+mod bookmarks;
 mod images;
 mod libraries;
 mod metadata;
@@ -440,6 +441,15 @@ pub fn router(app: Arc<App>, hosts: Option<Vec<String>>) -> Router {
             get(progress).put(save_progress).delete(clear_progress),
         )
         .route("/api/volumes/{id}/pages", get(pages))
+        .route(
+            "/api/volumes/{id}/bookmarks",
+            get(bookmarks::of_volume).post(bookmarks::add),
+        )
+        .route("/api/series/{id}/bookmarks", get(bookmarks::of_series))
+        .route(
+            "/api/bookmarks/{id}",
+            patch(bookmarks::set_note).delete(bookmarks::remove),
+        )
         .route("/api/pages/{id}/image", get(page_image))
         .route("/api/admin/health", get(health_summary))
         .route("/api/admin/health/files", get(files_to_repair))

@@ -33,6 +33,7 @@ macro_rules! now {
 
 mod accounts;
 mod backup;
+mod bookmarks;
 mod browse;
 mod health;
 mod library;
@@ -50,6 +51,7 @@ pub use accounts::{
     UserChange, temporary_password,
 };
 pub use backup::{RestoreError, temp_file};
+pub use bookmarks::{AddBookmark, Bookmark, MAX_NOTE, clean_note};
 pub use browse::{
     ContinueItem, LibrarySummary, PageFile, PageInfo, PageSource, PublicationStatus, ReadingStatus,
     SeriesDetail, SeriesSummary, SeriesVolume, VolumeDetail, VolumeLocation,
