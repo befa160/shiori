@@ -196,6 +196,8 @@ export const en: Translations = {
     removeTag: 'Remove tag {{tag}}',
     clear: 'Clear filters',
     noResults: 'No series matches.',
+    index: 'Alphabetical index',
+    indexLetter: 'Go to letter {{letter}}',
     noResultsHelp: 'Try another word, or clear the filters.',
   },
   library: {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SeriesSummary } from '@/api/types'
-import { allTags, applyFilters, fold, isFiltered, readFilters } from './filters'
+import { allTags, applyFilters, byName, fold, initial, isFiltered, letterAnchors, readFilters } from './filters'
 
 const base: SeriesSummary = {
   id: 0,
@@ -126,5 +126,26 @@ describe('filtres de séries', () => {
     expect(filters('status=incomplete')).toMatchObject({ status: 'incomplete' })
     expect(ids(applyFilters(list, filters('status=incomplete')))).toEqual([1])
     expect(ids(applyFilters(list, filters('status=completed')))).toEqual([1, 2, 4])
+  })
+})
+
+describe('index alphabétique', () => {
+  it('donne l’initiale sans accent, `#` pour les chiffres, symboles et autres écritures', () => {
+    expect(['Akira', ' été', '20th Century Boys', '進撃の巨人', '', '¡Hola!'].map(initial)).toEqual(['A', 'E', '#', '#', '#', '#'])
+  })
+
+  it('trie `#` d’abord, puis sans accents ni casse, les nombres dans l’ordre', () => {
+    const names = ['zelda', 'Été', 'Tome 10', '進撃', 'eden', 'Tome 2', 'Akira', '20th']
+    expect(names.map((name) => ({ name })).sort(byName).map((s) => s.name)).toEqual(['20th', '進撃', 'Akira', 'eden', 'Été', 'Tome 2', 'Tome 10', 'zelda'])
+  })
+
+  it('remet dans l’ordre alphabétique une liste reçue octet par octet', () => {
+    const server = [series[0], series[2], series[3], { ...series[1], id: 5, name: 'akira' }, series[1]]
+    expect(ids(applyFilters(server, filters('')))).toEqual([1, 5, 2, 3, 4])
+  })
+
+  it('marque la première série de chaque lettre', () => {
+    const list = ['1', '2', 'Akira', 'Astro', 'Été'].map((name, id) => ({ id, name }))
+    expect([...letterAnchors(list)]).toEqual([[0, '#'], [2, 'A'], [4, 'E']])
   })
 })

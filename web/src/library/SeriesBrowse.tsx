@@ -10,9 +10,10 @@ import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import { AlphabetIndex, INDEX_MIN } from './AlphabetIndex'
 import { CoverGrid, CoverSkeletons, SeriesCard } from './Covers'
 import { tagLabel, tagSpellings } from '@/i18n/tags'
-import { allTags, applyFilters, fold, isFiltered, READ_FILTERS, readFilters, SORTS, BROWSE_STATUS, tagKey } from './filters'
+import { allTags, applyFilters, fold, letterAnchors, isFiltered, READ_FILTERS, readFilters, SORTS, BROWSE_STATUS, tagKey } from './filters'
 
 const ALL = 'all'
 
@@ -160,6 +161,7 @@ export function SeriesBrowse({ search = false }: { search?: boolean }) {
       >
         {(all) => {
           const list = applyFilters(all, filters)
+          const anchors = filters.sort === 'name' && list.length >= INDEX_MIN ? letterAnchors(list) : null
           return (
             <div className="space-y-3">
               {/* Annonce le nombre de résultats à la frappe, sans déplacer le focus. */}
@@ -177,12 +179,13 @@ export function SeriesBrowse({ search = false }: { search?: boolean }) {
               ) : (
                 <CoverGrid>
                   {list.map((s, i) => (
-                    <li key={s.id}>
+                    <li key={s.id} data-letter={anchors?.get(s.id)} className="scroll-mt-6">
                       <SeriesCard series={s} eager={i < 12} />
                     </li>
                   ))}
                 </CoverGrid>
               )}
+              {anchors && <AlphabetIndex letters={new Set(anchors.values())} />}
             </div>
           )
         }}
