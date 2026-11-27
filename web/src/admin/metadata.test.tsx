@@ -9,7 +9,7 @@ afterEach(() => vi.unstubAllGlobals())
 const idle = { running: false, done: 0, total: 0, stopped: null }
 
 function serve(overview: Partial<MetadataOverview>, settings: Partial<Settings> = {}) {
-  let current: Settings = { language: 'fr', page_turn: 'reading', metadata_online: false, metadata_sources: null, metadata_adult: false, theme: 'system', full_scan_hours: 24, comicvine_key_set: false, ...settings }
+  let current: Settings = { language: 'fr', page_turn: 'reading', metadata_online: false, metadata_sources: null, metadata_adult: false, theme: 'system', full_scan_hours: 24, metadata_refresh_days: 0, comicvine_key_set: false, ...settings }
   let state: MetadataOverview = { online: current.metadata_online, sources: ['mangadex', 'anilist'], identify: idle, issues: [], ...overview }
   const fetch = mockApi({
     '/api/libraries': () => json([]),
@@ -156,5 +156,18 @@ describe('administration : métadonnées web', () => {
     expect(await s.findByLabelText('Clé Comic Vine')).toHaveValue('')
     expect(sent('/api/settings')).toEqual([{ comicvine_key: 'abc123' }, { comicvine_key: null }])
     expect(s.getByRole('link', { name: 'Comic Vine' })).toHaveAttribute('href', 'https://comicvine.gamespot.com')
+  })
+
+  it('actualisation des fiches liées : jamais par défaut, puis chaque semaine', async () => {
+    const { sent } = serve({})
+    renderAt('/admin')
+    const s = await section()
+    const select = await s.findByRole('combobox', { name: 'Actualiser les fiches liées' })
+    expect(select).toHaveTextContent('Jamais')
+    expect(select).toHaveAccessibleDescription(/par tranches de 100 fiches par heure/)
+    await userEvent.click(select)
+    await userEvent.click(await screen.findByRole('option', { name: 'Chaque semaine' }))
+    await waitFor(() => expect(select).toHaveTextContent('Chaque semaine'))
+    expect(sent('/api/settings')).toEqual([{ metadata_refresh_days: 7 }])
   })
 })

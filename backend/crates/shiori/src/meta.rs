@@ -8,6 +8,7 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
+use std::time::Duration;
 
 use serde::Serialize;
 use shiori_db::{Db, Language, MatchedBy, Outcome, Settings};
@@ -19,6 +20,9 @@ use tokio::task::JoinHandle;
 
 /// Candidats gardés pour une confirmation.
 const CANDIDATES: usize = 10;
+/// Fiches relues par tranche de l'actualisation périodique, une tranche par heure : de quoi
+/// relire 16 000 fiches par semaine, et rester sous les 200 requêtes par heure de Comic Vine.
+pub const REFRESH_BATCH: u32 = 100;
 
 /// État de l'identification en tâche de fond.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
@@ -151,20 +155,84 @@ impl Metadata {
             else {
                 continue;
             };
-            let Ok(client) = self.source(state.source).await else {
-                continue;
-            };
-            let outcome = match blocking(move || client.fetch(&external_id)).await {
-                Ok(data) => Outcome::Linked {
-                    external_id: data.id.clone(),
-                    matched_by,
-                    data: Box::new(data),
-                },
-                Err(e) => Outcome::Failed(e.code()),
+            let outcome = match self.reread(state.source, external_id, matched_by).await {
+                Ok(outcome) => outcome,
+                Err(MetaError::Fetch(e)) => Outcome::Failed(e.code()),
+                Err(MetaError::UnknownSource) => continue,
+                Err(e) => return Err(e),
             };
             self.db.record_source(series, state.source, outcome).await?;
         }
         Ok(())
+    }
+
+    /// Relit une fiche liée chez sa source.
+    async fn reread(
+        &self,
+        source: SourceId,
+        external_id: String,
+        matched_by: MatchedBy,
+    ) -> Result<Outcome, MetaError> {
+        let client = self.source(source).await?;
+        let data = blocking(move || client.fetch(&external_id)).await?;
+        Ok(Outcome::Linked {
+            external_id: data.id.clone(),
+            matched_by,
+            data: Box::new(data),
+        })
+    }
+
+    /// Une tranche de l'actualisation périodique (1.4f) : au plus [`REFRESH_BATCH`] fiches liées
+    /// plus vieilles que le réglage, les plus anciennes d'abord. Rien si le réseau ou le réglage
+    /// est coupé ; arrêt dès qu'une source demande d'attendre ou ne répond plus (la tranche
+    /// suivante reprendra) ; un autre échec est noté et la fiche passe en fin de file. Rend le
+    /// nombre de fiches relues.
+    pub async fn refresh_stale(&self) -> Result<usize, MetaError> {
+        let settings = self.db.settings().await?;
+        if !settings.metadata_online || settings.metadata_refresh_days == 0 {
+            return Ok(0);
+        }
+        let stale = self
+            .db
+            .stale_sources(settings.metadata_refresh_days, REFRESH_BATCH)
+            .await?;
+        let mut done = 0;
+        for fiche in stale {
+            let outcome = match self
+                .reread(fiche.source, fiche.external_id, fiche.matched_by)
+                .await
+            {
+                Ok(outcome) => outcome,
+                Err(MetaError::Fetch(FetchError::RateLimited(_) | FetchError::Offline(_))) => break,
+                Err(MetaError::Fetch(e)) => Outcome::Failed(e.code()),
+                // Source retirée de cette version : la fiche reste telle quelle.
+                Err(MetaError::UnknownSource) => continue,
+                Err(e) => return Err(e),
+            };
+            self.db
+                .record_source(fiche.series_id, fiche.source, outcome)
+                .await?;
+            done += 1;
+        }
+        Ok(done)
+    }
+
+    /// Lance l'actualisation périodique pour toute la vie du serveur : une tranche par `every`.
+    pub fn spawn_refresh(self: &Arc<Self>, every: Duration) -> JoinHandle<()> {
+        let this = self.clone();
+        tokio::spawn(async move {
+            let mut tick = tokio::time::interval(every);
+            // Le premier tic est immédiat : on laisse le serveur démarrer.
+            tick.tick().await;
+            loop {
+                tick.tick().await;
+                match this.refresh_stale().await {
+                    Ok(0) => {}
+                    Ok(n) => tracing::info!("actualisation des fiches liées : {n} relues"),
+                    Err(e) => tracing::warn!("actualisation des fiches liées : {e}"),
+                }
+            }
+        })
     }
 
     /// Vignette d'une fiche (résultat de recherche, candidat ou fiche liée), relayée : le

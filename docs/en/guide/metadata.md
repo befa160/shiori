@@ -35,6 +35,10 @@ They are **off by default** (**Administration → Web metadata**). Only the seri
 
 ![Identify window: linked sources (AniList, Wikipedia) and possible entries from a MangaDex search](/screens/en/ecran_identifier.jpg)
 
+## Periodic refresh
+
+A linked entry is kept as it is and read again on request ("Refresh" in the Identify window). **Administration → Web metadata → Refresh linked entries** can also read it again on its own: **Never** (default), **Every week** or **Every month**. Every hour, Shiori reads again at most 100 entries older than that delay, oldest first, at each source's rate; if a source asks to wait or does not answer, it resumes the next hour. An entry that is not found keeps its data and shows the error. Nothing is sent while web metadata is disabled.
+
 ## Incomplete series
 
 Shiori compares a series' **official number of volumes** with the volumes you have. That number comes, in the usual order, from your files (`<Count>` in a `ComicInfo.xml`, read when the volume is scanned), then from the web sources that give it (AniList, MangaDex, MangaUpdates; neither Wikipedia nor Comic Vine); it can be corrected in **Edit** ("Number of volumes").
@@ -42,7 +46,7 @@ Shiori compares a series' **official number of volumes** with the volumes you ha
 - The series page shows the volumes present out of the total ("38 / 43 volumes") and the missing numbers, as ranges ("Missing volumes: 2, 6–8, 43"). A "T03-05" file counts as three volumes; a special (decimal number) or a chapter does not replace a volume.
 - A series stored in chapters, or whose official count is unknown, is not compared.
 - A **completed** series with missing volumes is **incomplete**: the "Incomplete (missing volumes)" filter of the series list shows them.
-- An entry linked before 1.4 does not have the number of volumes yet: "Refresh" (Identify window) fetches it.
+- An entry linked before 1.4 does not have the number of volumes yet: "Refresh" (Identify window) fetches it, or the periodic refresh below.
 
 ## Cover
 

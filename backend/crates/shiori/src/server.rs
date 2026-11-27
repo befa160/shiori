@@ -284,6 +284,8 @@ pub async fn run(
     }
     let app = Arc::new(app);
     crate::watch::spawn(app.clone(), crate::watch::Timing::default());
+    app.metadata
+        .spawn_refresh(std::time::Duration::from_secs(3600));
     serve(listener, app, args.allowed_hosts, shutdown).await
 }
 

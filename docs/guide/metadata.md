@@ -36,6 +36,10 @@ Elles sont **désactivées par défaut** (**Administration → Métadonnées web
 ![Fenêtre Identifier : sources liées (AniList, Wikipédia) et fiches possibles d'une recherche MangaDex](/screens/fr/ecran_identifier.jpg)
 
 
+## Actualisation périodique
+
+Une fiche liée est gardée telle quelle et relue à la demande (« Actualiser » dans la fenêtre Identifier). **Administration → Métadonnées web → Actualiser les fiches liées** peut aussi la relire toute seule : **Jamais** (par défaut), **Chaque semaine** ou **Chaque mois**. Chaque heure, Shiori relit au plus 100 fiches plus anciennes que ce délai, les plus vieilles d'abord, au débit de chaque source ; si une source demande d'attendre ou ne répond pas, il reprend à l'heure suivante. Une fiche introuvable garde ses données et signale l'erreur. Rien ne part si les métadonnées web sont désactivées.
+
 ## Séries incomplètes
 
 Shiori compare le **nombre officiel de tomes** d'une série aux tomes que vous avez. Ce nombre vient, dans l'ordre habituel, de vos fichiers (`<Count>` d'un `ComicInfo.xml`, lu au scan du tome), puis des sources web qui le donnent (AniList, MangaDex, MangaUpdates ; ni Wikipédia ni Comic Vine) ; il se corrige dans **Modifier** (« Nombre de tomes »).
@@ -43,7 +47,7 @@ Shiori compare le **nombre officiel de tomes** d'une série aux tomes que vous a
 - La page de la série affiche les tomes présents sur le total (« 38 / 43 tomes ») et les numéros manquants, en plages (« Tomes manquants : 2, 6–8, 43 »). Un fichier « T03-05 » compte pour trois tomes ; un hors-série (numéro décimal) ou un chapitre ne remplace pas un tome.
 - Une série rangée en chapitres, ou dont le nombre officiel est inconnu, ne se compare pas.
 - Une série **terminée** à qui il manque des tomes est **incomplète** : le filtre « Incomplète (tomes manquants) » de la liste des séries les montre.
-- Une fiche liée avant la 1.4 n'a pas encore le nombre de tomes : « Actualiser » (fenêtre Identifier) le récupère.
+- Une fiche liée avant la 1.4 n'a pas encore le nombre de tomes : « Actualiser » (fenêtre Identifier) le récupère, ou l'actualisation périodique ci-dessous.
 
 ## Couverture
 

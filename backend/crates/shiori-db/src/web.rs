@@ -56,6 +56,15 @@ pub struct ToIdentify {
     pub names: Vec<String>,
 }
 
+/// Fiche liée à relire (actualisation périodique, 1.4f).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StaleSource {
+    pub series_id: i64,
+    pub source: SourceId,
+    pub external_id: String,
+    pub matched_by: MatchedBy,
+}
+
 /// Une source qui demande l'attention : candidats à confirmer ou dernier essai raté.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SourceIssue {
@@ -191,6 +200,31 @@ impl Db {
     /// Séries à identifier chez `source` : jamais cherchées, ou dont le dernier essai a raté
     /// sans lien ; jamais une source déliée par l'utilisateur. `series` restreint à une série
     /// (bouton « Identifier »), `None` : toutes.
+    /// Au plus `limit` fiches liées relues pour la dernière fois il y a plus de `days` jours, les
+    /// plus anciennes d'abord (un échec note aussi la date : la fiche repasse en fin de file).
+    pub async fn stale_sources(&self, days: u32, limit: u32) -> Result<Vec<StaleSource>, Error> {
+        sqlx::query(
+            "SELECT series_id, source, external_id, matched_by FROM series_sources
+             WHERE external_id IS NOT NULL AND matched_by IS NOT NULL AND NOT unlinked
+               AND checked_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-' || ? || ' days')
+             ORDER BY checked_at LIMIT ?",
+        )
+        .bind(days)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?
+        .iter()
+        .map(|r| {
+            Ok(StaleSource {
+                series_id: r.get("series_id"),
+                source: from_db(r.get("source"))?,
+                external_id: r.get("external_id"),
+                matched_by: from_db(r.get("matched_by"))?,
+            })
+        })
+        .collect()
+    }
+
     pub async fn to_identify(
         &self,
         source: SourceId,

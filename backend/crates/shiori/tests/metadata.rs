@@ -841,3 +841,131 @@ async fn the_comicvine_key_is_kept_secret_and_the_source_is_manual_only() {
     call(&f.app, "GET", &uri, None).await;
     assert_eq!(*f.anilist.key.lock().unwrap(), None);
 }
+
+/// Actualisation périodique (1.4f) : rien tant que le réglage est « Jamais » ; puis les fiches
+/// liées plus vieilles que le réglage sont relues, les plus anciennes d'abord ; une source qui
+/// demande d'attendre arrête la tranche, la suivante reprend.
+#[tokio::test]
+async fn stale_linked_entries_are_refreshed_oldest_first() {
+    let f = fixture(Duration::ZERO).await;
+    scan(&f).await;
+    f.state.metadata.wait().await;
+    let (blue, gigant) = (
+        series_id(&f, "Blue Lock").await,
+        series_id(&f, "Gigant").await,
+    );
+    for (series, id, age) in [(blue, "1", "-20 days"), (gigant, "2", "-40 days")] {
+        let linked = shiori_db::Outcome::Linked {
+            external_id: id.into(),
+            matched_by: shiori_db::MatchedBy::User,
+            data: Box::new(fiche(id, "Ancien")),
+        };
+        f.state
+            .db
+            .record_source(series, SourceId::Anilist, linked)
+            .await
+            .unwrap();
+        sqlx::query("UPDATE series_sources SET checked_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?) WHERE series_id = ?")
+            .bind(age)
+            .bind(series)
+            .execute(f.state.db.pool())
+            .await
+            .unwrap();
+    }
+    let before = f.anilist.calls().len();
+    // Réseau coupé, puis réglage « Jamais » (par défaut) : rien ne part.
+    assert_eq!(f.state.metadata.refresh_stale().await.unwrap(), 0);
+    enable(&f).await;
+    assert_eq!(f.state.metadata.refresh_stale().await.unwrap(), 0);
+    assert_eq!(f.anilist.calls().len(), before);
+
+    let (status, settings) = call(
+        &f.app,
+        "PUT",
+        "/api/settings",
+        Some(json!({ "metadata_refresh_days": 30 })),
+    )
+    .await;
+    assert_eq!(
+        (status, settings["metadata_refresh_days"].as_u64()),
+        (StatusCode::OK, Some(30))
+    );
+    // Plus de 30 jours : seule la fiche de Gigant ; la source demande d'attendre, rien n'est noté.
+    f.anilist
+        .fetch_gives(Err(FetchError::RateLimited(Duration::from_secs(60))));
+    assert_eq!(f.state.metadata.refresh_stale().await.unwrap(), 0);
+    f.anilist.fetch_gives(Ok(fiche("2", "Gigant relu")));
+    assert_eq!(f.state.metadata.refresh_stale().await.unwrap(), 1);
+    assert_eq!(&f.anilist.calls()[before..], ["fetch 2", "fetch 2"]);
+    // Relue : elle n'est plus ancienne.
+    assert_eq!(f.state.metadata.refresh_stale().await.unwrap(), 0);
+
+    // Chaque semaine : Blue Lock (20 jours) ; un échec est noté et la fiche passe en fin de file.
+    call(
+        &f.app,
+        "PUT",
+        "/api/settings",
+        Some(json!({ "metadata_refresh_days": 7 })),
+    )
+    .await;
+    f.anilist.fetch_gives(Err(FetchError::NotFound));
+    assert_eq!(f.state.metadata.refresh_stale().await.unwrap(), 1);
+    let (_, detail) = call(&f.app, "GET", &format!("/api/series/{blue}"), None).await;
+    assert_eq!(detail["sources"][0]["last_error"], "not_found");
+    assert_eq!(detail["sources"][0]["external_id"], "1");
+    assert_eq!(f.state.metadata.refresh_stale().await.unwrap(), 0);
+
+    let (status, _) = call(
+        &f.app,
+        "PUT",
+        "/api/settings",
+        Some(json!({ "metadata_refresh_days": 3 })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+/// La boucle de fond lance une tranche à chaque intervalle (le premier tic est sauté).
+#[tokio::test]
+async fn the_background_loop_refreshes_on_each_tick() {
+    let f = fixture(Duration::ZERO).await;
+    scan(&f).await;
+    f.state.metadata.wait().await;
+    let gigant = series_id(&f, "Gigant").await;
+    let linked = shiori_db::Outcome::Linked {
+        external_id: "2".into(),
+        matched_by: shiori_db::MatchedBy::User,
+        data: Box::new(fiche("2", "Gigant")),
+    };
+    f.state
+        .db
+        .record_source(gigant, SourceId::Anilist, linked)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE series_sources SET checked_at = '2000-01-01T00:00:00.000Z'")
+        .execute(f.state.db.pool())
+        .await
+        .unwrap();
+    enable(&f).await;
+    call(
+        &f.app,
+        "PUT",
+        "/api/settings",
+        Some(json!({ "metadata_refresh_days": 7 })),
+    )
+    .await;
+    f.anilist.fetch_gives(Ok(fiche("2", "Gigant")));
+    let handle = f.state.metadata.spawn_refresh(Duration::from_millis(20));
+    for _ in 0..200 {
+        if f.anilist.calls().iter().any(|c| c == "fetch 2") {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    handle.abort();
+    assert!(
+        f.anilist.calls().iter().any(|c| c == "fetch 2"),
+        "{:?}",
+        f.anilist.calls()
+    );
+}

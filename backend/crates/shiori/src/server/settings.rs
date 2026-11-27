@@ -40,6 +40,8 @@ pub(super) struct NewSettings {
     theme: Option<Option<Theme>>,
     /// Absent : inchangé ; 0 (jamais), 1, 6 ou 24 heures.
     full_scan_hours: Option<u32>,
+    /// Absent : inchangé ; 0 (jamais), 7 ou 30 jours.
+    metadata_refresh_days: Option<u32>,
     /// Absent : inchangée ; `null` : effacée ; sinon la clé Comic Vine (jamais renvoyée).
     #[serde(default, deserialize_with = "present")]
     comicvine_key: Option<Option<String>>,
@@ -63,6 +65,12 @@ pub(super) async fn save_settings(
         .is_some_and(|h| ![0, 1, 6, 24].contains(&h))
     {
         return Err(bad("full_scan_hours : 0, 1, 6 ou 24"));
+    }
+    if new
+        .metadata_refresh_days
+        .is_some_and(|d| ![0, 7, 30].contains(&d))
+    {
+        return Err(bad("metadata_refresh_days : 0, 7 ou 30"));
     }
     if new.metadata_online == Some(None) || new.metadata_adult == Some(None) {
         return Err(bad(
@@ -95,6 +103,7 @@ pub(super) async fn save_settings(
         && new.theme.is_none()
         && new.full_scan_hours.is_none()
         && key.is_none()
+        && new.metadata_refresh_days.is_none()
     {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -122,6 +131,9 @@ pub(super) async fn save_settings(
     }
     if let Some(sources) = new.metadata_sources {
         app.db.set_metadata_sources(sources).await?;
+    }
+    if let Some(days) = new.metadata_refresh_days {
+        app.db.set_metadata_refresh_days(days).await?;
     }
     if let Some(key) = key {
         app.db.set_comicvine_key(key).await?;

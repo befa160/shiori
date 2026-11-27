@@ -61,6 +61,8 @@ export interface Settings {
   theme: Theme
   /** Scan complet de toutes les bibliothèques toutes les N heures ; 0 : jamais. */
   full_scan_hours: FullScanHours
+  /** Fiches web liées relues quand elles ont plus de N jours ; 0 : jamais. */
+  metadata_refresh_days: RefreshDays
   /** Une clé Comic Vine est enregistrée ; la clé elle-même n'est jamais renvoyée. */
   comicvine_key_set: boolean
 }
@@ -69,6 +71,7 @@ export interface Settings {
 export type InstancePatch = Partial<Omit<Settings, 'comicvine_key_set'>> & { comicvine_key?: string | null }
 
 export type FullScanHours = 0 | 1 | 6 | 24
+export type RefreshDays = 0 | 7 | 30
 
 /** Sources de métadonnées web. */
 export type SourceId = 'anilist' | 'mangadex' | 'wikipedia' | 'mangaupdates' | 'comicvine'
