@@ -196,6 +196,8 @@ export const fr = {
     removeTag: 'Retirer le tag {{tag}}',
     clear: 'Effacer les filtres',
     noResults: 'Aucune série ne correspond.',
+    index: 'Index alphabétique',
+    indexLetter: 'Aller à la lettre {{letter}}',
     noResultsHelp: 'Essayez un autre mot, ou effacez les filtres.',
   },
   library: {
