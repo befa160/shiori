@@ -74,7 +74,7 @@ pub use settings::{Language, Settings, Theme};
 pub use stats::{Activity, DayActivity, ReadingStats};
 pub use tokens::{ApiToken, NewToken};
 pub use totp::{Enrollment, TotpError};
-pub use web::{Cover, MatchedBy, Outcome, SourceIssue, SourceState, ToIdentify};
+pub use web::{Cover, MatchedBy, Outcome, SourceIssue, SourceState, StaleSource, ToIdentify};
 
 pub struct Db {
     pool: SqlitePool,

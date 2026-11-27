@@ -11,11 +11,10 @@ async fn previous_version(path: &Path) {
     db.create_user("ancien", "mot de passe", Role::Admin)
         .await
         .unwrap();
-    // Défait la dernière migration (30). À recaler sur chaque nouvelle migration. La 30 ajoute
-    // une colonne et reconstruit une table (contrainte élargie) : sans la colonne, la rejouer suffit.
+    // Défait la dernière migration (31). À recaler sur chaque nouvelle migration.
     for undo in [
-        "ALTER TABLE app_settings DROP COLUMN comicvine_key",
-        "DELETE FROM _sqlx_migrations WHERE version = 30",
+        "ALTER TABLE app_settings DROP COLUMN metadata_refresh_days",
+        "DELETE FROM _sqlx_migrations WHERE version = 31",
     ] {
         sqlx::query(undo).execute(db.pool()).await.unwrap();
     }
@@ -147,7 +146,7 @@ async fn a_migration_is_preceded_by_a_backup_and_old_backups_still_restore() {
         .collect();
     assert_eq!(saved.len(), 1);
     let name = saved[0].file_name().unwrap().to_str().unwrap();
-    assert!(name.starts_with("shiori-avant-0030-"), "{name}");
+    assert!(name.starts_with("shiori-avant-0031-"), "{name}");
 
     // Base à jour : pas de nouvelle sauvegarde ; base neuve non plus.
     db.pool().close().await;

@@ -9,7 +9,7 @@ Readable by any signed-in account.
 ```json
 {
   "language": null, "page_turn": "reading", "metadata_online": false, "metadata_sources": null,
-  "metadata_adult": false, "theme": "system", "full_scan_hours": 24, "comicvine_key_set": false
+  "metadata_adult": false, "theme": "system", "full_scan_hours": 24, "metadata_refresh_days": 0, "comicvine_key_set": false
 }
 ```
 
@@ -22,6 +22,7 @@ Readable by any signed-in account.
 | `metadata_sources` | `["anilist", "mangadex", "wikipedia", "mangaupdates", "comicvine"]`, `null` | order of sources; `null`: from the language |
 | `metadata_adult` | boolean | adult entries allowed in searches |
 | `full_scan_hours` | 0, 1, 6, 24 | full scan of all libraries every N hours; 0: never |
+| `metadata_refresh_days` | 0, 7, 30 | linked web entries read again once more than N days old, in batches of 100 per hour; 0: never (default) |
 | `comicvine_key_set` | boolean | a Comic Vine key is saved (the key is never returned) |
 
 ### `PUT /api/settings` <Badge text="admin" />

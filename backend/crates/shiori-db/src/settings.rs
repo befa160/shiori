@@ -44,6 +44,8 @@ pub struct Settings {
     pub theme: Theme,
     /// Scan complet de toutes les bibliothèques toutes les N heures (0, 1, 6 ou 24) ; 0 = jamais.
     pub full_scan_hours: u32,
+    /// Fiches web liées relues quand elles ont plus de N jours (0, 7 ou 30) ; 0 = jamais (Q80).
+    pub metadata_refresh_days: u32,
     /// Une clé Comic Vine est enregistrée (la clé elle-même ne sort jamais de la base, Q79).
     pub comicvine_key_set: bool,
 }
@@ -92,7 +94,8 @@ impl Db {
     pub async fn settings(&self) -> Result<Settings, Error> {
         let row = sqlx::query(
             "SELECT language, page_turn, metadata_online, metadata_sources, metadata_adult, theme,
-                    full_scan_hours, comicvine_key IS NOT NULL AS comicvine_key_set
+                    full_scan_hours, metadata_refresh_days,
+                    comicvine_key IS NOT NULL AS comicvine_key_set
              FROM app_settings WHERE id = 1",
         )
         .fetch_one(&self.pool)
@@ -107,6 +110,7 @@ impl Db {
             metadata_adult: row.get("metadata_adult"),
             theme: from_db(row.get("theme"))?,
             full_scan_hours: row.get("full_scan_hours"),
+            metadata_refresh_days: row.get("metadata_refresh_days"),
             comicvine_key_set: row.get("comicvine_key_set"),
             metadata_sources: row
                 .get::<Option<&str>, _>("metadata_sources")
@@ -169,6 +173,16 @@ impl Db {
     pub async fn set_full_scan_hours(&self, hours: u32) -> Result<Settings, Error> {
         sqlx::query("UPDATE app_settings SET full_scan_hours = ? WHERE id = 1")
             .bind(hours)
+            .execute(&self.pool)
+            .await?;
+        self.settings().await
+    }
+
+    /// Âge (en jours) au-delà duquel une fiche liée est relue ; la contrainte de la table refuse
+    /// toute autre valeur que 0, 7 ou 30.
+    pub async fn set_metadata_refresh_days(&self, days: u32) -> Result<Settings, Error> {
+        sqlx::query("UPDATE app_settings SET metadata_refresh_days = ? WHERE id = 1")
+            .bind(days)
             .execute(&self.pool)
             .await?;
         self.settings().await

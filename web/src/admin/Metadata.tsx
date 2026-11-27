@@ -5,13 +5,17 @@ import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { toast } from 'sonner'
 import { api } from '@/api/client'
-import type { InstancePatch, SourceId, SourceIssue } from '@/api/types'
+import type { InstancePatch, RefreshDays, SourceId, SourceIssue } from '@/api/types'
 import { QueryState } from '@/browse/Parts'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { sourceErrorText, toastFailure } from '@/i18n/errors'
+
+/** « Actualiser les fiches liées » (1.4f) : jamais (par défaut, Q80), chaque semaine, chaque mois. */
+const REFRESH_DAYS: RefreshDays[] = [0, 7, 30]
 
 const CREDITS: [SourceId, string][] = [
   ['anilist', 'https://anilist.co'],
@@ -203,6 +207,31 @@ export function AdminMetadata() {
           )
         }}
       </QueryState>
+      {settings.data && (
+        <div className="space-y-1">
+          <p id={`${id}-refresh`} className="text-sm font-medium">
+            {t('admin.refresh')}
+          </p>
+          <p id={`${id}-refresh-help`} className="text-sm text-muted-foreground">
+            {t('admin.refreshHelp')}
+          </p>
+          <Select
+            value={String(save.isPending && save.variables.metadata_refresh_days !== undefined ? save.variables.metadata_refresh_days : settings.data.metadata_refresh_days)}
+            onValueChange={(v) => save.mutate({ metadata_refresh_days: Number(v) as RefreshDays })}
+          >
+            <SelectTrigger aria-labelledby={`${id}-refresh`} aria-describedby={`${id}-refresh-help`} className="w-full max-w-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent position="popper" align="start">
+              {REFRESH_DAYS.map((days) => (
+                <SelectItem key={days} value={String(days)}>
+                  {t(`admin.refreshEvery.d${days}`)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
       {settings.data && (
         <ComicvineKey set={settings.data.comicvine_key_set} saving={save.isPending} onSave={(comicvine_key) => save.mutate({ comicvine_key })} />
       )}
