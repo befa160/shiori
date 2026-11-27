@@ -84,7 +84,7 @@ Their exact location is shown at startup and in **Administration → Data**. To 
 4. Your series appear on the home page. Store your files **one folder per series**: see [Organizing your files](/en/guide/libraries#organizing-your-files).
 5. **Create your family's accounts** in **Administration → Accounts** ([accounts](/en/guide/accounts)).
 
-Optional: **Administration → Web metadata** completes your series from AniList, MangaDex, Wikipedia and MangaUpdates (off by default; only series titles are sent).
+Optional: **Administration → Web metadata** completes your series from AniList, MangaDex, Wikipedia, MangaUpdates and Comic Vine (free key to create for the latter; off by default; only series titles are sent).
 
 ## Updating
 

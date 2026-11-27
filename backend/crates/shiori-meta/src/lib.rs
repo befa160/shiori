@@ -1,5 +1,5 @@
-//! Métadonnées web (lot 5.5) : AniList, MangaDex, Wikipédia (lot 10.2b) et MangaUpdates (1.4c),
-//! normalisées dans
+//! Métadonnées web (lot 5.5) : AniList, MangaDex, Wikipédia (lot 10.2b), MangaUpdates (1.4c) et
+//! Comic Vine (1.4d), normalisées dans
 //! [`WebMetadata`].
 //!
 //! Rien de personnel ne part : seul le titre cherché (ou l'identifiant d'une fiche) est envoyé,
@@ -14,11 +14,13 @@ use serde::{Deserialize, Serialize};
 pub use shiori_core::Author;
 
 mod anilist;
+mod comicvine;
 mod mangadex;
 mod mangaupdates;
 mod wikipedia;
 
 pub use anilist::{ANILIST_URL, Anilist};
+pub use comicvine::{COMICVINE_URL, Comicvine};
 pub use mangadex::{MANGADEX_URL, Mangadex};
 pub use mangaupdates::{MANGAUPDATES_URL, Mangaupdates};
 pub use wikipedia::{WIKIPEDIA_URL, Wikipedia};
@@ -30,6 +32,7 @@ pub enum SourceId {
     Mangadex,
     Wikipedia,
     Mangaupdates,
+    Comicvine,
 }
 
 /// Un texte et sa langue (`en`, `fr`, `ja`, `ja-ro` pour le romaji…) ; `None` : inconnue.
@@ -73,6 +76,10 @@ pub enum FetchError {
     Http(u16),
     #[error("réponse inattendue : {0}")]
     BadResponse(String),
+    #[error("clé d'API à saisir dans l'administration")]
+    MissingKey,
+    #[error("clé d'API refusée par la source")]
+    InvalidKey,
 }
 
 impl FetchError {
@@ -83,6 +90,8 @@ impl FetchError {
             Self::NotFound => "not_found",
             Self::Http(_) => "http_error",
             Self::BadResponse(_) => "bad_response",
+            Self::MissingKey => "missing_key",
+            Self::InvalidKey => "invalid_key",
         }
     }
 }
@@ -96,6 +105,9 @@ pub trait Source: Send + Sync {
     fn fetch(&self, id: &str) -> Result<WebMetadata, FetchError>;
     /// Image d'une fiche (couverture), depuis les seuls hôtes de la source.
     fn image(&self, url: &str) -> Result<Vec<u8>, FetchError>;
+    /// Clé d'API de l'administrateur, pour une source qui en exige une (Comic Vine) ; donnée
+    /// avant chaque appel, `None` si aucune n'est enregistrée.
+    fn set_key(&self, _key: Option<String>) {}
 }
 
 type Response = Result<ureq::http::Response<ureq::Body>, ureq::Error>;
@@ -180,7 +192,8 @@ impl Http {
         match response.status().as_u16() {
             200 => Ok(response),
             404 => Err(FetchError::NotFound),
-            429 => {
+            // 420 : le « trop vite » de Comic Vine.
+            420 | 429 => {
                 // `Retry-After` en secondes ; une minute sans lui (le blocage d'AniList).
                 let secs = response
                     .headers()
@@ -251,7 +264,8 @@ pub fn auto_match(names: &[&str], candidates: &[WebMetadata]) -> Option<usize> {
     unique(true).or_else(|| unique(false))
 }
 
-/// Texte sans balises HTML (`<br>` devient un retour à la ligne) et sans entités courantes.
+/// Texte sans balises HTML (`<br>` et les blocs deviennent des retours à la ligne) et sans
+/// entités courantes.
 fn plain(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
@@ -262,11 +276,29 @@ fn plain(text: &str) -> String {
             rest = "";
             break;
         };
-        if rest[start + 1..start + end]
+        // Fin de ligne pour un saut ou un bloc (les articles de Comic Vine sont en paragraphes
+        // et listes) ; les lignes vides en trop partent plus bas.
+        let tag = rest[start + 1..start + end]
             .trim_start_matches('/')
-            .to_ascii_lowercase()
-            .starts_with("br")
-        {
+            .split(|c: char| !c.is_ascii_alphanumeric())
+            .next()
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if matches!(
+            tag.as_str(),
+            "br" | "p"
+                | "div"
+                | "li"
+                | "ul"
+                | "ol"
+                | "tr"
+                | "h1"
+                | "h2"
+                | "h3"
+                | "h4"
+                | "h5"
+                | "h6"
+        ) {
             out.push('\n');
         }
         rest = &rest[start + end + 1..];

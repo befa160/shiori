@@ -195,6 +195,23 @@ describe('identifier une série', () => {
     expect(item.getByRole('button', { name: 'Utiliser sa couverture' })).toBeInTheDocument()
     expect(d.getByRole('link', { name: 'MangaUpdates' })).toHaveAttribute('href', 'https://www.mangaupdates.com')
   })
+
+  it('Comic Vine sans clé : le dit et mène à l’administration ; une fiche liée ouvre sa page', async () => {
+    const url = '/api/series/7/metadata/search?source=comicvine&q=Toriko'
+    serve(
+      { ...base, sources: [state({ source: 'comicvine', external_id: '4321', matched_by: 'user' })] },
+      { [url]: () => json({ code: 'missing_key', message: 'x' }, 502) },
+    )
+    renderAt('/series/7')
+    await userEvent.click(await main().findByRole('button', { name: 'Identifier' }))
+    const d = await dialog()
+    const item = within(within(d.getByRole('region', { name: 'Sources liées' })).getByRole('listitem'))
+    expect(item.getByRole('link', { name: 'Voir la fiche' })).toHaveAttribute('href', 'https://comicvine.gamespot.com/volume/4050-4321/')
+    await userEvent.click(d.getByRole('combobox', { name: 'Source' }))
+    await userEvent.click(await screen.findByRole('option', { name: 'Comic Vine' }))
+    await userEvent.click(d.getByRole('button', { name: 'Chercher' }))
+    expect(await d.findByText(/Clé Comic Vine à saisir dans Administration/)).toBeInTheDocument()
+  })
 })
 
 describe('source principale', () => {
