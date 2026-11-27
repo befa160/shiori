@@ -1636,6 +1636,48 @@ Bilan :
 - 1.2c marque-pages (#148 API, #149 interface) : un par page et par compte, avec une note ; supprimés avec leur page (fichier modifié) ou leur compte ; lisibles par un jeton d'API (règle commune des `GET`), modifiables par une session seulement ; « Annuler » après un retrait ; section repliée sur la page de la série ; lecture seule hors ligne. Bouton Affichage en icône seule sur téléphone, pour garder le titre lisible à côté des deux nouveaux boutons.
 - Reste à faire par l'utilisateur : reprendre la capture `ecran_lecteur_affichage.jpg` de la documentation (curseur de luminosité absent), et essayer sur la Tab A9 la luminosité minimale (30 %) et la place des boutons dans la barre.
 
+## Version 1.3 : nouveautés suivies, « À lire », collections partagées (plan validé le 2026-11-26, terminée le 2026-11-27)
+
+Cinq lots, dans cet ordre ; les relations entre séries, prévues au départ, sont retirées (Q75).
+
+### Ce qui existe
+
+- Accueil (`HomePage.tsx`) : « Continuer la lecture » (`/api/continue`), puis les derniers ajouts de chaque bibliothèque, triés sur `series.created_at`.
+- Rien ne date l'arrivée d'un tome : `file_locations` n'a que `last_seen_at`, `volumes.scanned_at` change à chaque rescan.
+- Données par compte : `reading_progress`, `user_series_settings`, `bookmarks` ; règle commune : un jeton d'API lit (`GET`), seule une session écrit.
+- Navigation : 4 onglets sur téléphone (Accueil, Séries, Recherche, Compte), sidebar à partir de `lg`.
+
+### Lots
+
+| Lot | Contenu | Taille |
+|---|---|---|
+| 1.3a ✅ | **Nouveautés, API** : migration `volumes.added_at` (NULL pour l'existant, Q77 ; posée quand le tome entre en base, donc un fichier déplacé ou renommé, même hash, n'est jamais nouveau ; un fichier modifié l'est) ; table `series_follows` (compte, série, `seen_at`) ; `PUT/DELETE /api/series/{id}/follow`, `followed` dans le détail d'une série ; `GET /api/me/new` (tomes des séries suivies ajoutés après `seen_at` et jamais ouverts par ce compte, Q72), `POST /api/me/new/seen` (« Tout marquer comme vu ») | S |
+| 1.3b ✅ | **Nouveautés, interface** : bouton « Suivre » / « Suivie » sur la page de la série (Q73 : rien d'automatique), étagère « Nouveautés » à l'accueil, après « Continuer la lecture » (carte du tome, nom de la série) avec « Tout marquer comme vu », masquée quand elle est vide ; e2e + captures | S |
+| 1.3c ✅ | **« À lire »**, API et interface : table `to_read` (compte, série, date d'ajout) ; `PUT/DELETE /api/series/{id}/to-read`, date `to_read_at` dans la liste des séries (au lieu d'un `GET /api/me/to-read` : l'accueil a déjà cette liste) ; une série en sort dès qu'une de ses pages est lue (Q74, dans la transaction de la progression) ; bouton sur la page de la série, étagère « À lire » à l'accueil (ordre d'ajout) | S |
+| 1.3d ✅ | **Collections, API** : tables `collections` (nom unique) et `collection_series` ; `GET /api/collections` (avec les séries visibles du compte, `series_ids` : nombre, couvertures et titres viennent de la liste des séries ; pas de `GET /api/collections/{id}`) ; administrateur : `POST`, `PATCH` (renommer), `DELETE`, `PUT/DELETE /api/collections/{id}/series/{series_id}` ; une collection dont le compte ne voit aucune série est masquée (accès aux bibliothèques) ; `collections` dans le détail d'une série | S |
+| 1.3e ✅ | **Collections, interface** : entrée « Collections » dans la sidebar, étagère « Collections » à l'accueil (sur téléphone, pas de 5ᵉ onglet), page `/collections` et page d'une collection (grille des séries, triées par titre, Q76) ; menu ⋮ d'une série (administrateur) : « Collections… » (une case par collection, ou une nouvelle avec la série) ; puce des collections sur la page de la série ; renommer et supprimer depuis la page de la collection ; version `1.3.0` dans une PR à part | M |
+
+Chaque lot : documentation FR/EN (accueil, page de la série, API), ROADMAP, Ponytail, captures 4 tailles pour l'UI, `backup/tests.rs` (`previous_version`) recalé à chaque migration.
+
+### Décisions (2026-11-26)
+
+- **Q72** Un tome reste « nouveau » jusqu'à ce que le compte l'ouvre, ou jusqu'à « Tout marquer comme vu » ; état côté serveur, le même sur tous les appareils.
+- **Q73** Suivre une série : bouton seulement, rien d'automatique.
+- **Q74** Une série quitte « À lire » dès qu'on commence à la lire (elle passe dans « Continuer la lecture »).
+- **Q75** Relations entre séries : non retenues.
+- **Q76** Collections partagées simples : un nom et des séries triées par titre, créées par l'administrateur, visibles de tous les comptes qui voient leurs séries.
+- **Q77** Tomes déjà en base au passage à la 1.3 : jamais nouveaux (date d'ajout vide).
+
+Bilan :
+- 1.3a nouveautés, API (#152) : date d'arrivée sur le tome (`volumes.added_at`), donc un fichier déplacé ou renommé n'est jamais nouveau ; un tome ouvert une fois ne le redevient pas quand sa progression est effacée (`volumes_opened`), demandé après la revue.
+- 1.3b nouveautés, interface (#153) : bouton « Suivre », étagère « Nouveautés » ; « Continuer la lecture » reste toujours en tête de l'accueil (demande de l'utilisateur).
+- 1.3c « À lire » (#154) : date dans la liste des séries plutôt qu'une route à part ; sortie de la liste en commençant ou en marquant la série lue ; bouton seulement pour une série pas commencée ; « Suivre » et « À lire » partagent un bouton à bascule.
+- 1.3d collections, API (#155) : `series_ids` visibles du compte, l'interface prend titres et couvertures dans la liste des séries ; l'administrateur voit aussi les collections vides.
+- 1.3e collections, interface (#156) : pages, barre latérale, étagère d'accueil, puces et « Collections… » dans le menu ⋮ d'une série.
+- Ordre de l'accueil : « Continuer la lecture », « Nouveautés », « À lire », « Collections », puis les bibliothèques.
+- Reste à faire par l'utilisateur : essayer sur la Tab A9 et l'A55 (bouton « Suivre », étagères, fenêtre « Collections… »), et voir les nouveautés après un vrai scan du NAS.
+
+
 ## Fonctionnalités ajoutées en cours de route
 
 ### Menu d'administration des scans (demandé le 2026-11-11)

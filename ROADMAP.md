@@ -30,37 +30,9 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 
 ---
 
-## Version 1.3 : nouveautés suivies, « À lire », collections partagées (plan validé le 2026-11-26)
+## Prochaine phase (❓ à décider)
 
-Cinq lots, dans cet ordre ; les relations entre séries, prévues au départ, sont retirées (Q75).
-
-### Ce qui existe
-
-- Accueil (`HomePage.tsx`) : « Continuer la lecture » (`/api/continue`), puis les derniers ajouts de chaque bibliothèque, triés sur `series.created_at`.
-- Rien ne date l'arrivée d'un tome : `file_locations` n'a que `last_seen_at`, `volumes.scanned_at` change à chaque rescan.
-- Données par compte : `reading_progress`, `user_series_settings`, `bookmarks` ; règle commune : un jeton d'API lit (`GET`), seule une session écrit.
-- Navigation : 4 onglets sur téléphone (Accueil, Séries, Recherche, Compte), sidebar à partir de `lg`.
-
-### Lots
-
-| Lot | Contenu | Taille |
-|---|---|---|
-| 1.3a ✅ | **Nouveautés, API** : migration `volumes.added_at` (NULL pour l'existant, Q77 ; posée quand le tome entre en base, donc un fichier déplacé ou renommé, même hash, n'est jamais nouveau ; un fichier modifié l'est) ; table `series_follows` (compte, série, `seen_at`) ; `PUT/DELETE /api/series/{id}/follow`, `followed` dans le détail d'une série ; `GET /api/me/new` (tomes des séries suivies ajoutés après `seen_at` et jamais ouverts par ce compte, Q72), `POST /api/me/new/seen` (« Tout marquer comme vu ») | S |
-| 1.3b ✅ | **Nouveautés, interface** : bouton « Suivre » / « Suivie » sur la page de la série (Q73 : rien d'automatique), étagère « Nouveautés » à l'accueil, après « Continuer la lecture » (carte du tome, nom de la série) avec « Tout marquer comme vu », masquée quand elle est vide ; e2e + captures | S |
-| 1.3c ✅ | **« À lire »**, API et interface : table `to_read` (compte, série, date d'ajout) ; `PUT/DELETE /api/series/{id}/to-read`, date `to_read_at` dans la liste des séries (au lieu d'un `GET /api/me/to-read` : l'accueil a déjà cette liste) ; une série en sort dès qu'une de ses pages est lue (Q74, dans la transaction de la progression) ; bouton sur la page de la série, étagère « À lire » à l'accueil (ordre d'ajout) | S |
-| 1.3d ✅ | **Collections, API** : tables `collections` (nom unique) et `collection_series` ; `GET /api/collections` (avec les séries visibles du compte, `series_ids` : nombre, couvertures et titres viennent de la liste des séries ; pas de `GET /api/collections/{id}`) ; administrateur : `POST`, `PATCH` (renommer), `DELETE`, `PUT/DELETE /api/collections/{id}/series/{series_id}` ; une collection dont le compte ne voit aucune série est masquée (accès aux bibliothèques) ; `collections` dans le détail d'une série | S |
-| 1.3e ✅ | **Collections, interface** : entrée « Collections » dans la sidebar, étagère « Collections » à l'accueil (sur téléphone, pas de 5ᵉ onglet), page `/collections` et page d'une collection (grille des séries, triées par titre, Q76) ; menu ⋮ d'une série (administrateur) : « Collections… » (une case par collection, ou une nouvelle avec la série) ; puce des collections sur la page de la série ; renommer et supprimer depuis la page de la collection ; version `1.3.0` dans une PR à part | M |
-
-Chaque lot : documentation FR/EN (accueil, page de la série, API), ROADMAP, Ponytail, captures 4 tailles pour l'UI, `backup/tests.rs` (`previous_version`) recalé à chaque migration.
-
-### Décisions (2026-11-26)
-
-- **Q72** Un tome reste « nouveau » jusqu'à ce que le compte l'ouvre, ou jusqu'à « Tout marquer comme vu » ; état côté serveur, le même sur tous les appareils.
-- **Q73** Suivre une série : bouton seulement, rien d'automatique.
-- **Q74** Une série quitte « À lire » dès qu'on commence à la lire (elle passe dans « Continuer la lecture »).
-- **Q75** Relations entre séries : non retenues.
-- **Q76** Collections partagées simples : un nom et des séries triées par titre, créées par l'administrateur, visibles de tous les comptes qui voient leurs séries.
-- **Q77** Tomes déjà en base au passage à la 1.3 : jamais nouveaux (date d'ajout vide).
+La 1.3 est terminée : nouveautés suivies (#152, #153), « À lire » (#154), collections partagées (#155, #156) ; plan et bilan dans l'historique. Version `1.3.0` ; prochaine étape proposée : le plan de la 1.4 (liens d'invitation ; sources MangaUpdates et Comic Vine ; actualisation périodique des fiches).
 
 ## Planning après la V1
 
@@ -70,7 +42,7 @@ Le backlog ci-dessous, rangé par version (S : une PR, M : 2 ou 3 PR, L : une ph
 |---|---|---|
 | 1.1 ✅ | Statistiques de lecture (application Android abandonnée après essai) | M |
 | 1.2 ✅ | Lecteur : luminosité, marque-pages ; édition d'un tome dans l'interface | S + S + M |
-| 1.3 🚧 | Nouveautés suivies ; liste « À lire » par compte ; collections partagées (relations entre séries retirées) | M + S + M |
+| 1.3 ✅ | Nouveautés suivies ; liste « À lire » par compte ; collections partagées (relations entre séries retirées) | M + S + M |
 | 1.4 | Liens d'invitation ; sources MangaUpdates et Comic Vine ; actualisation périodique des fiches | M + M + S |
 | 1.5 | En-tête `Remote-User` (pour les autres installations, inutile ici) | S |
 | plus tard | OPDS (lecture et progression, sur les jetons d'API) | M |
@@ -189,3 +161,4 @@ Décisions assumées, chacune marquée `shortcut:` dans le code avec son seuil (
 - 2026-11-26 : « À lire » (1.3c) : la date de mise de côté est un champ de la liste des séries (`to_read_at`), pas une route à part ; la série sort aussi de la liste quand elle est marquée lue ; le bouton n'est proposé que pour une série pas commencée. « Suivre » et « À lire » partagent un même bouton à bascule.
 - 2026-11-27 : collections, API (1.3d) : `GET /api/collections` rend les identifiants des séries visibles, l'interface prend titres et couvertures dans la liste des séries qu'elle a déjà ; nom de 1 à 100 caractères, unique sans tenir compte de la casse ASCII (`NOCASE`) ; l'administrateur voit aussi les collections vides.
 - 2026-11-27 : collections, interface (1.3e) : « Collections… » dans le menu ⋮ d'une série ouvre une case par collection, enregistrée tout de suite, et crée une collection avec la série ; couverture d'une collection = celle de sa première série par titre ; l'étagère de l'accueil ignore les collections vides. `t` typé `TFunction` dans deux écrans d'administration : le catalogue agrandi dépassait la profondeur des types de i18next.
+- 2026-11-27 : 1.3 terminée (nouveautés suivies, « À lire », collections partagées) ; version `1.3.0`.
