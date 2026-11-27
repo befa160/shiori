@@ -12,6 +12,7 @@ Chaque personne se connecte avec son compte : sa progression, ses réglages, les
 - **Premier compte** : page **Installation** tant qu'aucun compte n'existe, avec le **jeton d'installation** affiché au démarrage de Shiori (il change à chaque lancement et empêche le premier venu de votre réseau de prendre l'instance). Sans interface : `shiori user add <nom> --admin`.
 - **Administration → Comptes** : créer un compte (nom, rôle, bibliothèques ouvertes), modifier son rôle et ses bibliothèques, le désactiver, lui donner un nouveau mot de passe provisoire, déconnecter tous ses appareils et jetons, retirer sa double authentification, le supprimer (sa progression part avec lui, pas les fichiers ni les fiches).
 - Un **mot de passe provisoire** est montré une seule fois et doit être changé à la première connexion.
+- **Inviter** (même page) : plutôt qu'un mot de passe à transmettre, un **lien d'invitation** avec le rôle et les bibliothèques du futur compte, valable 1, 7 ou 30 jours. La personne ouvre le lien, choisit son nom et son mot de passe, et se retrouve connectée. Le lien est montré une seule fois et ne sert qu'une fois ; les invitations en attente (et celles qui ont expiré) sont listées sous les comptes, chacune révocable. Une invitation tombe si l'administrateur qui l'a créée perd son rôle. Personne ne peut s'inscrire sans lien.
 - Le dernier administrateur actif ne peut être ni rétrogradé, ni désactivé, ni supprimé.
 
 ## Se connecter

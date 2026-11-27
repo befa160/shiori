@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Account, Library } from '@/api/types'
+import type { Account, Invite, Library } from '@/api/types'
 import { ADMIN, READER, json, mockApi, renderAt } from '@/test/render'
 
 const libraries: Library[] = [
@@ -161,5 +161,50 @@ describe('administration des comptes', () => {
     expect(dialog.getByText("Aucune bibliothèque pour l'instant.")).toBeInTheDocument()
     await userEvent.click(dialog.getByRole('button', { name: 'Annuler' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  it('invite : lien montré une fois, invitations en attente (périmée signalée), révocation confirmée', async () => {
+    let invites: Invite[] = [{ id: 9, role: 'reader', libraries: [1], created_at: '2026-01-01T00:00:00Z', expires_at: '2026-01-08T00:00:00Z' }]
+    const fetch = mockApi({
+      ...base,
+      '/api/admin/users': () => json(accounts),
+      '/api/admin/invites': (init) => {
+        if (init?.method !== 'POST') return json(invites)
+        const created = { id: 10, role: 'admin' as const, libraries: [], created_at: '2099-01-01T00:00:00Z', expires_at: '2099-01-31T00:00:00Z' }
+        invites = [created, ...invites]
+        return json({ ...created, token: 'JETON' }, 201)
+      },
+      '/api/admin/invites/9': () => {
+        invites = invites.filter((i) => i.id !== 9)
+        return new Response(null, { status: 204 })
+      },
+    })
+    const writeText = vi.fn(async () => {})
+    vi.stubGlobal('navigator', { ...navigator, onLine: true, languages: ['fr'], clipboard: { writeText } })
+    renderAt('/admin/users')
+    const pending = within(await screen.findByRole('region', { name: 'Invitations en attente' }))
+    expect(pending.getByText('Lecteur · 1 bibliothèque')).toBeInTheDocument()
+    expect(pending.getByText(/Expirée le/)).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Inviter' }))
+    const dialog = within(await screen.findByRole('dialog'))
+    await userEvent.click(dialog.getByRole('combobox', { name: 'Rôle' }))
+    await userEvent.click(await screen.findByRole('option', { name: 'Administrateur' }))
+    await userEvent.click(dialog.getByRole('combobox', { name: 'Lien valable' }))
+    await userEvent.click(await screen.findByRole('option', { name: '30 jours' }))
+    await userEvent.click(dialog.getByRole('button', { name: 'Créer le lien' }))
+    const link = `${window.location.origin}/invite/JETON`
+    expect(await dialog.findByText(link)).toBeInTheDocument()
+    const post = fetch.mock.calls.filter(([url, init]) => url === '/api/admin/invites' && init?.method === 'POST').at(-1)
+    expect(body(post?.[1])).toEqual({ role: 'admin', days: 30 })
+    await userEvent.click(dialog.getByRole('button', { name: 'Copier le lien' }))
+    expect(writeText).toHaveBeenCalledWith(link)
+    await userEvent.click(dialog.getByRole('button', { name: "C'est noté" }))
+    expect(await pending.findByText(/Valable jusqu'au/)).toBeInTheDocument()
+
+    await userEvent.click(pending.getByRole('button', { name: /Révoquer l'invitation Lecteur/ }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Révoquer' }))
+    await waitFor(() => expect(pending.queryByText(/Expirée le/)).not.toBeInTheDocument())
+    expect(fetch.mock.calls.some(([url, init]) => url === '/api/admin/invites/9' && init?.method === 'DELETE')).toBe(true)
   })
 })

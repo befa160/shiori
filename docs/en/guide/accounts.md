@@ -12,6 +12,7 @@ Each person signs in with their own account: their progress, their settings, the
 - **First account**: the **Setup** page while no account exists, with the **setup token** shown when Shiori starts (it changes at every launch and keeps the first comer on your network from taking over the instance). Without the interface: `shiori user add <name> --admin`.
 - **Administration → Accounts**: create an account (name, role, open libraries), change its role and libraries, disable it, give it a new temporary password, sign out all its devices and tokens, remove its two-factor authentication, delete it (its progress goes with it, not the files or entries).
 - A **temporary password** is shown only once and must be changed at the first sign-in.
+- **Invite** (same page): instead of a password to pass on, an **invite link** with the future account's role and libraries, valid for 1, 7 or 30 days. The person opens the link, picks their name and password, and is signed in. The link is shown only once and works only once; pending invites (and expired ones) are listed below the accounts, each one revocable. An invite dies if the administrator who created it loses that role. Nobody can sign up without a link.
 - The last active administrator can be neither demoted, nor disabled, nor deleted.
 
 ## Signing in

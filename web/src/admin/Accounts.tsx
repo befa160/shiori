@@ -1,12 +1,12 @@
 import type { TFunction } from 'i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Copy, Loader2, Plus } from 'lucide-react'
+import { Copy, Link2, Loader2, Plus, Trash2 } from 'lucide-react'
 import { type FormEvent, useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { api } from '@/api/client'
 import { useLibraries } from '@/api/queries'
-import type { Account, Library, Role } from '@/api/types'
+import type { Account, Invite, Library, Role } from '@/api/types'
 import { describedBy } from '@/auth/describedBy'
 import { Field } from '@/auth/Field'
 import { accountError, useUser } from '@/auth/session'
@@ -27,9 +27,13 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toastFailure } from '@/i18n/errors'
+import { formatDate } from './format'
 
 const ROLES: Role[] = ['reader', 'admin']
 const KEY = ['accounts']
+const INVITES = ['invites']
+/** Durées de validité d'un lien (Q78). */
+const DAYS = ['1', '7', '30'] as const
 
 /** Administration → Comptes : création (mot de passe provisoire montré une fois), rôle,
  * bibliothèques, désactivation, nouveau mot de passe, déconnexion des appareils, suppression. */
@@ -38,6 +42,7 @@ export function AccountsPage() {
   const accounts = useQuery({ queryKey: KEY, queryFn: ({ signal }) => api.accounts({ signal }) })
   const libraries = useLibraries().data ?? []
   const [creating, setCreating] = useState(false)
+  const [inviting, setInviting] = useState(false)
   const [editing, setEditing] = useState<Account | null>(null)
   return (
     <section className="space-y-6">
@@ -45,10 +50,16 @@ export function AccountsPage() {
       <BackLink to="/admin" label={t('admin.title')} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">{t('accounts.title')}</h1>
-        <Button onClick={() => setCreating(true)}>
-          <Plus aria-hidden />
-          {t('accounts.new')}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" onClick={() => setInviting(true)}>
+            <Link2 aria-hidden />
+            {t('invite.new')}
+          </Button>
+          <Button onClick={() => setCreating(true)}>
+            <Plus aria-hidden />
+            {t('accounts.new')}
+          </Button>
+        </div>
       </div>
       <QueryState query={accounts} empty={null} isEmpty={(list) => list.length === 0}>
         {(list) => (
@@ -67,6 +78,10 @@ export function AccountsPage() {
           </ul>
         )}
       </QueryState>
+      <Invites libraries={libraries} />
+      <Dialog open={inviting} onOpenChange={setInviting}>
+        {inviting && <NewInvite libraries={libraries} onDone={() => setInviting(false)} />}
+      </Dialog>
       <Dialog open={creating} onOpenChange={setCreating}>
         {creating && <NewAccount libraries={libraries} onDone={() => setCreating(false)} />}
       </Dialog>
@@ -77,11 +92,14 @@ export function AccountsPage() {
   )
 }
 
+/** Rôle et bibliothèques ouvertes, en mots. */
+function access({ role, libraries: open }: { role: Role; libraries: number[] }, libraries: Library[], t: TFunction): string[] {
+  const all = role === 'admin' || (libraries.length > 0 && libraries.every((l) => open.includes(l.id)))
+  return [t(`account.roles.${role}`), all ? t('accounts.allLibraries') : t('counts.libraries', { count: open.length })]
+}
+
 function summary(account: Account, libraries: Library[], t: TFunction): string {
-  const parts = [t(`account.roles.${account.role}`)]
-  if (account.role === 'admin') parts.push(t('accounts.allLibraries'))
-  else if (libraries.length > 0 && libraries.every((l) => account.libraries.includes(l.id))) parts.push(t('accounts.allLibraries'))
-  else parts.push(t('counts.libraries', { count: account.libraries.length }))
+  const parts = access(account, libraries, t)
   if (account.totp) parts.push(t('accounts.totp'))
   if (account.disabled) parts.push(t('accounts.disabled'))
   else if (account.must_change_password) parts.push(t('accounts.provisional'))
@@ -147,24 +165,24 @@ function Access({
   )
 }
 
-/** Mot de passe provisoire, montré une seule fois. */
-function Revealed({ username, password, onDone }: { username: string; password: string; onDone: () => void }) {
+/** Secret montré une seule fois (mot de passe provisoire, lien d'invitation), avec Copier. */
+function Revealed({ message, secret, copy, onDone }: { message: string; secret: string; copy: 'accounts' | 'invite'; onDone: () => void }) {
   const { t } = useTranslation()
-  const copy = async () => {
+  const copyIt = async () => {
     try {
-      await navigator.clipboard.writeText(password)
-      toast.success(t('accounts.copied'))
+      await navigator.clipboard.writeText(secret)
+      toast.success(t(`${copy}.copied`))
     } catch {
-      // Presse-papiers refusé (HTTP sans TLS) : le mot de passe reste sélectionnable.
-      toast.error(t('accounts.copyFailed'))
+      // Presse-papiers refusé (HTTP sans TLS) : le secret reste sélectionnable.
+      toast.error(t(`${copy}.copyFailed`))
     }
   }
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">{t('accounts.passwordOnce', { name: username })}</p>
+      <p className="text-sm text-muted-foreground">{message}</p>
       <div className="flex items-center gap-2 rounded-md bg-muted p-3">
-        <code className="flex-1 font-mono text-base break-all select-all">{password}</code>
-        <Button variant="ghost" size="icon" aria-label={t('accounts.copy')} onClick={() => void copy()}>
+        <code className="flex-1 font-mono text-base break-all select-all">{secret}</code>
+        <Button variant="ghost" size="icon" aria-label={t(`${copy}.copy`)} onClick={() => void copyIt()}>
           <Copy aria-hidden />
         </Button>
       </div>
@@ -199,7 +217,12 @@ function NewAccount({ libraries, onDone }: { libraries: Library[]; onDone: () =>
         {!create.data && <DialogDescription>{t('accounts.newDescription')}</DialogDescription>}
       </DialogHeader>
       {create.data ? (
-        <Revealed username={create.data.user.username} password={create.data.password} onDone={onDone} />
+        <Revealed
+          message={t('accounts.passwordOnce', { name: create.data.user.username })}
+          secret={create.data.password}
+          copy="accounts"
+          onDone={onDone}
+        />
       ) : (
         <form onSubmit={submit} className="space-y-4" noValidate>
           <Field id={`${id}-name`} label={t('auth.username')} help={t('auth.usernameHelp')} error={error}>
@@ -281,7 +304,7 @@ function EditAccount({ account, libraries, onDone }: { account: Account; librari
         <DialogDescription>{t('accounts.editDescription')}</DialogDescription>
       </DialogHeader>
       {reset.data ? (
-        <Revealed username={account.username} password={reset.data.password} onDone={onDone} />
+        <Revealed message={t('accounts.passwordOnce', { name: account.username })} secret={reset.data.password} copy="accounts" onDone={onDone} />
       ) : (
         <>
           <form onSubmit={submit} className="space-y-4" noValidate>
@@ -346,6 +369,133 @@ function EditAccount({ account, libraries, onDone }: { account: Account; librari
             </div>
           )}
         </>
+      )}
+    </DialogContent>
+  )
+}
+
+/** Invitations en attente (périmées comprises, à révoquer) ; rien tant qu'il n'y en a pas.
+ * `dataUpdatedAt` : l'heure de réception, pour dire « expirée » sans lire l'horloge au rendu. */
+function Invites({ libraries }: { libraries: Library[] }) {
+  const { t } = useTranslation()
+  const invites = useQuery({ queryKey: INVITES, queryFn: ({ signal }) => api.invites({ signal }) })
+  if (!invites.data?.length) return null
+  const now = new Date(invites.dataUpdatedAt).toISOString()
+  return (
+    <section className="space-y-2" aria-labelledby="invites-title">
+      <h2 id="invites-title" className="text-lg font-semibold">
+        {t('invite.pending')}
+      </h2>
+      <ul className="divide-y divide-border rounded-md bg-card px-4">
+        {invites.data.map((invite) => (
+          <InviteRow key={invite.id} invite={invite} libraries={libraries} now={now} />
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+function InviteRow({ invite, libraries, now }: { invite: Invite; libraries: Library[]; now: string }) {
+  const { t, i18n } = useTranslation()
+  const queryClient = useQueryClient()
+  const revoke = useMutation({
+    mutationFn: () => api.revokeInvite(invite.id),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: INVITES }),
+    onError: toastFailure(t('invite.revokeFailed'), t, accountError),
+  })
+  const expired = invite.expires_at < now
+  const date = formatDate(invite.expires_at, i18n.language)
+  const name = access(invite, libraries, t).join(' · ')
+  return (
+    <li className="flex items-center gap-3 py-3">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium">{name}</p>
+        <p className={expired ? 'text-sm text-destructive' : 'text-sm text-muted-foreground'}>
+          {t(expired ? 'invite.expired' : 'invite.expires', { date })}
+        </p>
+      </div>
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <Button variant="ghost" size="icon" disabled={revoke.isPending} aria-label={t('invite.revokeNamed', { name, date })} className="text-destructive">
+            <Trash2 aria-hidden />
+          </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogTitle>{t('invite.revokeTitle')}</AlertDialogTitle>
+          <AlertDialogDescription>{t('invite.revokeDescription')}</AlertDialogDescription>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('admin.cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => revoke.mutate()}>{t('invite.revoke')}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </li>
+  )
+}
+
+function NewInvite({ libraries, onDone }: { libraries: Library[]; onDone: () => void }) {
+  const { t, i18n } = useTranslation()
+  const id = useId()
+  const queryClient = useQueryClient()
+  const [role, setRole] = useState<Role>('reader')
+  const [chosen, setChosen] = useState(() => libraries.map((l) => l.id))
+  const [days, setDays] = useState<(typeof DAYS)[number]>('7')
+  const create = useMutation({
+    mutationFn: () => api.createInvite({ role, libraries: role === 'reader' ? chosen : undefined, days: Number(days) }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: INVITES }),
+  })
+  const submit = (e: FormEvent) => {
+    e.preventDefault()
+    create.mutate()
+  }
+  return (
+    <DialogContent closeLabel={t('common.close')}>
+      <DialogHeader>
+        <DialogTitle>{t('invite.new')}</DialogTitle>
+        {!create.data && <DialogDescription>{t('invite.newDescription')}</DialogDescription>}
+      </DialogHeader>
+      {create.data ? (
+        <Revealed
+          message={t('invite.once', { date: formatDate(create.data.expires_at, i18n.language) })}
+          secret={`${window.location.origin}/invite/${create.data.token}`}
+          copy="invite"
+          onDone={onDone}
+        />
+      ) : (
+        <form onSubmit={submit} className="space-y-4" noValidate>
+          {create.error && (
+            <p role="alert" className="text-sm text-destructive">
+              {accountError(create.error, t)}
+            </p>
+          )}
+          <Access role={role} setRole={setRole} chosen={chosen} setChosen={setChosen} libraries={libraries} />
+          <div className="space-y-1">
+            <p id={`${id}-days`} className="text-sm font-medium">
+              {t('invite.duration')}
+            </p>
+            <Select value={days} onValueChange={(v) => setDays(v as (typeof DAYS)[number])}>
+              <SelectTrigger aria-labelledby={`${id}-days`} className="w-56">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent position="popper" align="start">
+                {DAYS.map((d) => (
+                  <SelectItem key={d} value={d}>
+                    {t(`invite.days.${d}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="secondary" onClick={onDone}>
+              {t('admin.cancel')}
+            </Button>
+            <Button type="submit" disabled={create.isPending}>
+              {create.isPending && <Loader2 aria-hidden className="animate-spin" />}
+              {t('invite.create')}
+            </Button>
+          </div>
+        </form>
       )}
     </DialogContent>
   )
