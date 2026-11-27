@@ -64,3 +64,23 @@ Second facteur après `login`.
 ### `POST /api/auth/logout`
 
 Ferme la session de la requête. **Réponse 204**, cookie effacé.
+
+### `GET /api/auth/invite/{token}`
+
+Sans session : le lien d'invitation est-il encore bon ? **Réponse 200** : le rôle prévu, rien d'autre.
+
+```json
+{ "role": "reader" }
+```
+
+**Erreurs** : 404 `invite_invalid` (lien inconnu, expiré, déjà utilisé ou révoqué, sans distinction).
+
+### `POST /api/auth/invite/{token}`
+
+Sans session : crée le compte de l'invitation (mot de passe définitif, rôle et bibliothèques prévus) et ouvre sa session, comme `login`.
+
+```json
+{ "username": "lea", "password": "…" }
+```
+
+**Réponse 200** : la session (cookie `shiori_session`, ou `token` avec `client: "app"`). **Erreurs** : 404 `invite_invalid`, 400 `invalid_username`, 400 `weak_password`, 409 `name_taken` (le lien reste valable), 429 `rate_limited` après plusieurs liens invalides depuis la même adresse.

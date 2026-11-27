@@ -38,6 +38,7 @@ mod browse;
 mod collections;
 mod follows;
 mod health;
+mod invites;
 mod library;
 mod metadata;
 mod reading;
@@ -61,6 +62,7 @@ pub use browse::{
 };
 pub use collections::{Collection, CollectionError, CollectionRef, MAX_COLLECTION_NAME};
 pub use health::{CodeCount, FileHealth, FileIssue, Health, HealthFilter, LibraryHealth};
+pub use invites::{Invite, NewInvite};
 pub use library::{Library, LibraryError};
 pub use metadata::{EditError, Edited, SeriesMetadata, VolumeMetadata};
 pub use reading::{

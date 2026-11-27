@@ -46,6 +46,7 @@ mod backups;
 mod bookmarks;
 mod collections;
 mod images;
+mod invites;
 mod libraries;
 mod metadata;
 mod scans;
@@ -370,6 +371,10 @@ pub fn router(app: Arc<App>, hosts: Option<Vec<String>>) -> Router {
         .route("/api/auth/login", post(auth::login))
         .route("/api/auth/totp", post(auth::second_factor))
         .route("/api/auth/logout", post(auth::logout))
+        .route(
+            "/api/auth/invite/{token}",
+            get(invites::check).post(invites::accept),
+        )
         .route("/api/me", get(accounts::me).put(accounts::save_me))
         .route("/api/me/password", post(auth::change_password))
         .route("/api/me/sessions", get(accounts::devices))
@@ -398,6 +403,11 @@ pub fn router(app: Arc<App>, hosts: Option<Vec<String>>) -> Router {
             delete(accounts::revoke_sessions),
         )
         .route("/api/admin/users/{id}/totp", delete(totp::reset))
+        .route(
+            "/api/admin/invites",
+            get(invites::list).post(invites::create),
+        )
+        .route("/api/admin/invites/{id}", delete(invites::revoke))
         .route("/api/settings", get(settings).put(save_settings))
         .route("/api/libraries", get(libraries).post(create_library))
         .route(

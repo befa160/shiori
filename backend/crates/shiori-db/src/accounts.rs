@@ -115,7 +115,7 @@ pub(crate) fn user(row: &SqliteRow) -> Result<User, Error> {
 /// Clé d'unicité : la casse ne distingue pas deux comptes (`Élise` = `élise`).
 // shortcut: pas de normalisation Unicode (NFC) : « É » précomposé et « E » + accent font deux
 // comptes ; ajouter `unicode-normalization` si des noms saisis sur des claviers différents se croisent.
-fn name_key(username: &str) -> Result<String, AccountError> {
+pub(crate) fn name_key(username: &str) -> Result<String, AccountError> {
     let valid = (1..=32).contains(&username.chars().count())
         && username
             .chars()
@@ -164,7 +164,7 @@ pub(crate) fn readable<const N: usize>() -> String {
         .collect()
 }
 
-async fn hash_password(password: &str) -> Result<String, AccountError> {
+pub(crate) async fn hash_password(password: &str) -> Result<String, AccountError> {
     if !(MIN_PASSWORD..=MAX_PASSWORD).contains(&password.chars().count()) {
         return Err(AccountError::WeakPassword);
     }
@@ -200,6 +200,76 @@ async fn verify(password: &str, hash: String) -> bool {
     })
     .await
     .unwrap_or(false)
+}
+
+/// Insère un compte dans `tx` et rend son identifiant ; `None` si `only_first` et qu'un compte
+/// existe déjà. `provisional` : mot de passe à changer à la prochaine connexion (Q45).
+pub(crate) async fn insert_in(
+    tx: &mut sqlx::SqliteConnection,
+    username: &str,
+    key: &str,
+    hash: &str,
+    role: Role,
+    only_first: bool,
+    provisional: bool,
+) -> Result<Option<i64>, AccountError> {
+    let sql = concat!(
+        "INSERT INTO users (username, username_key, password_hash, role,
+                                must_change_password, created_at, password_changed_at)
+             SELECT ?, ?, ?, ?, ?, ",
+        now!(),
+        ", ",
+        now!(),
+        " WHERE ? OR NOT EXISTS (SELECT 1 FROM users) RETURNING id"
+    );
+    let id: i64 = match sqlx::query(sql)
+        .bind(username)
+        .bind(key)
+        .bind(hash)
+        .bind(to_db(&role))
+        .bind(provisional)
+        .bind(!only_first)
+        .fetch_optional(&mut *tx)
+        .await
+    {
+        Ok(None) => return Ok(None),
+        Ok(Some(row)) => row.get("id"),
+        Err(e)
+            if e.as_database_error()
+                .is_some_and(|d| d.is_unique_violation()) =>
+        {
+            return Err(AccountError::NameTaken(username.to_owned()));
+        }
+        Err(e) => return Err(e.into()),
+    };
+    if role == Role::Admin {
+        // L'existant d'avant les comptes revient au premier administrateur (Q46) ; les
+        // suivants trouvent les tables vides.
+        for sql in [
+                "INSERT INTO reading_progress
+                   (user_id, volume_id, page_id, ordinal, finished_at, updated_at)
+                 SELECT ?, volume_id, page_id, ordinal, finished_at, updated_at FROM legacy_progress",
+                "INSERT INTO user_series_settings
+                   (user_id, series_id, reading_mode, page_layout, page_turn)
+                 SELECT ?, series_id, reading_mode, page_layout, page_turn
+                 FROM legacy_series_settings",
+            ] {
+                sqlx::query(sql).bind(id).execute(&mut *tx).await?;
+            }
+        sqlx::query("DELETE FROM legacy_progress")
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM legacy_series_settings")
+            .execute(&mut *tx)
+            .await?;
+    }
+    if role == Role::Reader {
+        sqlx::query("INSERT INTO user_libraries (user_id, library_id) SELECT ?, id FROM libraries")
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+    }
+    Ok(Some(id))
 }
 
 impl Db {
@@ -239,63 +309,11 @@ impl Db {
         let key = name_key(username)?;
         let hash = hash_password(password).await?;
         let mut tx = self.pool.begin().await?;
-        let sql = concat!(
-            "INSERT INTO users (username, username_key, password_hash, role,
-                                must_change_password, created_at, password_changed_at)
-             SELECT ?, ?, ?, ?, ?, ",
-            now!(),
-            ", ",
-            now!(),
-            " WHERE ? OR NOT EXISTS (SELECT 1 FROM users) RETURNING id"
-        );
-        let id: i64 = match sqlx::query(sql)
-            .bind(username)
-            .bind(&key)
-            .bind(&hash)
-            .bind(to_db(&role))
-            .bind(!first)
-            .bind(!first)
-            .fetch_optional(&mut *tx)
-            .await
+        if insert_in(&mut tx, username, &key, &hash, role, first, !first)
+            .await?
+            .is_none()
         {
-            Ok(None) => return Ok(None),
-            Ok(Some(row)) => row.get("id"),
-            Err(e)
-                if e.as_database_error()
-                    .is_some_and(|d| d.is_unique_violation()) =>
-            {
-                return Err(AccountError::NameTaken(username.to_owned()));
-            }
-            Err(e) => return Err(e.into()),
-        };
-        if role == Role::Admin {
-            // L'existant d'avant les comptes revient au premier administrateur (Q46) ; les
-            // suivants trouvent les tables vides.
-            for sql in [
-                "INSERT INTO reading_progress
-                   (user_id, volume_id, page_id, ordinal, finished_at, updated_at)
-                 SELECT ?, volume_id, page_id, ordinal, finished_at, updated_at FROM legacy_progress",
-                "INSERT INTO user_series_settings
-                   (user_id, series_id, reading_mode, page_layout, page_turn)
-                 SELECT ?, series_id, reading_mode, page_layout, page_turn
-                 FROM legacy_series_settings",
-            ] {
-                sqlx::query(sql).bind(id).execute(&mut *tx).await?;
-            }
-            sqlx::query("DELETE FROM legacy_progress")
-                .execute(&mut *tx)
-                .await?;
-            sqlx::query("DELETE FROM legacy_series_settings")
-                .execute(&mut *tx)
-                .await?;
-        }
-        if role == Role::Reader {
-            sqlx::query(
-                "INSERT INTO user_libraries (user_id, library_id) SELECT ?, id FROM libraries",
-            )
-            .bind(id)
-            .execute(&mut *tx)
-            .await?;
+            return Ok(None);
         }
         tx.commit().await?;
         Ok(self.user_by_name(username).await?)
