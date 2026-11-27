@@ -44,6 +44,7 @@ mod accounts;
 mod auth;
 mod backups;
 mod bookmarks;
+mod collections;
 mod images;
 mod libraries;
 mod metadata;
@@ -413,6 +414,18 @@ pub fn router(app: Arc<App>, hosts: Option<Vec<String>>) -> Router {
             put(mark_series_read).delete(mark_series_unread),
         )
         .route("/api/series/{id}/follow", put(follow).delete(unfollow))
+        .route(
+            "/api/collections",
+            get(collections::list).post(collections::create),
+        )
+        .route(
+            "/api/collections/{id}",
+            patch(collections::rename).delete(collections::delete),
+        )
+        .route(
+            "/api/collections/{id}/series/{series_id}",
+            put(collections::add_series).delete(collections::remove_series),
+        )
         .route(
             "/api/series/{id}/to-read",
             put(add_to_read).delete(remove_to_read),

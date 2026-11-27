@@ -61,7 +61,7 @@ Nouveautés des séries suivies par le compte : les tomes ajoutés depuis le sui
   "sources": [],
   "publication_status": "ongoing",
   "settings": { "reading_mode": "rtl", "page_layout": "auto", "page_turn": "reading", "reading_mode_override": null, "page_layout_override": null, "page_turn_override": null },
-  "followed": false, "to_read": false, "resume_volume_id": "a41b…", "page_count": 612, "pages_read": 250,
+  "followed": false, "to_read": false, "collections": [{ "id": 2, "name": "Shōnen" }], "resume_volume_id": "a41b…", "page_count": 612, "pages_read": 250,
   "volumes": [{ "volume_id": "a41b…", "kind": "volume", "number": 1, "number_end": null, "status": "ok", "page_count": 204, "cover_page_id": "…", "file_name": "One Piece T01.cbz", "title": "Romance Dawn", "progress": { "…": "…" } }]
 }
 ```
@@ -72,6 +72,7 @@ Nouveautés des séries suivies par le compte : les tomes ajoutés depuis le sui
 - `settings` : réglages de lecture appliqués pour le compte ; `*_override` : ce que la série impose (`null` : défaut de la bibliothèque, ou défaut global pour `page_turn`).
 - `followed` : série suivie par le compte ([nouveautés](#get-api-me-new)).
 - `to_read` : série dans « À lire » pour le compte.
+- `collections` : [collections](#collections) qui la contiennent, par nom.
 - `volumes` : dans l'ordre de lecture ; `kind` : `volume`, `chapter`, `special`, `unknown` ; `progress` absent si le tome n'a jamais été ouvert.
 
 ### `PATCH /api/series/{id}` <Badge text="admin" />
@@ -117,3 +118,39 @@ Met la série dans « À lire », pour le compte ; déjà dedans, la date d'ajou
 ### `DELETE /api/series/{id}/to-read`
 
 Retire la série de « À lire ». **Réponse 204.** **Erreur** : 404 `not_found`.
+
+## Collections
+
+Collections partagées : un nom et des séries, gérés par l'administrateur, lus par tous les comptes. Un compte ne voit que les séries de ses bibliothèques, et pas une collection dont il ne voit aucune série ; l'administrateur les voit toutes, vides comprises.
+
+### `GET /api/collections`
+
+Par nom. `series_ids` : les séries visibles du compte ; titres, couvertures et tri viennent de la [liste des séries](#get-api-series).
+
+```json
+[{ "id": 2, "name": "Shōnen", "series_ids": [7, 12] }]
+```
+
+### `POST /api/collections` <Badge text="admin" />
+
+```json
+{ "name": "Shōnen" }
+```
+
+Nom sans les espaces des bords, de 1 à 100 caractères, unique (majuscules et minuscules confondues, en ASCII seulement). **Réponse 201** : la collection, vide. **Erreurs** : 400 `invalid_name`, 409 `name_taken`.
+
+### `PATCH /api/collections/{id}` <Badge text="admin" />
+
+Renomme : `{ "name": "Nekketsu" }`. **Réponse 200** : la collection. **Erreurs** : 400 `invalid_name`, 404 `not_found`, 409 `name_taken`.
+
+### `DELETE /api/collections/{id}` <Badge text="admin" />
+
+Supprime la collection, pas ses séries. **Réponse 204.** **Erreur** : 404 `not_found`.
+
+### `PUT /api/collections/{id}/series/{series_id}` <Badge text="admin" />
+
+Ajoute une série (déjà dedans : rien ne change). **Réponse 200** : la collection. **Erreur** : 404 `not_found` (collection ou série inconnue).
+
+### `DELETE /api/collections/{id}/series/{series_id}` <Badge text="admin" />
+
+Retire une série. **Réponse 200** : la collection. **Erreur** : 404 `not_found`.
