@@ -17,6 +17,7 @@ import type {
   User,
   FileHealth,
   Health,
+  Invite,
   LibrariesHealth,
   Library,
   LibraryKind,
@@ -197,6 +198,13 @@ export const api = {
   deleteAccount: (id: number) => request<null>(`/admin/users/${id}`, { method: 'DELETE' }),
   resetPassword: (id: number) => must<{ password: string }>(`/admin/users/${id}/password`, { method: 'POST' }),
   signOutAccount: (id: number) => request<null>(`/admin/users/${id}/sessions`, { method: 'DELETE' }),
+  invites: (init?: RequestInit) => must<Invite[]>('/admin/invites', init),
+  createInvite: (body: { role: Role; libraries?: number[]; days: number }) =>
+    must<Invite & { token: string }>('/admin/invites', { method: 'POST', body: JSON.stringify(body) }),
+  revokeInvite: (id: number) => request<null>(`/admin/invites/${id}`, { method: 'DELETE' }),
+  checkInvite: (token: string, init?: RequestInit) => must<{ role: Role }>(`/auth/invite/${encodeURIComponent(token)}`, init),
+  acceptInvite: (token: string, body: { username: string; password: string }) =>
+    must<{ user: User }>(`/auth/invite/${encodeURIComponent(token)}`, { method: 'POST', body: JSON.stringify(body) }),
   saveSeriesSettings: (seriesId: number, patch: SettingsPatch) =>
     must<ReadingSettings>(`/series/${seriesId}/settings`, { method: 'PATCH', body: JSON.stringify(patch) }),
 }

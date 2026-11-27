@@ -487,6 +487,16 @@ export interface Account extends User {
   totp: boolean
 }
 
+/** Invitation pas encore utilisée (périmée comprise), sans son jeton. */
+export interface Invite {
+  id: number
+  role: Role
+  /** Bibliothèques du futur lecteur ; vide pour un administrateur. */
+  libraries: number[]
+  created_at: string
+  expires_at: string
+}
+
 /** Jeton d'API (lecture et progression seulement), sans son secret. */
 export interface ApiToken {
   id: number

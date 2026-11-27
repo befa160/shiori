@@ -43,7 +43,7 @@ export function AuthGate() {
 }
 
 /** Cadre des écrans hors session : logo, titre, carte centrée, zones sûres. */
-function AuthScreen({ title, intro, children }: { title: string; intro?: string; children: ReactNode }) {
+export function AuthScreen({ title, intro, children }: { title: string; intro?: string; children: ReactNode }) {
   return (
     <main className="flex min-h-dvh items-center justify-center bg-background pt-[max(1.5rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(1.5rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] text-foreground">
       <title>{`${title} · Shiori`}</title>
@@ -64,7 +64,7 @@ function AuthScreen({ title, intro, children }: { title: string; intro?: string;
   )
 }
 
-function Submit({ pending, children }: { pending: boolean; children: ReactNode }) {
+export function Submit({ pending, children }: { pending: boolean; children: ReactNode }) {
   return (
     <Button type="submit" size="lg" disabled={pending} className="w-full">
       {pending && <Loader2 aria-hidden className="animate-spin" />}

@@ -3,6 +3,7 @@ import { AccountPage } from '@/account/AccountPage'
 import { AccountsPage } from '@/admin/Accounts'
 import { AuthGate } from '@/auth/AuthGate'
 import { AdminOnly } from '@/auth/AdminOnly'
+import { InvitePage } from '@/auth/InvitePage'
 import { LibraryPage } from '@/browse/LibraryPage'
 import { SeriesPage } from '@/browse/SeriesPage'
 import { WithId } from '@/browse/Parts'
@@ -19,6 +20,8 @@ import { LoadFailed, NotFound } from '@/pages/NotFound'
 
 // Tout passe par la garde : installation, connexion, mot de passe provisoire (lot 7.7).
 export const routes: RouteObject[] = [
+  // Lien d'invitation : s'ouvre sans session, hors de la garde (lot 1.4b).
+  { path: '/invite/:token', element: <InvitePage /> },
   {
     element: <AuthGate />,
     children: [
