@@ -14,12 +14,22 @@ import { errorText, sourceErrorText, toastFailure } from '@/i18n/errors'
 import { FallbackCover } from '@/library/Covers'
 import { useSeriesAction } from './series'
 
-const SOURCES: SourceId[] = ['mangadex', 'anilist', 'wikipedia']
-/** Page de la fiche chez sa source ; un identifiant Wikipédia est `langue:Titre de l'article`. */
+const SOURCES: SourceId[] = ['mangadex', 'anilist', 'wikipedia', 'mangaupdates']
+/** Page de la fiche chez sa source ; un identifiant Wikipédia est `langue:Titre de l'article`, celui
+ * de MangaUpdates un nombre que ses adresses écrivent en base 36. */
 const page = (source: SourceId, id: string) => {
-  if (source !== 'wikipedia') return `${source === 'anilist' ? 'https://anilist.co/manga/' : 'https://mangadex.org/title/'}${encodeURIComponent(id)}`
-  const [lang, ...title] = id.split(':')
-  return `https://${lang === 'en' ? 'en' : 'fr'}.wikipedia.org/wiki/${encodeURIComponent(title.join(':').replaceAll(' ', '_'))}`
+  switch (source) {
+    case 'anilist':
+      return `https://anilist.co/manga/${encodeURIComponent(id)}`
+    case 'mangadex':
+      return `https://mangadex.org/title/${encodeURIComponent(id)}`
+    case 'mangaupdates':
+      return `https://www.mangaupdates.com/series/${Number(id).toString(36)}`
+    case 'wikipedia': {
+      const [lang, ...title] = id.split(':')
+      return `https://${lang === 'en' ? 'en' : 'fr'}.wikipedia.org/wiki/${encodeURIComponent(title.join(':').replaceAll(' ', '_'))}`
+    }
+  }
 }
 
 /** Fenêtre « Identifier » façon Plex (lot 5.7b) : en tête, chaque source liée, à actualiser, dont

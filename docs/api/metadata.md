@@ -1,6 +1,6 @@
 # Métadonnées
 
-Sources web : `anilist`, `mangadex`, `wikipedia` (identifiant `langue:Titre de l'article`, par exemple `fr:One Piece` ; la recherche se fait dans la langue du compte). Toutes ces routes sont **admin** ; les sources doivent être autorisées dans les [réglages](/api/settings) (`metadata_online`), sinon 409 `metadata_disabled`.
+Sources web : `anilist`, `mangadex`, `wikipedia` (identifiant `langue:Titre de l'article`, par exemple `fr:One Piece` ; la recherche se fait dans la langue du compte), `mangaupdates` (identifiant numérique). Toutes ces routes sont **admin** ; les sources doivent être autorisées dans les [réglages](/api/settings) (`metadata_online`), sinon 409 `metadata_disabled`.
 
 État d'une source pour une série (`sources` du [détail d'une série](/api/series#get-api-series-id)) :
 
@@ -53,7 +53,7 @@ Vignette d'un candidat, relayée par le serveur (le navigateur ne contacte jamai
 ### `GET /api/admin/metadata`
 
 ```json
-{ "online": true, "sources": ["mangadex", "anilist", "wikipedia"], "identify": { "running": false, "done": 40, "total": 40, "stopped": null }, "issues": [{ "series_id": 9, "series_name": "Blame!", "source": "anilist", "candidates": 2, "last_error": null }] }
+{ "online": true, "sources": ["mangadex", "anilist", "wikipedia", "mangaupdates"], "identify": { "running": false, "done": 40, "total": 40, "stopped": null }, "issues": [{ "series_id": 9, "series_name": "Blame!", "source": "anilist", "candidates": 2, "last_error": null }] }
 ```
 
 `sources` : ordre appliqué ; `issues` : séries à vérifier (fiches à confirmer) ou en échec.

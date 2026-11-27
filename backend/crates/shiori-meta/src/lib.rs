@@ -1,4 +1,5 @@
-//! Métadonnées web (lot 5.5) : AniList, MangaDex et Wikipédia (lot 10.2b), normalisées dans
+//! Métadonnées web (lot 5.5) : AniList, MangaDex, Wikipédia (lot 10.2b) et MangaUpdates (1.4c),
+//! normalisées dans
 //! [`WebMetadata`].
 //!
 //! Rien de personnel ne part : seul le titre cherché (ou l'identifiant d'une fiche) est envoyé,
@@ -14,10 +15,12 @@ pub use shiori_core::Author;
 
 mod anilist;
 mod mangadex;
+mod mangaupdates;
 mod wikipedia;
 
 pub use anilist::{ANILIST_URL, Anilist};
 pub use mangadex::{MANGADEX_URL, Mangadex};
+pub use mangaupdates::{MANGAUPDATES_URL, Mangaupdates};
 pub use wikipedia::{WIKIPEDIA_URL, Wikipedia};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -26,6 +29,7 @@ pub enum SourceId {
     Anilist,
     Mangadex,
     Wikipedia,
+    Mangaupdates,
 }
 
 /// Un texte et sa langue (`en`, `fr`, `ja`, `ja-ro` pour le romaji…) ; `None` : inconnue.

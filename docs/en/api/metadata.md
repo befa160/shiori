@@ -1,6 +1,6 @@
 # Metadata
 
-Web sources: `anilist`, `mangadex`, `wikipedia` (identifier `language:Article title`, for example `en:One Piece`; searches use the account's language). All these routes are **admin**; sources must be allowed in the [settings](/en/api/settings) (`metadata_online`), otherwise 409 `metadata_disabled`.
+Web sources: `anilist`, `mangadex`, `wikipedia` (identifier `language:Article title`, for example `en:One Piece`; searches use the account's language), `mangaupdates` (numeric identifier). All these routes are **admin**; sources must be allowed in the [settings](/en/api/settings) (`metadata_online`), otherwise 409 `metadata_disabled`.
 
 State of a source for a series (`sources` in the [series detail](/en/api/series#get-api-series-id)):
 
@@ -53,7 +53,7 @@ A candidate's thumbnail, relayed by the server (the browser never contacts the s
 ### `GET /api/admin/metadata`
 
 ```json
-{ "online": true, "sources": ["mangadex", "anilist", "wikipedia"], "identify": { "running": false, "done": 40, "total": 40, "stopped": null }, "issues": [{ "series_id": 9, "series_name": "Blame!", "source": "anilist", "candidates": 2, "last_error": null }] }
+{ "online": true, "sources": ["mangadex", "anilist", "wikipedia", "mangaupdates"], "identify": { "running": false, "done": 40, "total": 40, "stopped": null }, "issues": [{ "series_id": 9, "series_name": "Blame!", "source": "anilist", "candidates": 2, "last_error": null }] }
 ```
 
 `sources`: applied order; `issues`: series to check (entries to confirm) or failing.

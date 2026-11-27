@@ -84,7 +84,7 @@ Leur emplacement exact s'affiche au démarrage et dans **Administration → Donn
 4. Vos séries apparaissent sur l'accueil. Rangez vos fichiers **un dossier par série** : voir [Ranger ses fichiers](/guide/libraries#ranger-ses-fichiers).
 5. **Créez les comptes de la famille** dans **Administration → Comptes** ([comptes](/guide/accounts)).
 
-Facultatif : **Administration → Métadonnées web** complète vos séries avec AniList, MangaDex et Wikipédia (désactivé par défaut ; seul le titre des séries est envoyé).
+Facultatif : **Administration → Métadonnées web** complète vos séries avec AniList, MangaDex, Wikipédia et MangaUpdates (désactivé par défaut ; seul le titre des séries est envoyé).
 
 ## Mettre à jour
 
