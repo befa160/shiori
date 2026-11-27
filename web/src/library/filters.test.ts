@@ -16,6 +16,7 @@ const base: SeriesSummary = {
   last_read_at: null, to_read_at: null,
   cover_page_id: null,
   resume_volume_id: null,
+  missing_volumes: null,
   cover_image_id: null,
   alt_titles: [],
   authors: [],
@@ -113,5 +114,17 @@ describe('filtres de séries', () => {
     expect(isFiltered(filters('sort=added'))).toBe(false)
     expect(isFiltered(filters('q=%20'))).toBe(false)
     expect(isFiltered(filters('status=ongoing'))).toBe(true)
+  })
+
+  it('« incomplète » : terminée et des tomes manquent ; ni en cours, ni sans comparaison', () => {
+    const list: SeriesSummary[] = [
+      { ...base, id: 1, publication_status: 'completed', missing_volumes: [3] },
+      { ...base, id: 2, publication_status: 'completed', missing_volumes: [] },
+      { ...base, id: 3, publication_status: 'ongoing', missing_volumes: [2] },
+      { ...base, id: 4, publication_status: 'completed', missing_volumes: null },
+    ]
+    expect(filters('status=incomplete')).toMatchObject({ status: 'incomplete' })
+    expect(ids(applyFilters(list, filters('status=incomplete')))).toEqual([1])
+    expect(ids(applyFilters(list, filters('status=completed')))).toEqual([1, 2, 4])
   })
 })

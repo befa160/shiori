@@ -49,6 +49,7 @@ const series: SeriesDetail = {
   to_read: false,
   collections: [],
   resume_volume_id: null,
+  missing_volumes: null,
   page_count: 3,
   pages_read: 0,
   settings: settings('rtl'),

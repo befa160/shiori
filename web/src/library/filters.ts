@@ -6,9 +6,11 @@ import { canonicalTag, tagSpellings } from '@/i18n/tags'
 
 export const READ_FILTERS = ['unread', 'in_progress', 'read'] as const satisfies readonly ReadingStatus[]
 export const STATUS_FILTERS = ['ongoing', 'completed', 'hiatus', 'cancelled', 'unknown'] as const
+/** Filtres de la liste : les statuts, plus « incomplète » (terminée, tomes manquants ; 1.4e). */
+export const BROWSE_STATUS = [...STATUS_FILTERS, 'incomplete'] as const
 export const SORTS = ['name', 'last_read', 'added'] as const
 
-export type StatusFilter = (typeof STATUS_FILTERS)[number]
+export type StatusFilter = (typeof BROWSE_STATUS)[number]
 export type Sort = (typeof SORTS)[number]
 
 export interface Filters {
@@ -30,7 +32,7 @@ export function readFilters(params: URLSearchParams): Filters {
   return {
     q: params.get('q') ?? '',
     read: pick(READ_FILTERS, params.get('read')),
-    status: pick(STATUS_FILTERS, params.get('status')),
+    status: pick(BROWSE_STATUS, params.get('status')),
     library: Number.isInteger(library) && library > 0 ? library : null,
     // Un tag par graphie repliée : `?tag=sf&tag=SF` (ou `Comedy` et `Comédie`) n'en fait qu'un.
     tags: [...new Map(params.getAll('tag').filter((t) => t.trim() !== '').map((t) => [tagKey(t), t])).values()],
@@ -53,7 +55,10 @@ const hasTags = (s: SeriesSummary, wanted: string[]) => {
   const own = new Set(s.tags.map(tagKey))
   return wanted.every((t) => own.has(tagKey(t)))
 }
-const statusOf = (s: SeriesSummary): StatusFilter => s.publication_status ?? 'unknown'
+/** Terminée mais des tomes manquent. */
+export const incomplete = (s: Pick<SeriesSummary, 'publication_status' | 'missing_volumes'>) =>
+  s.publication_status === 'completed' && (s.missing_volumes?.length ?? 0) > 0
+const hasStatus = (s: SeriesSummary, f: StatusFilter) => (f === 'incomplete' ? incomplete(s) : (s.publication_status ?? 'unknown') === f)
 // Dates ISO : l'ordre des chaînes est l'ordre chronologique.
 const newestFirst = (a: string | null, b: string | null) => (b ?? '').localeCompare(a ?? '')
 
@@ -63,7 +68,7 @@ export function applyFilters(series: SeriesSummary[], f: Filters): SeriesSummary
   const kept = series.filter(
     (s) =>
       (f.read === null || s.reading_status === f.read) &&
-      (f.status === null || statusOf(s) === f.status) &&
+      (f.status === null || hasStatus(s, f.status)) &&
       (f.library === null || s.library_id === f.library) &&
       hasTags(s, f.tags) &&
       words.every((word) => searchable(s).includes(word)),

@@ -409,3 +409,48 @@ async fn a_series_marked_read_leaves_continue_reading() {
             .collect();
     assert!(left.is_empty(), "{left:?}");
 }
+
+fn numbered(kind: NameKind, number: Option<f64>, end: Option<f64>) -> SeriesVolume {
+    SeriesVolume {
+        volume_id: String::new(),
+        kind,
+        number,
+        number_end: end,
+        status: Status::Ok,
+        page_count: 1,
+        cover_page_id: None,
+        file_name: String::new(),
+        progress: None,
+        title: None,
+    }
+}
+
+#[test]
+fn missing_volumes_are_the_numbers_no_file_covers() {
+    use NameKind::{Chapter, Special, Unknown, Volume};
+    let files = [
+        numbered(Volume, Some(1.0), None),
+        // « T03-05 » couvre trois numéros ; un hors-série (2.5) n'en couvre aucun.
+        numbered(Volume, Some(3.0), Some(5.0)),
+        numbered(Volume, Some(2.5), None),
+        numbered(Unknown, Some(7.0), None),
+        // Un chapitre ou un spécial ne remplace pas un tome ; un tome au-delà du compte ne gêne pas.
+        numbered(Chapter, Some(6.0), None),
+        numbered(Special, Some(8.0), None),
+        numbered(Volume, Some(12.0), None),
+        numbered(Volume, None, None),
+    ];
+    assert_eq!(missing_volumes(Some(9), &files), Some(vec![2, 6, 8, 9]));
+    assert_eq!(missing_volumes(Some(1), &files), Some(vec![]));
+    // Nombre inconnu, ou série rangée en chapitres : rien à comparer.
+    assert_eq!(missing_volumes(None, &files), None);
+    assert_eq!(
+        missing_volumes(Some(5), &[numbered(Chapter, Some(1.0), None)]),
+        None
+    );
+    // Une valeur absurde reste bornée.
+    assert_eq!(
+        missing_volumes(Some(u32::MAX), &files).unwrap().len(),
+        2000 - 6
+    );
+}

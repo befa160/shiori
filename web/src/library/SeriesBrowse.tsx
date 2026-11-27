@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { cn } from '@/lib/utils'
 import { CoverGrid, CoverSkeletons, SeriesCard } from './Covers'
 import { tagLabel, tagSpellings } from '@/i18n/tags'
-import { allTags, applyFilters, fold, isFiltered, READ_FILTERS, readFilters, SORTS, STATUS_FILTERS, tagKey } from './filters'
+import { allTags, applyFilters, fold, isFiltered, READ_FILTERS, readFilters, SORTS, BROWSE_STATUS, tagKey } from './filters'
 
 const ALL = 'all'
 
@@ -103,7 +103,7 @@ export function SeriesBrowse({ search = false }: { search?: boolean }) {
         <FilterSelect
           label={t('browse.statusLabel')}
           value={filters.status ?? ALL}
-          options={[[ALL, t('browse.statusAll')], ...STATUS_FILTERS.map((v) => [v, t(`browse.status.${v}`)] as const)]}
+          options={[[ALL, t('browse.statusAll')], ...BROWSE_STATUS.map((v) => [v, t(`browse.status.${v}`)] as const)]}
           onChange={(v) => update('status', v === ALL ? null : v)}
         />
         {(tags.length > 0 || filters.tags.length > 0) && (

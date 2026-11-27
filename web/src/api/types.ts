@@ -192,6 +192,8 @@ export interface SeriesSummary {
   cover_image_id: string | null
   /** Tome qu'ouvre « Lire » : la suite de la lecture, sinon le premier non lu, sinon le premier. */
   resume_volume_id: string | null
+  /** Tomes manquants d'après le nombre officiel ; `null` : rien à comparer (nombre inconnu, chapitres). */
+  missing_volumes: number[] | null
 }
 
 /** Ce qu'un compte a lu sur une période (`GET /api/me/stats`). */
@@ -277,6 +279,8 @@ export interface SeriesMetadata {
   publisher: string | null
   age_rating: string | null
   publication_status: PublicationStatus | null
+  /** Nombre officiel de tomes (fichiers, puis sources, ou édité). */
+  volume_count: number | null
   links: string[]
   cover_page_id: string | null
   cover_image_id: string | null
@@ -312,6 +316,8 @@ export interface SeriesDetail {
   collections: CollectionRef[]
   /** Tome qu'ouvre « Lire » (même règle que dans `SeriesSummary`). */
   resume_volume_id: string | null
+  /** Tomes manquants d'après le nombre officiel ; `null` : rien à comparer (nombre inconnu, chapitres). */
+  missing_volumes: number[] | null
   /** Comme dans `SeriesSummary`. */
   page_count: number
   pages_read: number

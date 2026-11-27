@@ -30,6 +30,8 @@ pub struct SeriesMetadata {
     pub publisher: Option<String>,
     pub age_rating: Option<String>,
     pub publication_status: Option<PublicationStatus>,
+    /// Nombre officiel de tomes (fichiers, puis sources) ; comparé aux tomes présents (1.4e).
+    pub volume_count: Option<u32>,
     pub links: Vec<String>,
     /// Page choisie comme couverture ; vide : page 0 du premier tome.
     pub cover_page_id: Option<String>,
@@ -52,6 +54,7 @@ const SERIES_FIELDS: &[&str] = &[
     "publisher",
     "age_rating",
     "publication_status",
+    "volume_count",
     "links",
     "cover_page_id",
     "cover_image_id",
@@ -139,6 +142,8 @@ fn from_locals(name: &str, locals: &[(MetadataSource, LocalMetadata)]) -> Series
         publication_status: ordered
             .iter()
             .find_map(|m| from_db(m.status.as_deref()?).ok()),
+        // Le plus grand : chaque tome a son `<Count>`, celui d'un tome ancien date d'avant la suite.
+        volume_count: ordered.iter().filter_map(|m| m.volume_count).max(),
         links: list(|m| &m.links),
         cover_page_id: None,
         cover_image_id: None,
@@ -220,6 +225,9 @@ fn with_web(
     meta.publication_status = meta
         .publication_status
         .or_else(|| webs.iter().find_map(|w| from_db(w.status.as_deref()?).ok()));
+    meta.volume_count = meta
+        .volume_count
+        .or_else(|| webs.iter().find_map(|w| w.volume_count));
     for link in webs.iter().flat_map(|w| &w.links) {
         if !meta.links.contains(link) {
             meta.links.push(link.clone());

@@ -61,6 +61,8 @@ pub struct WebMetadata {
     pub links: Vec<String>,
     /// Couverture chez la source : à télécharger par le serveur, jamais à donner au navigateur.
     pub cover_url: Option<String>,
+    /// Nombre de tomes de la série chez la source (souvent connu seulement une fois finie, 1.4e).
+    pub volume_count: Option<u32>,
 }
 
 /// Erreur d'une source ; `code` est stable (enregistré en base, traduit par l'interface).

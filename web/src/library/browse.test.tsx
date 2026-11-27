@@ -22,6 +22,7 @@ const base = {
   last_read_at: null, to_read_at: null,
   cover_page_id: null,
   resume_volume_id: null,
+  missing_volumes: null,
   cover_image_id: null,
   alt_titles: [] as string[],
   authors: [] as string[],

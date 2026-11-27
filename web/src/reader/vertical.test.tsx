@@ -118,7 +118,7 @@ describe('mode webtoon', () => {
 
   it('fait de la bande en haut de l’écran la couverture de la série', async () => {
     const inSeries = { ...volume, locations: [{ ...volume.locations[0], series_id: 7 }] }
-    const series = { id: 7, library_id: 1, name: 'Leviathan', folder: 'Leviathan', publication_status: null, metadata: NO_METADATA, locked: [], sources: [], followed: false, to_read: false, collections: [], settings: volume.settings, resume_volume_id: null, page_count: 100, pages_read: 0, volumes: [] }
+    const series = { id: 7, library_id: 1, name: 'Leviathan', folder: 'Leviathan', publication_status: null, metadata: NO_METADATA, locked: [], sources: [], followed: false, to_read: false, collections: [], settings: volume.settings, resume_volume_id: null, missing_volumes: null, page_count: 100, pages_read: 0, volumes: [] }
     const fetch = mockApi({
       [`/api/volumes/${VOLUME}`]: () => json(inSeries),
       [`/api/volumes/${VOLUME}/pages`]: () => json(strips),
@@ -161,7 +161,7 @@ describe('mode webtoon', () => {
   it('en fin de tome, le tome suivant en erreur reste proposé, mais signalé', async () => {
     const entry = (volume_id: string, status: string) => ({ volume_id, kind: 'volume', number: 1, number_end: null, status, page_count: 100, cover_page_id: null, file_name: `${volume_id}.cbz` })
     const NEXT = 'd'.repeat(64)
-    const series = { id: 7, library_id: 1, name: 'Leviathan', folder: 'Leviathan', publication_status: null, metadata: NO_METADATA, locked: [], sources: [], followed: false, to_read: false, collections: [], settings: volume.settings, resume_volume_id: null, page_count: 200, pages_read: 0, volumes: [entry(VOLUME, 'ok'), entry(NEXT, 'error')] }
+    const series = { id: 7, library_id: 1, name: 'Leviathan', folder: 'Leviathan', publication_status: null, metadata: NO_METADATA, locked: [], sources: [], followed: false, to_read: false, collections: [], settings: volume.settings, resume_volume_id: null, missing_volumes: null, page_count: 200, pages_read: 0, volumes: [entry(VOLUME, 'ok'), entry(NEXT, 'error')] }
     mockApi({
       [`/api/volumes/${VOLUME}`]: () => json({ ...volume, locations: [{ ...volume.locations[0], series_id: 7 }] }),
       [`/api/volumes/${VOLUME}/pages`]: () => json(strips),

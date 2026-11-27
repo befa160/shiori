@@ -20,6 +20,7 @@ const summary = {
   last_read_at: null, to_read_at: null,
   cover_page_id: null,
   resume_volume_id: null,
+  missing_volumes: null,
   cover_image_id: null,
   alt_titles: [] as string[],
   authors: [] as string[],
@@ -43,6 +44,7 @@ const detail: SeriesDetail = {
   to_read: false,
   collections: [],
   resume_volume_id: 'b',
+  missing_volumes: null,
   page_count: 392,
   pages_read: 245,
   settings,
@@ -166,10 +168,12 @@ describe('page d’une série', () => {
       alt_titles: ['トリコ'],
       links: ['https://example.org/toriko', 'javascript:alert(1)', 'pas une adresse'],
     }
-    mockApi({ '/api/series/7': () => json({ ...detail, metadata }) })
+    mockApi({ '/api/series/7': () => json({ ...detail, metadata: { ...metadata, volume_count: 43 }, missing_volumes: [2, 6, 7, 8, 43] }) })
     renderAt('/series/7')
     expect(await main().findByText('Mitsutoshi Shimabukuro', { selector: 'p' })).toBeInTheDocument()
-    expect(main().getByText('2008 · Kana · Publication terminée')).toBeInTheDocument()
+    // Tomes présents sur le nombre officiel, puis les manquants, en plages.
+    expect(main().getByText('2008 · Kana · Publication terminée · 38 / 43 tomes')).toBeInTheDocument()
+    expect(main().getByText('Tomes manquants : 2, 6–8, 43')).toBeInTheDocument()
     const chips = within(main().getByRole('list', { name: 'Genres et tags' })).getAllByRole('listitem')
     expect(chips.map((li) => li.textContent)).toEqual(['Action', 'Aventure', 'Cuisine'])
     // Chaque tag mène aux séries qui l'ont.
@@ -233,6 +237,12 @@ describe('page d’une série', () => {
     await userEvent.type(dialog.getByLabelText('Liens'), 'https://example.org')
     await userEvent.type(dialog.getByLabelText('Autres titres'), 'トリコ')
     await userEvent.type(dialog.getByLabelText('Éditeur'), '   ')
+    // Nombre de tomes : un entier positif, sinon l'enregistrement attend.
+    await userEvent.type(dialog.getByLabelText('Nombre de tomes'), '0')
+    expect(dialog.getByLabelText('Nombre de tomes')).toHaveAccessibleDescription(/Un nombre entier, de 1 à 9999/)
+    expect(dialog.getByRole('button', { name: 'Enregistrer' })).toBeDisabled()
+    await userEvent.clear(dialog.getByLabelText('Nombre de tomes'))
+    await userEvent.type(dialog.getByLabelText('Nombre de tomes'), '43')
     await userEvent.click(dialog.getByLabelText('Statut de publication'))
     await userEvent.click(await screen.findByRole('option', { name: 'En pause' }))
     await userEvent.click(dialog.getByRole('button', { name: 'Enregistrer' }))
@@ -245,6 +255,7 @@ describe('page d’une série', () => {
       links: ['https://example.org'],
       alt_titles: ['トリコ'],
       publisher: null,
+      volume_count: 43,
       publication_status: 'hiatus',
     })
     expect(await screen.findByText('Modifications enregistrées')).toBeInTheDocument()

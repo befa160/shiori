@@ -19,6 +19,7 @@ const COMIC_INFO: &str = r#"<?xml version="1.0" encoding="utf-8"?>
   <LanguageISO>fr</LanguageISO>
   <Manga>YesAndRightToLeft</Manga>
   <AgeRating>Unknown</AgeRating>
+  <Count>12</Count>
   <Pages><Page Image="0" Type="FrontCover"/></Pages>
 </ComicInfo>"#;
 
@@ -54,8 +55,15 @@ fn comic_info_is_normalized() {
             status: None,
             right_to_left: Some(true),
             links: vec!["https://a.example".into(), "HTTP://b.example".into()],
+            volume_count: Some(12),
         }
     );
+    // ComicRack écrit `-1` pour « inconnu » ; un texte n'est pas un nombre.
+    for count in ["-1", "0", "douze"] {
+        let xml = format!("<ComicInfo><Count>{count}</Count></ComicInfo>");
+        let meta = parse(MetadataSource::Comicinfo, xml.as_bytes()).unwrap();
+        assert_eq!(meta.volume_count, None, "{count}");
+    }
 }
 
 #[test]

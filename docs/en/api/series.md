@@ -24,6 +24,7 @@ All visible series, sorted by name (natural sort). `?library_id=` restricts to o
 | `publication_status` | `ongoing`, `completed`, `hiatus`, `cancelled`, or `null` |
 | `cover_page_id` / `cover_image_id` | cover page ([image](/en/api/volumes#get-api-pages-id-image)), or a source's cover ([`/api/covers/{id}`](/en/api/volumes#get-api-covers-id)), which wins |
 | `resume_volume_id` | volume that "Read" opens: the one in progress, otherwise the first unread, otherwise the first |
+| `missing_volumes` | numbers of the volumes missing from 1 to the official count (`metadata.volume_count`), a "T03-05" file covering three numbers; `null` if that count is unknown or no file has a volume number (series in chapters). A `completed` series whose list is not empty is **incomplete** |
 | `to_read_at` | when the account put the series in "To read" ([`PUT …/to-read`](#put-api-series-id-to-read)), otherwise `null`; the home page sorts the list on it |
 
 ### `GET /api/continue`
@@ -55,13 +56,13 @@ New volumes in the series the account follows: volumes added since it followed t
   "id": 7, "library_id": 1, "name": "One Piece", "folder": "One Piece",
   "metadata": { "title": "One Piece", "alt_titles": [], "summary": "…", "authors": [{ "name": "Eiichiro Oda", "story": true, "art": true }],
     "genres": ["Adventure"], "tags": [], "year": 1997, "publisher": "Viz", "age_rating": null,
-    "publication_status": "ongoing", "links": [], "cover_page_id": null, "cover_image_id": null,
+    "publication_status": "ongoing", "volume_count": null, "links": [], "cover_page_id": null, "cover_image_id": null,
     "main_source": null, "right_to_left": true },
   "locked": ["summary"],
   "sources": [],
   "publication_status": "ongoing",
   "settings": { "reading_mode": "rtl", "page_layout": "auto", "page_turn": "reading", "reading_mode_override": null, "page_layout_override": null, "page_turn_override": null },
-  "followed": false, "to_read": false, "collections": [{ "id": 2, "name": "Shōnen" }], "resume_volume_id": "a41b…", "page_count": 612, "pages_read": 250,
+  "followed": false, "to_read": false, "collections": [{ "id": 2, "name": "Shōnen" }], "resume_volume_id": "a41b…", "missing_volumes": null, "page_count": 612, "pages_read": 250,
   "volumes": [{ "volume_id": "a41b…", "kind": "volume", "number": 1, "number_end": null, "status": "ok", "page_count": 204, "cover_page_id": "…", "file_name": "One Piece T01.cbz", "title": "Romance Dawn", "progress": { "…": "…" } }]
 }
 ```
@@ -83,7 +84,7 @@ Edits metadata. Each field given is **edited and locked** (`null` included); `un
 { "summary": "The series summary…", "genres": ["Adventure", "Comedy"], "unlock": ["title"] }
 ```
 
-Fields: `title`, `alt_titles`, `summary`, `authors`, `genres`, `tags`, `year`, `publisher`, `age_rating`, `publication_status`, `links`, `cover_page_id` (a page of the series), `cover_image_id`, `main_source`. **Response 200**: the series detail. **Errors**: 400 `invalid_body` (unknown field, invalid value, page of another series).
+Fields: `title`, `alt_titles`, `summary`, `authors`, `genres`, `tags`, `year`, `publisher`, `age_rating`, `publication_status`, `volume_count` (official number of volumes, positive integer), `links`, `cover_page_id` (a page of the series), `cover_image_id`, `main_source`. **Response 200**: the series detail. **Errors**: 400 `invalid_body` (unknown field, invalid value, page of another series).
 
 ### `PATCH /api/series/{id}/settings`
 

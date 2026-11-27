@@ -36,6 +36,15 @@ Elles sont **désactivées par défaut** (**Administration → Métadonnées web
 ![Fenêtre Identifier : sources liées (AniList, Wikipédia) et fiches possibles d'une recherche MangaDex](/screens/fr/ecran_identifier.jpg)
 
 
+## Séries incomplètes
+
+Shiori compare le **nombre officiel de tomes** d'une série aux tomes que vous avez. Ce nombre vient, dans l'ordre habituel, de vos fichiers (`<Count>` d'un `ComicInfo.xml`, lu au scan du tome), puis des sources web qui le donnent (AniList, MangaDex, MangaUpdates ; ni Wikipédia ni Comic Vine) ; il se corrige dans **Modifier** (« Nombre de tomes »).
+
+- La page de la série affiche les tomes présents sur le total (« 38 / 43 tomes ») et les numéros manquants, en plages (« Tomes manquants : 2, 6–8, 43 »). Un fichier « T03-05 » compte pour trois tomes ; un hors-série (numéro décimal) ou un chapitre ne remplace pas un tome.
+- Une série rangée en chapitres, ou dont le nombre officiel est inconnu, ne se compare pas.
+- Une série **terminée** à qui il manque des tomes est **incomplète** : le filtre « Incomplète (tomes manquants) » de la liste des séries les montre.
+- Une fiche liée avant la 1.4 n'a pas encore le nombre de tomes : « Actualiser » (fenêtre Identifier) le récupère.
+
 ## Couverture
 
 La couverture d'une série est la première page de son premier tome, ou celle que vous choisissez : n'importe quelle page, ou la couverture d'une source (gardée par le serveur). Sans couverture, Shiori en dessine une avec le titre et l'auteur.

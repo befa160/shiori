@@ -117,6 +117,7 @@ fn anilist_search_is_normalized() {
             cover_url: Some(
                 "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx30013.jpg".into()
             ),
+            volume_count: Some(110),
         }
     );
     // Pas encore paru : pas de statut ; scénario et dessin séparés.
@@ -265,6 +266,7 @@ fn mangadex_search_and_fetch_are_normalized() {
         cover_url: Some(format!(
             "https://uploads.mangadex.org/covers/{id}/2f4aca53.png.512.jpg"
         )),
+        volume_count: Some(108),
     };
     assert_eq!(found, std::slice::from_ref(&expected));
     assert_eq!(mangadex.fetch(id).unwrap(), expected);
@@ -484,6 +486,7 @@ fn mangaupdates_search_and_fetch_are_normalized() {
             status: None,
             links: vec!["https://www.mangaupdates.com/series/hzh0nue/mushikago-no-cagaster".into()],
             cover_url: Some("https://cdn.mangaupdates.com/image/i407606.jpg".into()),
+            volume_count: None,
         }
     );
     // Résumé vide, année vide, pas d'image.
@@ -506,6 +509,8 @@ fn mangaupdates_search_and_fetch_are_normalized() {
     let series = source.fetch("39150200246").unwrap();
     assert_eq!(series.titles.len(), 4);
     assert_eq!(series.status.as_deref(), Some("completed"));
+    // « 7 Volumes (Complete) » : sept tomes.
+    assert_eq!(series.volume_count, Some(7));
     assert_eq!(
         series.authors,
         [

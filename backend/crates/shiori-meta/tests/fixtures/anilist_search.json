@@ -1,6 +1,6 @@
 {"data":{"Page":{"media":[
  {"id":30013,"title":{"romaji":"ONE PIECE","english":"One Piece","native":"ONE PIECE"},
-  "synonyms":["ワンピース","  "],"startDate":{"year":1997},"status":"RELEASING",
+  "synonyms":["ワンピース","  "],"startDate":{"year":1997},"status":"RELEASING","volumes":110,
   "description":"Un garçon au chapeau de paille &amp; son équipage.\n<br><br>\n(Source: exemple)",
   "genres":["Action","Adventure"],
   "tags":[{"name":"Pirates","isMediaSpoiler":false},{"name":"Fin révélée","isMediaSpoiler":true}],
