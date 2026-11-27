@@ -30,7 +30,7 @@ use tokio::sync::Semaphore;
 
 use super::{ApiError, App, invalid_body};
 
-/// Routes ouvertes sans session.
+/// Routes ouvertes sans session, avec celles des liens d'invitation (`/api/auth/invite/…`).
 const PUBLIC: [&str; 6] = [
     "/api/health",
     "/api/auth/state",
@@ -58,7 +58,7 @@ const CHALLENGE: Duration = Duration::from_secs(5 * 60);
 /// Un compteur d'essais ratés : sa clé, les essais libres, la pause la plus longue, et s'il
 /// repart de zéro après une connexion réussie (pas celui d'une adresse partagée).
 #[derive(Clone)]
-struct Limit {
+pub(super) struct Limit {
     key: String,
     free: u32,
     max: Duration,
@@ -105,6 +105,16 @@ fn login_limits(username: &str, address: &str) -> [Limit; 3] {
     ]
 }
 
+/// Compteur d'une adresse seule (lien d'invitation : pas encore de nom de compte).
+pub(super) fn address_limit(address: &str) -> [Limit; 1] {
+    [Limit {
+        key: format!("adresse:{address}"),
+        free: FREE_PER_ADDRESS,
+        max: MAX_PAUSE,
+        reset: false,
+    }]
+}
+
 /// Mot de passe juste, second facteur attendu.
 struct Challenge {
     user_id: i64,
@@ -120,7 +130,7 @@ pub(crate) struct Guard {
     failures: Mutex<HashMap<String, (u32, Instant)>>,
     challenges: Mutex<HashMap<String, Challenge>>,
     /// Argon2 prend ~20 Mio et des dizaines de ms par essai : peu de calculs à la fois.
-    hashing: Semaphore,
+    pub(super) hashing: Semaphore,
     /// Reverse proxies dont on croit `X-Forwarded-For` ; vide : toute adresse locale ou privée.
     pub(crate) trusted_proxies: Vec<IpAddr>,
 }
@@ -141,7 +151,7 @@ impl Guard {
     }
 
     /// Temps restant avant le prochain essai permis pour l'un de ces compteurs, s'il y en a.
-    fn paused(&self, limits: &[Limit]) -> Option<Duration> {
+    pub(super) fn paused(&self, limits: &[Limit]) -> Option<Duration> {
         let failures = self.failures.lock().unwrap_or_else(PoisonError::into_inner);
         limits
             .iter()
@@ -154,7 +164,7 @@ impl Guard {
             .max()
     }
 
-    fn failed(&self, limits: &[Limit]) {
+    pub(super) fn failed(&self, limits: &[Limit]) {
         let mut failures = self.failures.lock().unwrap_or_else(PoisonError::into_inner);
         // Des noms inventés par milliers ne doivent pas faire grossir la table sans fin.
         if failures.len() > 10_000 {
@@ -200,7 +210,11 @@ impl Guard {
 /// Adresse du client : celle de la connexion, ou, si elle vient d'un reverse proxy, la dernière
 /// de `X-Forwarded-For`, ajoutée par ce proxy. Proxy : l'un de `trusted` s'il y en a, sinon
 /// toute adresse locale ou privée (un client du réseau local peut alors s'inventer une adresse).
-fn client_address(peer: Option<SocketAddr>, headers: &HeaderMap, trusted: &[IpAddr]) -> String {
+pub(super) fn client_address(
+    peer: Option<SocketAddr>,
+    headers: &HeaderMap,
+    trusted: &[IpAddr],
+) -> String {
     let peer = peer.map(|p| p.ip());
     let local = |ip: IpAddr| match (trusted.is_empty(), ip) {
         (false, ip) => trusted.contains(&ip.to_canonical()),
@@ -262,7 +276,10 @@ pub(crate) async fn require_session(
     next: Next,
 ) -> Response {
     let path = request.uri().path().to_owned();
-    if !path.starts_with("/api/") || PUBLIC.contains(&path.as_str()) {
+    if !path.starts_with("/api/")
+        || PUBLIC.contains(&path.as_str())
+        || path.starts_with("/api/auth/invite/")
+    {
         return next.run(request).await;
     }
     let presented = presented_token(request.headers());
@@ -457,7 +474,7 @@ pub(crate) struct AuthState {
 }
 
 /// 429 `rate_limited`, avec `Retry-After` en secondes.
-fn rate_limited(wait: Duration) -> ApiError {
+pub(super) fn rate_limited(wait: Duration) -> ApiError {
     let seconds = wait.as_secs() + 1;
     ApiError::new(
         StatusCode::TOO_MANY_REQUESTS,
@@ -468,7 +485,7 @@ fn rate_limited(wait: Duration) -> ApiError {
 }
 
 /// Ouvre une session et la remet au client : cookie, ou jeton dans la réponse.
-async fn sign_in(
+pub(super) async fn sign_in(
     app: &App,
     headers: &HeaderMap,
     user: User,

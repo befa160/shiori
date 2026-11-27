@@ -69,9 +69,9 @@ Sans authentification.
 
 | Page | Routes |
 |---|---|
-| [Authentification](/api/auth) | installation, connexion, double authentification, déconnexion |
+| [Authentification](/api/auth) | installation, connexion, double authentification, déconnexion, liens d'invitation |
 | [Compte](/api/account) | compte connecté, préférences, mot de passe, appareils, double authentification, jetons d'API |
-| [Comptes (admin)](/api/users) | gestion des comptes |
+| [Comptes (admin)](/api/users) | gestion des comptes, invitations |
 | [Bibliothèques](/api/libraries) | liste, création, surveillance, suppression |
 | [Séries](/api/series) | listes, détail, modification, réglages de lecture, « Continuer la lecture », nouveautés, « À lire », collections |
 | [Tomes et pages](/api/volumes) | détail, progression, pages, images, couvertures |

@@ -400,3 +400,140 @@ async fn a_slow_client_is_cut_off() {
     let read = tokio::time::timeout(Duration::from_secs(20), stream.read_to_end(&mut rest)).await;
     assert!(read.is_ok(), "connexion toujours ouverte après 20 s");
 }
+
+/// Cookie d'une session ouverte directement en base.
+async fn session_cookie(f: &Fixture, user: &shiori_db::User) -> String {
+    let session = f.state.db.create_session(user.id, "tests").await.unwrap();
+    format!("shiori_session={}", session.token)
+}
+
+#[tokio::test]
+async fn an_invite_link_creates_one_account_with_a_session_then_is_spent() {
+    let f = fixture().await;
+    f.state
+        .db
+        .create_user("chef", "mot de passe", Role::Admin)
+        .await
+        .unwrap();
+    f.state
+        .db
+        .set_password("chef", "mot de passe", false, None)
+        .await
+        .unwrap();
+    let chef = f.state.db.user_by_name("chef").await.unwrap().unwrap();
+    let admin = session_cookie(&f, &chef).await;
+    let admin = [("cookie", admin.as_str())];
+
+    // Lecteur : pas d'administration des invitations.
+    let lecteur = reader(&f, "lecteur").await;
+    let lecteur = session_cookie(&f, &lecteur).await;
+    let (status, _, _) = call(
+        &f.app,
+        "POST",
+        "/api/admin/invites",
+        Some(json!({})),
+        &[("cookie", lecteur.as_str())],
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    let (status, _, body) = call(
+        &f.app,
+        "POST",
+        "/api/admin/invites",
+        Some(json!({ "days": 3 })),
+        &admin,
+    )
+    .await;
+    assert_eq!(
+        (status, body["code"].as_str()),
+        (StatusCode::BAD_REQUEST, Some("invalid_body"))
+    );
+
+    let (status, _, created) = call(
+        &f.app,
+        "POST",
+        "/api/admin/invites",
+        Some(json!({ "libraries": [] })),
+        &admin,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(created["role"], "reader");
+    let token = created["token"].as_str().unwrap();
+    let (_, _, listed) = call(&f.app, "GET", "/api/admin/invites", None, &admin).await;
+    assert_eq!(listed.as_array().unwrap().len(), 1);
+    assert!(
+        listed[0].get("token").is_none(),
+        "jamais le jeton dans la liste"
+    );
+
+    // Sans session : le lien se vérifie, puis crée le compte et ouvre sa session.
+    let uri = format!("/api/auth/invite/{token}");
+    let (status, _, body) = call(&f.app, "GET", &uri, None, &[]).await;
+    assert_eq!(
+        (status, body),
+        (StatusCode::OK, json!({ "role": "reader" }))
+    );
+    let (status, _, body) = call(&f.app, "GET", "/api/auth/invite/faux", None, &[]).await;
+    assert_eq!(
+        (status, body["code"].as_str()),
+        (StatusCode::NOT_FOUND, Some("invite_invalid"))
+    );
+
+    let choice = json!({ "username": "élise", "password": "mot de passe choisi" });
+    let (status, headers, body) = call(&f.app, "POST", &uri, Some(choice.clone()), &[]).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["user"]["must_change_password"], false);
+    let cookie = cookie_of(&headers);
+    let (status, _, me) = call(&f.app, "GET", "/api/me", None, &[("cookie", &cookie)]).await;
+    assert_eq!(
+        (status, &me["user"]["username"]),
+        (StatusCode::OK, &json!("élise"))
+    );
+
+    let (status, _, body) = call(&f.app, "POST", &uri, Some(choice), &[]).await;
+    assert_eq!(
+        (status, body["code"].as_str()),
+        (StatusCode::NOT_FOUND, Some("invite_invalid"))
+    );
+    let (_, _, listed) = call(&f.app, "GET", "/api/admin/invites", None, &admin).await;
+    assert_eq!(listed, json!([]));
+
+    // Révocation.
+    let (_, _, other) = call(
+        &f.app,
+        "POST",
+        "/api/admin/invites",
+        Some(json!({ "role": "admin", "days": 30 })),
+        &admin,
+    )
+    .await;
+    let revoke = format!("/api/admin/invites/{}", other["id"]);
+    let (status, _, _) = call(&f.app, "DELETE", &revoke, None, &admin).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, _, _) = call(&f.app, "DELETE", &revoke, None, &admin).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let uri = format!("/api/auth/invite/{}", other["token"].as_str().unwrap());
+    let (status, _, _) = call(&f.app, "GET", &uri, None, &[]).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn invalid_invite_links_count_against_the_address() {
+    let f = fixture().await;
+    let choice = json!({ "username": "élise", "password": "mot de passe choisi" });
+    let mut last = StatusCode::OK;
+    for _ in 0..22 {
+        let (status, _, _) = call(
+            &f.app,
+            "POST",
+            "/api/auth/invite/faux",
+            Some(choice.clone()),
+            &[],
+        )
+        .await;
+        last = status;
+    }
+    assert_eq!(last, StatusCode::TOO_MANY_REQUESTS);
+}

@@ -55,3 +55,37 @@ Déconnecte tous les appareils du compte et révoque ses jetons d'API. **Répons
 ### `DELETE /api/admin/users/{id}/totp`
 
 Retire la double authentification (téléphone perdu). **Réponse 204**.
+
+## Invitations
+
+Un lien d'invitation (`/invite/<jeton>`) laisse une personne créer son compte elle-même, avec le rôle et les bibliothèques prévus par l'administrateur. Usage unique, valable 1, 7 ou 30 jours ; seul le hash du jeton est gardé. Une invitation tombe si son auteur n'est plus administrateur (rétrogradé, désactivé ou supprimé). Aucune inscription libre.
+
+Une invitation vue par l'administrateur (jamais son jeton) :
+
+```json
+{ "id": 4, "role": "reader", "libraries": [1, 3], "created_at": "…", "expires_at": "…" }
+```
+
+### `GET /api/admin/invites`
+
+Les invitations pas encore utilisées, périmées comprises (à révoquer), de la plus récente à la plus ancienne.
+
+### `POST /api/admin/invites`
+
+```json
+{ "role": "reader", "libraries": [1, 3], "days": 7 }
+```
+
+Chaque champ est facultatif : `role` `reader`, `days` 7 (1, 7 ou 30), `libraries` toutes les bibliothèques existantes (sans effet pour un administrateur). **Réponse 201** : l'invitation et son jeton, montré une seule fois.
+
+```json
+{ "id": 4, "role": "reader", "libraries": [1, 3], "created_at": "…", "expires_at": "…", "token": "…" }
+```
+
+**Erreurs** : 400 `invalid_body` (durée hors liste).
+
+### `DELETE /api/admin/invites/{id}`
+
+Révoque une invitation pas encore utilisée. **Réponse 204**. **Erreurs** : 404 `not_found`.
+
+La personne invitée utilise ensuite le lien sans session, voir [Authentification](./auth.md#get-api-auth-invite-token).

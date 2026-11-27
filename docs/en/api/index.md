@@ -69,9 +69,9 @@ No authentication.
 
 | Page | Routes |
 |---|---|
-| [Authentication](/en/api/auth) | setup, sign-in, two-factor, sign-out |
+| [Authentication](/en/api/auth) | setup, sign-in, two-factor, sign-out, invite links |
 | [Account](/en/api/account) | signed-in account, preferences, password, devices, two-factor, API tokens |
-| [Accounts (admin)](/en/api/users) | account management |
+| [Accounts (admin)](/en/api/users) | account management, invites |
 | [Libraries](/en/api/libraries) | list, creation, watching, deletion |
 | [Series](/en/api/series) | lists, detail, editing, reading settings, "Continue reading", new volumes, "To read", collections |
 | [Volumes and pages](/en/api/volumes) | detail, progress, pages, images, covers |
