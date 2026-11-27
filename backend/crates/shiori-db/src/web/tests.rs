@@ -340,7 +340,8 @@ async fn an_edited_field_beats_the_web_and_settings_round_trip() {
             SourceId::Mangadex,
             SourceId::Anilist,
             SourceId::Wikipedia,
-            SourceId::Mangaupdates
+            SourceId::Mangaupdates,
+            SourceId::Comicvine
         ]
     );
     assert_eq!(
@@ -349,7 +350,8 @@ async fn an_edited_field_beats_the_web_and_settings_round_trip() {
             SourceId::Anilist,
             SourceId::Mangadex,
             SourceId::Wikipedia,
-            SourceId::Mangaupdates
+            SourceId::Mangaupdates,
+            SourceId::Comicvine
         ]
     );
     assert!(db.set_metadata_online(true).await.unwrap().metadata_online);

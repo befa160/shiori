@@ -28,6 +28,8 @@ struct Fake {
     fetches: Mutex<VecDeque<Answer<WebMetadata>>>,
     calls: Mutex<Vec<String>>,
     delay: Duration,
+    /// Dernière clé d'API donnée par le service.
+    key: Mutex<Option<String>>,
 }
 
 impl Fake {
@@ -79,6 +81,10 @@ impl Source for Fake {
             "https://s4.anilist.co/c.jpg" => Ok(png(600, 900, page_color(3))),
             _ => Ok(b"pas une image".to_vec()),
         }
+    }
+
+    fn set_key(&self, key: Option<String>) {
+        *self.key.lock().unwrap() = key;
     }
 }
 
@@ -161,6 +167,7 @@ async fn fixture_with(delay: Duration, id: SourceId) -> Fixture {
         fetches: Mutex::default(),
         calls: Mutex::default(),
         delay,
+        key: Mutex::default(),
     });
     let sources: Vec<Arc<dyn Source>> = vec![anilist.clone()];
     // Un fichier à la fois : les séries reçoivent leurs ids dans l'ordre des dossiers.
@@ -252,7 +259,13 @@ async fn nothing_leaves_while_the_network_is_off() {
     // Français par défaut : MangaDex d'abord, Wikipédia en repli, MangaUpdates arrivée après (Q81).
     assert_eq!(
         overview["sources"],
-        json!(["mangadex", "anilist", "wikipedia", "mangaupdates"])
+        json!([
+            "mangadex",
+            "anilist",
+            "wikipedia",
+            "mangaupdates",
+            "comicvine"
+        ])
     );
     assert!(f.anilist.calls().is_empty(), "{:?}", f.anilist.calls());
 
@@ -500,7 +513,13 @@ async fn errors_are_explicit_and_a_rate_limit_stops_the_identification() {
     let (_, overview) = call(&f.app, "GET", "/api/admin/metadata", None).await;
     assert_eq!(
         overview["sources"],
-        json!(["mangadex", "anilist", "wikipedia", "mangaupdates"])
+        json!([
+            "mangadex",
+            "anilist",
+            "wikipedia",
+            "mangaupdates",
+            "comicvine"
+        ])
     );
     assert_eq!(
         overview["identify"]["total"], 1,
@@ -768,4 +787,57 @@ async fn an_automatic_mangaupdates_match_is_read_in_full() {
         ),
         (Some("completed"), Some("mangaupdates"))
     );
+}
+
+/// Comic Vine (1.4d) : clé saisie dans l'administration, jamais renvoyée, donnée à la source à
+/// chaque appel ; jamais d'identification automatique (Q82), la recherche à la demande marche.
+#[tokio::test]
+async fn the_comicvine_key_is_kept_secret_and_the_source_is_manual_only() {
+    let f = fixture_with(Duration::ZERO, SourceId::Comicvine).await;
+    let (status, body) = call(
+        &f.app,
+        "PUT",
+        "/api/settings",
+        Some(json!({ "comicvine_key": "pas une clé !" })),
+    )
+    .await;
+    assert_eq!(
+        (status, body["code"].as_str()),
+        (StatusCode::BAD_REQUEST, Some("invalid_body"))
+    );
+    let body = json!({ "metadata_online": true, "metadata_sources": ["comicvine"], "comicvine_key": " abc123 " });
+    let (status, settings) = call(&f.app, "PUT", "/api/settings", Some(body)).await;
+    assert_eq!(
+        (status, settings["comicvine_key_set"].as_bool()),
+        (StatusCode::OK, Some(true))
+    );
+    let (_, settings) = call(&f.app, "GET", "/api/settings", None).await;
+    assert!(!settings.to_string().contains("abc123"), "{settings}");
+    assert_eq!(
+        f.state.db.comicvine_key().await.unwrap().as_deref(),
+        Some("abc123")
+    );
+
+    // Le scan lance l'identification : Comic Vine n'est pas appelée.
+    scan(&f).await;
+    f.state.metadata.wait().await;
+    assert!(f.anilist.calls().is_empty(), "{:?}", f.anilist.calls());
+
+    let gigant = series_id(&f, "Gigant").await;
+    let uri = format!("/api/series/{gigant}/metadata/search?source=comicvine&q=Gigant");
+    assert_eq!(call(&f.app, "GET", &uri, None).await.0, StatusCode::OK);
+    assert_eq!(f.anilist.calls(), ["search Gigant"]);
+    assert_eq!(f.anilist.key.lock().unwrap().as_deref(), Some("abc123"));
+
+    // Clé effacée : la source la reçoit vide au prochain appel.
+    let (_, settings) = call(
+        &f.app,
+        "PUT",
+        "/api/settings",
+        Some(json!({ "comicvine_key": null })),
+    )
+    .await;
+    assert_eq!(settings["comicvine_key_set"].as_bool(), Some(false));
+    call(&f.app, "GET", &uri, None).await;
+    assert_eq!(*f.anilist.key.lock().unwrap(), None);
 }

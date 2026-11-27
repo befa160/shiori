@@ -1,0 +1,4 @@
+{"error":"OK","limit":10,"offset":0,"number_of_page_results":2,"number_of_total_results":2,"status_code":1,"results":[
+{"aliases":"Les Vieux Fourneaux\nThe Old Geezers\n","deck":"Trois amis &amp; septuagénaires.","description":"<p>Long article.</p>","id":123456,"image":{"icon_url":"https://comicvine.gamespot.com/a/uploads/square_avatar/1/1/1-x.jpg","original_url":"https://comicvine.gamespot.com/a/uploads/original/1/1/1-x.jpg"},"name":"Old Geezers","site_detail_url":"https://comicvine.gamespot.com/old-geezers/4050-123456/","start_year":"2014","resource_type":"volume"},
+{"aliases":null,"deck":null,"description":"<p>Une <b>BD</b>.</p><ul><li>Tome 1</li></ul>","id":7,"image":null,"name":"Blacksad","site_detail_url":null,"start_year":2000,"resource_type":"volume"}
+],"version":"1.0"}

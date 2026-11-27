@@ -1,6 +1,6 @@
 # Métadonnées
 
-Sources web : `anilist`, `mangadex`, `wikipedia` (identifiant `langue:Titre de l'article`, par exemple `fr:One Piece` ; la recherche se fait dans la langue du compte), `mangaupdates` (identifiant numérique). Toutes ces routes sont **admin** ; les sources doivent être autorisées dans les [réglages](/api/settings) (`metadata_online`), sinon 409 `metadata_disabled`.
+Sources web : `anilist`, `mangadex`, `wikipedia` (identifiant `langue:Titre de l'article`, par exemple `fr:One Piece` ; la recherche se fait dans la langue du compte), `mangaupdates` (identifiant numérique), `comicvine` (identifiant numérique du volume ; exige une clé, voir les [réglages](/api/settings), et ne sert jamais à l'identification automatique). Toutes ces routes sont **admin** ; les sources doivent être autorisées dans les [réglages](/api/settings) (`metadata_online`), sinon 409 `metadata_disabled`.
 
 État d'une source pour une série (`sources` du [détail d'une série](/api/series#get-api-series-id)) :
 
@@ -8,7 +8,7 @@ Sources web : `anilist`, `mangadex`, `wikipedia` (identifiant `langue:Titre de l
 { "source": "mangadex", "external_id": "a1c7c817-…", "matched_by": "auto", "checked_at": "…", "last_error": null, "unlinked": false, "candidates": [] }
 ```
 
-`matched_by` : `auto` (identification) ou `user` ; `unlinked` : déliée par l'utilisateur (l'identification automatique ne la relie plus) ; `candidates` : fiches à confirmer ; `last_error` : `offline`, `rate_limited`, `not_found`, `http_error`, `bad_response`.
+`matched_by` : `auto` (identification) ou `user` ; `unlinked` : déliée par l'utilisateur (l'identification automatique ne la relie plus) ; `candidates` : fiches à confirmer ; `last_error` : `offline`, `rate_limited`, `not_found`, `http_error`, `bad_response`, `missing_key`, `invalid_key` (Comic Vine).
 
 ### `GET /api/series/{id}/metadata/search`
 
@@ -18,7 +18,7 @@ Sources web : `anilist`, `mangadex`, `wikipedia` (identifiant `langue:Titre de l
 [{ "id": "30013", "titles": [{ "lang": "ja-ro", "text": "ONE PIECE" }], "summaries": [], "authors": [], "genres": [], "tags": [], "year": 1997, "status": "ongoing", "links": [] }]
 ```
 
-**Erreurs** : 400 `invalid_query` (`q` vide), 502 / 503 selon la source (`offline`, `rate_limited`, `http_error`, `bad_response`).
+**Erreurs** : 400 `invalid_query` (`q` vide), 502 / 503 selon la source (`offline`, `rate_limited`, `http_error`, `bad_response`, `missing_key`, `invalid_key`).
 
 ### `PUT /api/series/{id}/metadata/links/{source}`
 
@@ -53,7 +53,7 @@ Vignette d'un candidat, relayée par le serveur (le navigateur ne contacte jamai
 ### `GET /api/admin/metadata`
 
 ```json
-{ "online": true, "sources": ["mangadex", "anilist", "wikipedia", "mangaupdates"], "identify": { "running": false, "done": 40, "total": 40, "stopped": null }, "issues": [{ "series_id": 9, "series_name": "Blame!", "source": "anilist", "candidates": 2, "last_error": null }] }
+{ "online": true, "sources": ["mangadex", "anilist", "wikipedia", "mangaupdates", "comicvine"], "identify": { "running": false, "done": 40, "total": 40, "stopped": null }, "issues": [{ "series_id": 9, "series_name": "Blame!", "source": "anilist", "candidates": 2, "last_error": null }] }
 ```
 
 `sources` : ordre appliqué ; `issues` : séries à vérifier (fiches à confirmer) ou en échec.

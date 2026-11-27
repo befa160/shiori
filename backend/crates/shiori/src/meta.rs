@@ -12,8 +12,8 @@ use std::sync::{Arc, Mutex, RwLock};
 use serde::Serialize;
 use shiori_db::{Db, Language, MatchedBy, Outcome, Settings};
 use shiori_meta::{
-    ANILIST_URL, Anilist, FetchError, MANGADEX_URL, MANGAUPDATES_URL, Mangadex, Mangaupdates,
-    Source, SourceId, WIKIPEDIA_URL, WebMetadata, Wikipedia, auto_match,
+    ANILIST_URL, Anilist, COMICVINE_URL, Comicvine, FetchError, MANGADEX_URL, MANGAUPDATES_URL,
+    Mangadex, Mangaupdates, Source, SourceId, WIKIPEDIA_URL, WebMetadata, Wikipedia, auto_match,
 };
 use tokio::task::JoinHandle;
 
@@ -62,6 +62,7 @@ pub fn web_sources() -> Vec<Arc<dyn Source>> {
         Arc::new(Mangadex::new(MANGADEX_URL)),
         Arc::new(Wikipedia::new(WIKIPEDIA_URL)),
         Arc::new(Mangaupdates::new(MANGAUPDATES_URL)),
+        Arc::new(Comicvine::new(COMICVINE_URL)),
     ]
 }
 
@@ -76,12 +77,17 @@ impl Metadata {
         }
     }
 
-    fn source(&self, id: SourceId) -> Result<Arc<dyn Source>, MetaError> {
-        self.sources
+    /// Client d'une source, avec la clé d'API enregistrée (relue à chaque fois : une clé changée
+    /// dans l'administration sert tout de suite).
+    async fn source(&self, id: SourceId) -> Result<Arc<dyn Source>, MetaError> {
+        let client = self
+            .sources
             .iter()
             .find(|s| s.id() == id)
             .cloned()
-            .ok_or(MetaError::UnknownSource)
+            .ok_or(MetaError::UnknownSource)?;
+        client.set_key(self.db.comicvine_key().await?);
+        Ok(client)
     }
 
     async fn enabled(&self) -> Result<(), MetaError> {
@@ -100,7 +106,7 @@ impl Metadata {
         lang: &'static str,
     ) -> Result<Vec<WebMetadata>, MetaError> {
         self.enabled().await?;
-        let source = self.source(source)?;
+        let source = self.source(source).await?;
         let id = source.id();
         let adult = self.db.settings().await?.metadata_adult;
         let mut found = blocking(move || source.search(&query, adult, lang)).await?;
@@ -125,7 +131,7 @@ impl Metadata {
         external_id: String,
     ) -> Result<(), MetaError> {
         self.enabled().await?;
-        let client = self.source(source)?;
+        let client = self.source(source).await?;
         let id = external_id.clone();
         let data = blocking(move || client.fetch(&id)).await?;
         let outcome = Outcome::Linked {
@@ -145,7 +151,7 @@ impl Metadata {
             else {
                 continue;
             };
-            let Ok(client) = self.source(state.source) else {
+            let Ok(client) = self.source(state.source).await else {
                 continue;
             };
             let outcome = match blocking(move || client.fetch(&external_id)).await {
@@ -169,7 +175,7 @@ impl Metadata {
         external_id: &str,
     ) -> Result<Vec<u8>, MetaError> {
         self.enabled().await?;
-        let client = self.source(source)?;
+        let client = self.source(source).await?;
         let known = self
             .covers
             .lock()
@@ -191,7 +197,7 @@ impl Metadata {
     /// téléchargée, gardée en base, choisie (champ édité `cover_image_id`).
     pub async fn use_cover(&self, series: i64, source: SourceId) -> Result<(), MetaError> {
         self.enabled().await?;
-        let client = self.source(source)?;
+        let client = self.source(source).await?;
         let linked = self.db.linked_sources(series).await?;
         let (_, external_id) = linked
             .into_iter()
@@ -256,7 +262,12 @@ impl Metadata {
             return Ok(None);
         }
         for id in settings.source_order() {
-            let Ok(client) = self.source(id) else {
+            // Comic Vine seulement à la demande (Q82) : 200 requêtes par heure, clé bloquée si
+            // elle va trop vite.
+            if id == SourceId::Comicvine {
+                continue;
+            }
+            let Ok(client) = self.source(id).await else {
                 continue;
             };
             let todo = self.db.to_identify(id, None).await?;

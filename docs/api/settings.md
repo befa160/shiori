@@ -9,7 +9,7 @@ Lisible par tout compte connecté.
 ```json
 {
   "language": null, "page_turn": "reading", "metadata_online": false, "metadata_sources": null,
-  "metadata_adult": false, "theme": "system", "full_scan_hours": 24
+  "metadata_adult": false, "theme": "system", "full_scan_hours": 24, "comicvine_key_set": false
 }
 ```
 
@@ -19,13 +19,14 @@ Lisible par tout compte connecté.
 | `page_turn` | `reading`, `ltr`, `rtl` | sens pour tourner les pages par défaut |
 | `theme` | `system`, `dark`, `light`, `oled`, `sepia` | thème par défaut |
 | `metadata_online` | booléen | sources web autorisées (désactivées par défaut) |
-| `metadata_sources` | `["anilist", "mangadex", "wikipedia", "mangaupdates"]`, `null` | ordre des sources ; `null` : d'après la langue |
+| `metadata_sources` | `["anilist", "mangadex", "wikipedia", "mangaupdates", "comicvine"]`, `null` | ordre des sources ; `null` : d'après la langue |
 | `metadata_adult` | booléen | fiches pour adultes permises dans les recherches |
 | `full_scan_hours` | 0, 1, 6, 24 | scan complet de toutes les bibliothèques toutes les N heures ; 0 : jamais |
+| `comicvine_key_set` | booléen | une clé Comic Vine est enregistrée (la clé n'est jamais renvoyée) |
 
 ### `PUT /api/settings` <Badge text="admin" />
 
-Mise à jour partielle : un champ absent est inchangé ; seuls `language` et `metadata_sources` acceptent `null`. Un corps vide est refusé.
+Mise à jour partielle : un champ absent est inchangé ; seuls `language`, `metadata_sources` et `comicvine_key` acceptent `null`. `comicvine_key` (écriture seulement) : la clé d'API Comic Vine, 1 à 128 lettres ou chiffres, `null` pour l'effacer ; gardée en base (donc dans les sauvegardes), jamais renvoyée. Un corps vide est refusé.
 
 ```json
 { "metadata_online": true, "full_scan_hours": 6 }

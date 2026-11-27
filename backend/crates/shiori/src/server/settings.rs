@@ -40,6 +40,9 @@ pub(super) struct NewSettings {
     theme: Option<Option<Theme>>,
     /// Absent : inchangé ; 0 (jamais), 1, 6 ou 24 heures.
     full_scan_hours: Option<u32>,
+    /// Absent : inchangée ; `null` : effacée ; sinon la clé Comic Vine (jamais renvoyée).
+    #[serde(default, deserialize_with = "present")]
+    comicvine_key: Option<Option<String>>,
 }
 
 pub(super) async fn save_settings(
@@ -73,6 +76,16 @@ pub(super) async fn save_settings(
             "metadata_sources : au moins une source, chacune une fois",
         ));
     }
+    // Une clé Comic Vine : 40 caractères hexadécimaux aujourd'hui ; lettres et chiffres seulement.
+    let key = new
+        .comicvine_key
+        .as_ref()
+        .map(|k| k.as_deref().map(str::trim));
+    if let Some(Some(key)) = key
+        && (!(1..=128).contains(&key.len()) || !key.bytes().all(|b| b.is_ascii_alphanumeric()))
+    {
+        return Err(bad("comicvine_key : 1 à 128 lettres ou chiffres"));
+    }
     // Un corps vide est une erreur, jamais une remise à zéro silencieuse.
     if new.language.is_none()
         && new.page_turn.is_none()
@@ -81,6 +94,7 @@ pub(super) async fn save_settings(
         && new.metadata_sources.is_none()
         && new.theme.is_none()
         && new.full_scan_hours.is_none()
+        && key.is_none()
     {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -108,6 +122,9 @@ pub(super) async fn save_settings(
     }
     if let Some(sources) = new.metadata_sources {
         app.db.set_metadata_sources(sources).await?;
+    }
+    if let Some(key) = key {
+        app.db.set_comicvine_key(key).await?;
     }
     Ok(Json(app.db.settings().await?))
 }

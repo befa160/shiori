@@ -37,6 +37,7 @@ import type {
   WebMetadata,
   Settings,
   SettingsPatch,
+  InstancePatch,
   VolumeDetail,
   VolumePatch,
   Bookmark,
@@ -84,7 +85,7 @@ async function must<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   health: (init?: RequestInit) => must<Health>('/health', init),
   settings: (init?: RequestInit) => must<Settings>('/settings', init),
-  saveSettings: (settings: Partial<Settings>) =>
+  saveSettings: (settings: InstancePatch) =>
     must<Settings>('/settings', { method: 'PUT', body: JSON.stringify(settings) }),
   libraries: (init?: RequestInit) => must<Library[]>('/libraries', init),
   librarySeries: (id: number, init?: RequestInit) => must<SeriesSummary[]>(`/libraries/${id}/series`, init),

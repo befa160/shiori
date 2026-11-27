@@ -14,6 +14,7 @@ async fn language_is_unset_then_chosen_then_reset() {
             metadata_adult: false,
             theme: Theme::System,
             full_scan_hours: 24,
+            comicvine_key_set: false,
         }
     );
     let en = db.set_language(Some(Language::En)).await.unwrap();

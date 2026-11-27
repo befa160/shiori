@@ -331,7 +331,7 @@ async fn language_setting_round_trip() {
         call(&f.app, "GET", "/api/settings", None).await,
         (
             StatusCode::OK,
-            json!({ "language": null, "page_turn": "reading", "metadata_online": false, "metadata_sources": null, "metadata_adult": false, "theme": "system", "full_scan_hours": 24 })
+            json!({ "language": null, "page_turn": "reading", "metadata_online": false, "metadata_sources": null, "metadata_adult": false, "theme": "system", "full_scan_hours": 24, "comicvine_key_set": false })
         )
     );
     let (status, saved) = call(
@@ -345,12 +345,12 @@ async fn language_setting_round_trip() {
         (status, saved),
         (
             StatusCode::OK,
-            json!({ "language": "en", "page_turn": "reading", "metadata_online": false, "metadata_sources": null, "metadata_adult": false, "theme": "system", "full_scan_hours": 24 })
+            json!({ "language": "en", "page_turn": "reading", "metadata_online": false, "metadata_sources": null, "metadata_adult": false, "theme": "system", "full_scan_hours": 24, "comicvine_key_set": false })
         )
     );
     assert_eq!(
         call(&f.app, "GET", "/api/settings", None).await.1,
-        json!({ "language": "en", "page_turn": "reading", "metadata_online": false, "metadata_sources": null, "metadata_adult": false, "theme": "system", "full_scan_hours": 24 })
+        json!({ "language": "en", "page_turn": "reading", "metadata_online": false, "metadata_sources": null, "metadata_adult": false, "theme": "system", "full_scan_hours": 24, "comicvine_key_set": false })
     );
     let (_, reset) = call(
         &f.app,
@@ -361,7 +361,7 @@ async fn language_setting_round_trip() {
     .await;
     assert_eq!(
         reset,
-        json!({ "language": null, "page_turn": "reading", "metadata_online": false, "metadata_sources": null, "metadata_adult": false, "theme": "system", "full_scan_hours": 24 })
+        json!({ "language": null, "page_turn": "reading", "metadata_online": false, "metadata_sources": null, "metadata_adult": false, "theme": "system", "full_scan_hours": 24, "comicvine_key_set": false })
     );
     // Un champ absent reste inchangé.
     let (_, turned) = call(
@@ -373,7 +373,7 @@ async fn language_setting_round_trip() {
     .await;
     assert_eq!(
         turned,
-        json!({ "language": null, "page_turn": "ltr", "metadata_online": false, "metadata_sources": null, "metadata_adult": false, "theme": "system", "full_scan_hours": 24 })
+        json!({ "language": null, "page_turn": "ltr", "metadata_online": false, "metadata_sources": null, "metadata_adult": false, "theme": "system", "full_scan_hours": 24, "comicvine_key_set": false })
     );
     let (_, themed) = call(
         &f.app,

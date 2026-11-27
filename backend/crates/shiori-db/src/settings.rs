@@ -44,6 +44,8 @@ pub struct Settings {
     pub theme: Theme,
     /// Scan complet de toutes les bibliothèques toutes les N heures (0, 1, 6 ou 24) ; 0 = jamais.
     pub full_scan_hours: u32,
+    /// Une clé Comic Vine est enregistrée (la clé elle-même ne sort jamais de la base, Q79).
+    pub comicvine_key_set: bool,
 }
 
 impl Settings {
@@ -58,19 +60,21 @@ impl Settings {
         self.metadata_sources
             .clone()
             .unwrap_or_else(|| match language {
-                // Wikipédia : une source de repli (résumé et lien seulement) ; MangaUpdates arrivée
-                // après elle (Q81), à la fin.
+                // Wikipédia : une source de repli (résumé et lien seulement) ; MangaUpdates et Comic
+                // Vine arrivées après elle (Q81), à la fin.
                 Language::En => vec![
                     SourceId::Anilist,
                     SourceId::Mangadex,
                     SourceId::Wikipedia,
                     SourceId::Mangaupdates,
+                    SourceId::Comicvine,
                 ],
                 Language::Fr => vec![
                     SourceId::Mangadex,
                     SourceId::Anilist,
                     SourceId::Wikipedia,
                     SourceId::Mangaupdates,
+                    SourceId::Comicvine,
                 ],
             })
     }
@@ -88,7 +92,7 @@ impl Db {
     pub async fn settings(&self) -> Result<Settings, Error> {
         let row = sqlx::query(
             "SELECT language, page_turn, metadata_online, metadata_sources, metadata_adult, theme,
-                    full_scan_hours
+                    full_scan_hours, comicvine_key IS NOT NULL AS comicvine_key_set
              FROM app_settings WHERE id = 1",
         )
         .fetch_one(&self.pool)
@@ -103,12 +107,32 @@ impl Db {
             metadata_adult: row.get("metadata_adult"),
             theme: from_db(row.get("theme"))?,
             full_scan_hours: row.get("full_scan_hours"),
+            comicvine_key_set: row.get("comicvine_key_set"),
             metadata_sources: row
                 .get::<Option<&str>, _>("metadata_sources")
                 .map(serde_json::from_str)
                 .transpose()
                 .map_err(|e| Error::Decode(Box::new(e)))?,
         })
+    }
+
+    /// Clé Comic Vine enregistrée ; seulement pour l'envoyer à Comic Vine.
+    pub async fn comicvine_key(&self) -> Result<Option<String>, Error> {
+        Ok(
+            sqlx::query("SELECT comicvine_key FROM app_settings WHERE id = 1")
+                .fetch_one(&self.pool)
+                .await?
+                .get("comicvine_key"),
+        )
+    }
+
+    /// Enregistre ou efface (`None`) la clé Comic Vine.
+    pub async fn set_comicvine_key(&self, key: Option<&str>) -> Result<Settings, Error> {
+        sqlx::query("UPDATE app_settings SET comicvine_key = ? WHERE id = 1")
+            .bind(key)
+            .execute(&self.pool)
+            .await?;
+        self.settings().await
     }
 
     pub async fn set_metadata_adult(&self, adult: bool) -> Result<Settings, Error> {

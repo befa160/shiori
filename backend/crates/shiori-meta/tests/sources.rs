@@ -7,8 +7,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use shiori_meta::{
-    Anilist, Author, FetchError, Mangadex, Mangaupdates, Source, SourceId, Text, WebMetadata,
-    Wikipedia,
+    Anilist, Author, Comicvine, FetchError, Mangadex, Mangaupdates, Source, SourceId, Text,
+    WebMetadata, Wikipedia,
 };
 
 /// Faux serveur : une réponse par connexion, dans l'ordre ; garde chaque requête reçue.
@@ -532,4 +532,81 @@ fn mangaupdates_adult_entries_only_when_allowed_and_covers_from_its_cdn() {
         source.image("https://evil.example/i.jpg"),
         Err(FetchError::BadResponse(_))
     ));
+}
+
+#[test]
+fn comicvine_needs_a_key_sends_it_and_never_shows_it() {
+    let server = mock(vec![
+        (200, "", fixture("comicvine_search.json")),
+        (
+            200,
+            "",
+            r#"{"error":"OK","status_code":1,"results":{"id":7,"name":"Blacksad","aliases":"","start_year":"2000"}}"#.into(),
+        ),
+        (401, "", r#"{"error":"Invalid API Key","status_code":100}"#.into()),
+        (200, "", r#"{"error":"Object Not Found","status_code":101,"results":[]}"#.into()),
+        (420, "", String::new()),
+    ]);
+    let source = Comicvine::new(&server.url);
+    assert_eq!(source.id(), SourceId::Comicvine);
+    // Sans clé, rien ne part.
+    assert_eq!(source.search("x", false, "fr"), Err(FetchError::MissingKey));
+    assert!(server.requests.lock().unwrap().is_empty());
+
+    source.set_key(Some("CLE0123456789".into()));
+    let found = source.search("geezers", false, "fr").unwrap();
+    assert_eq!(
+        found[0],
+        WebMetadata {
+            id: "123456".into(),
+            titles: vec![
+                text(Some("en"), "Old Geezers"),
+                text(None, "Les Vieux Fourneaux"),
+                text(None, "The Old Geezers")
+            ],
+            summaries: vec![text(Some("en"), "Trois amis & septuagénaires.")],
+            year: Some(2014),
+            links: vec!["https://comicvine.gamespot.com/old-geezers/4050-123456/".into()],
+            cover_url: Some("https://comicvine.gamespot.com/a/uploads/original/1/1/1-x.jpg".into()),
+            ..WebMetadata::default()
+        }
+    );
+    // Sans résumé court, l'article ; année en nombre.
+    assert_eq!(
+        (found[1].summaries[0].text.as_str(), found[1].year),
+        ("Une BD.\n\nTome 1", Some(2000))
+    );
+    let request = server.requests.lock().unwrap()[0].clone();
+    assert!(request.starts_with("GET /search/?"), "{request}");
+    assert!(request.contains("api_key=CLE0123456789") && request.contains("resources=volume"));
+    assert_discreet(&request, "query=geezers");
+
+    assert_eq!(
+        source.fetch("7").unwrap().titles,
+        [text(Some("en"), "Blacksad")]
+    );
+    assert!(server.requests.lock().unwrap()[1].starts_with("GET /volume/4050-7/?"));
+    assert_eq!(source.fetch("8"), Err(FetchError::InvalidKey));
+    assert_eq!(source.search("x", false, "fr"), Err(FetchError::NotFound));
+    assert!(matches!(
+        source.search("x", false, "fr"),
+        Err(FetchError::RateLimited(_))
+    ));
+    assert_eq!(source.fetch("../x"), Err(FetchError::NotFound));
+    assert!(matches!(
+        source.image("https://evil.example/x.jpg"),
+        Err(FetchError::BadResponse(_))
+    ));
+}
+
+#[test]
+fn a_comicvine_network_error_hides_the_key() {
+    let source = Comicvine::new("http://127.0.0.1:1");
+    source.set_key(Some("SECRET42".into()));
+    let error = source.search("x", false, "fr").unwrap_err();
+    assert!(matches!(error, FetchError::Offline(_)), "{error:?}");
+    assert!(
+        !format!("{error:?} {error}").contains("SECRET42"),
+        "{error:?}"
+    );
 }

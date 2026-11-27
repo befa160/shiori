@@ -1,14 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowDown, ArrowUp, Loader2 } from 'lucide-react'
-import { useEffect, useId, useRef } from 'react'
+import { type FormEvent, useEffect, useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { toast } from 'sonner'
 import { api } from '@/api/client'
-import type { Settings, SourceId, SourceIssue } from '@/api/types'
+import type { InstancePatch, SourceId, SourceIssue } from '@/api/types'
 import { QueryState } from '@/browse/Parts'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { sourceErrorText, toastFailure } from '@/i18n/errors'
 
@@ -17,6 +18,7 @@ const CREDITS: [SourceId, string][] = [
   ['mangadex', 'https://mangadex.org'],
   ['wikipedia', 'https://www.wikipedia.org'],
   ['mangaupdates', 'https://www.mangaupdates.com'],
+  ['comicvine', 'https://comicvine.gamespot.com'],
 ]
 
 /** Les sources créditées, comme leurs conditions le demandent ; Wikipédia avec la licence de ses
@@ -64,7 +66,7 @@ export function AdminMetadata() {
   }, [running, queryClient])
   const settings = useQuery({ queryKey: ['settings'], queryFn: ({ signal }) => api.settings({ signal }) })
   const save = useMutation({
-    mutationFn: (patch: Partial<Settings>) => api.saveSettings(patch),
+    mutationFn: (patch: InstancePatch) => api.saveSettings(patch),
     onSuccess: (saved) => {
       queryClient.setQueryData(['settings'], saved)
       // L'ordre change les titres et résumés venus du web.
@@ -201,8 +203,60 @@ export function AdminMetadata() {
           )
         }}
       </QueryState>
+      {settings.data && (
+        <ComicvineKey set={settings.data.comicvine_key_set} saving={save.isPending} onSave={(comicvine_key) => save.mutate({ comicvine_key })} />
+      )}
       <Credits />
     </section>
+  )
+}
+
+/** Clé Comic Vine (Q79) : saisie ici, gardée sur le serveur, jamais réaffichée. */
+function ComicvineKey({ set, saving, onSave }: { set: boolean; saving: boolean; onSave: (key: string | null) => void }) {
+  const { t } = useTranslation()
+  const id = useId()
+  const [key, setKey] = useState('')
+  const submit = (e: FormEvent) => {
+    e.preventDefault()
+    onSave(key.trim())
+    setKey('')
+  }
+  return (
+    <div className="space-y-2">
+      <h3 className="text-sm font-medium">
+        <label htmlFor={`${id}-key`}>{t('admin.comicvine')}</label>
+      </h3>
+      <p id={`${id}-help`} className="text-sm text-muted-foreground">
+        {t('admin.comicvineHelp')}{' '}
+        <a href="https://comicvine.gamespot.com/api/" target="_blank" rel="noreferrer noopener" className="underline underline-offset-4">
+          {t('admin.comicvineGet')}
+        </a>
+      </p>
+      {set ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-sm">{t('admin.comicvineSet')}</p>
+          <Button variant="secondary" disabled={saving} onClick={() => onSave(null)}>
+            {t('admin.comicvineClear')}
+          </Button>
+        </div>
+      ) : (
+        <form onSubmit={submit} className="flex flex-wrap gap-2">
+          <Input
+            id={`${id}-key`}
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            className="w-72 max-w-full font-mono"
+            aria-describedby={`${id}-help`}
+          />
+          <Button type="submit" variant="secondary" disabled={saving || key.trim() === ''}>
+            {t('admin.comicvineSave')}
+          </Button>
+        </form>
+      )}
+    </div>
   )
 }
 

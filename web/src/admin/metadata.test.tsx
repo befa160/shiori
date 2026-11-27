@@ -9,14 +9,15 @@ afterEach(() => vi.unstubAllGlobals())
 const idle = { running: false, done: 0, total: 0, stopped: null }
 
 function serve(overview: Partial<MetadataOverview>, settings: Partial<Settings> = {}) {
-  let current: Settings = { language: 'fr', page_turn: 'reading', metadata_online: false, metadata_sources: null, metadata_adult: false, theme: 'system', full_scan_hours: 24, ...settings }
+  let current: Settings = { language: 'fr', page_turn: 'reading', metadata_online: false, metadata_sources: null, metadata_adult: false, theme: 'system', full_scan_hours: 24, comicvine_key_set: false, ...settings }
   let state: MetadataOverview = { online: current.metadata_online, sources: ['mangadex', 'anilist'], identify: idle, issues: [], ...overview }
   const fetch = mockApi({
     '/api/libraries': () => json([]),
     '/api/admin/scans/current': () => new Response(null, { status: 204 }),
     '/api/settings': (init) => {
       if (init?.method === 'PUT') {
-        current = { ...current, ...JSON.parse(String(init.body)) }
+        const { comicvine_key, ...rest } = JSON.parse(String(init.body))
+        current = { ...current, ...rest, ...(comicvine_key === undefined ? {} : { comicvine_key_set: comicvine_key !== null }) }
         state = { ...state, online: current.metadata_online, sources: current.metadata_sources ?? ['mangadex', 'anilist'] }
       }
       return json(current)
@@ -137,5 +138,23 @@ describe('administration : métadonnées web', () => {
       expect(s.getByText('Rien à vérifier.')).toBeInTheDocument()
       unmount()
     }
+  })
+
+  it('clé Comic Vine : enregistrée sans être réaffichée, puis effacée', async () => {
+    const { sent } = serve({})
+    renderAt('/admin')
+    const s = await section()
+    const key = await s.findByLabelText('Clé Comic Vine')
+    expect(key).toHaveAccessibleDescription(/usage non commercial/)
+    expect(s.getByRole('link', { name: 'Obtenir une clé' })).toHaveAttribute('href', 'https://comicvine.gamespot.com/api/')
+    expect(s.getByRole('button', { name: 'Enregistrer la clé' })).toBeDisabled()
+    await userEvent.type(key, ' abc123 ')
+    await userEvent.click(s.getByRole('button', { name: 'Enregistrer la clé' }))
+    expect(await s.findByText('Clé enregistrée.')).toBeInTheDocument()
+    expect(s.queryByDisplayValue('abc123')).not.toBeInTheDocument()
+    await userEvent.click(s.getByRole('button', { name: 'Effacer la clé' }))
+    expect(await s.findByLabelText('Clé Comic Vine')).toHaveValue('')
+    expect(sent('/api/settings')).toEqual([{ comicvine_key: 'abc123' }, { comicvine_key: null }])
+    expect(s.getByRole('link', { name: 'Comic Vine' })).toHaveAttribute('href', 'https://comicvine.gamespot.com')
   })
 })

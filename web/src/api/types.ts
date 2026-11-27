@@ -61,12 +61,17 @@ export interface Settings {
   theme: Theme
   /** Scan complet de toutes les bibliothèques toutes les N heures ; 0 : jamais. */
   full_scan_hours: FullScanHours
+  /** Une clé Comic Vine est enregistrée ; la clé elle-même n'est jamais renvoyée. */
+  comicvine_key_set: boolean
 }
+
+/** Réglages à changer ; `comicvine_key` : la clé à enregistrer, `null` pour l'effacer. */
+export type InstancePatch = Partial<Omit<Settings, 'comicvine_key_set'>> & { comicvine_key?: string | null }
 
 export type FullScanHours = 0 | 1 | 6 | 24
 
 /** Sources de métadonnées web. */
-export type SourceId = 'anilist' | 'mangadex' | 'wikipedia' | 'mangaupdates'
+export type SourceId = 'anilist' | 'mangadex' | 'wikipedia' | 'mangaupdates' | 'comicvine'
 
 /** Un texte et sa langue (`en`, `fr`, `ja`, `ja-ro`…). */
 export interface LangText {

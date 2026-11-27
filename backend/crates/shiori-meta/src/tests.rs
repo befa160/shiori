@@ -63,6 +63,11 @@ fn descriptions_lose_their_markup() {
     );
     assert_eq!(plain("a < b et pas de balise"), "a < b et pas de balise");
     assert_eq!(plain("  <BR>  "), "");
+    // Paragraphes et listes : une ligne chacun, pas de lignes vides en série ; `<b>` ne coupe pas.
+    assert_eq!(
+        plain("<p>Une <b>BD</b>.</p><ul><li>Tome 1</li><li>Tome 2</li></ul>"),
+        "Une BD.\n\nTome 1\n\nTome 2"
+    );
 }
 
 #[test]
@@ -89,6 +94,8 @@ fn errors_have_stable_codes() {
         FetchError::NotFound,
         FetchError::Http(500),
         FetchError::BadResponse("x".into()),
+        FetchError::MissingKey,
+        FetchError::InvalidKey,
     ]
     .map(|e| e.code());
     assert_eq!(
@@ -98,7 +105,9 @@ fn errors_have_stable_codes() {
             "rate_limited",
             "not_found",
             "http_error",
-            "bad_response"
+            "bad_response",
+            "missing_key",
+            "invalid_key"
         ]
     );
 }
