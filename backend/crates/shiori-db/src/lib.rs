@@ -35,6 +35,7 @@ mod accounts;
 mod backup;
 mod bookmarks;
 mod browse;
+mod collections;
 mod follows;
 mod health;
 mod library;
@@ -58,6 +59,7 @@ pub use browse::{
     ContinueItem, LibrarySummary, NewVolume, PageFile, PageInfo, PageSource, PublicationStatus,
     ReadingStatus, SeriesDetail, SeriesSummary, SeriesVolume, VolumeDetail, VolumeLocation,
 };
+pub use collections::{Collection, CollectionError, CollectionRef, MAX_COLLECTION_NAME};
 pub use health::{CodeCount, FileHealth, FileIssue, Health, HealthFilter, LibraryHealth};
 pub use library::{Library, LibraryError};
 pub use metadata::{EditError, Edited, SeriesMetadata, VolumeMetadata};

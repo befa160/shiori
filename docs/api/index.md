@@ -73,7 +73,7 @@ Sans authentification.
 | [Compte](/api/account) | compte connecté, préférences, mot de passe, appareils, double authentification, jetons d'API |
 | [Comptes (admin)](/api/users) | gestion des comptes |
 | [Bibliothèques](/api/libraries) | liste, création, surveillance, suppression |
-| [Séries](/api/series) | listes, détail, modification, réglages de lecture, « Continuer la lecture » |
+| [Séries](/api/series) | listes, détail, modification, réglages de lecture, « Continuer la lecture », nouveautés, « À lire », collections |
 | [Tomes et pages](/api/volumes) | détail, progression, pages, images, couvertures |
 | [Métadonnées](/api/metadata) | sources web, recherche, liens, identification |
 | [Scans](/api/scans) | lancer, suivre, annuler, historique, journaux |

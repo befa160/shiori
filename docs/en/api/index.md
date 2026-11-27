@@ -73,7 +73,7 @@ No authentication.
 | [Account](/en/api/account) | signed-in account, preferences, password, devices, two-factor, API tokens |
 | [Accounts (admin)](/en/api/users) | account management |
 | [Libraries](/en/api/libraries) | list, creation, watching, deletion |
-| [Series](/en/api/series) | lists, detail, editing, reading settings, "Continue reading" |
+| [Series](/en/api/series) | lists, detail, editing, reading settings, "Continue reading", new volumes, "To read", collections |
 | [Volumes and pages](/en/api/volumes) | detail, progress, pages, images, covers |
 | [Metadata](/en/api/metadata) | web sources, search, links, identification |
 | [Scans](/en/api/scans) | start, follow, cancel, history, logs |

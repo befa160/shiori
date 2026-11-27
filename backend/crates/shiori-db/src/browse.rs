@@ -122,6 +122,8 @@ pub struct SeriesDetail {
     pub followed: bool,
     /// Dans « À lire » pour ce compte (1.3c).
     pub to_read: bool,
+    /// Collections partagées qui la contiennent, par nom (1.3d).
+    pub collections: Vec<crate::CollectionRef>,
     /// Tome qu'ouvre « Lire » : même règle que dans [`SeriesSummary`].
     pub resume_volume_id: Option<String>,
     /// Comme dans [`SeriesSummary`].
@@ -685,6 +687,7 @@ impl Db {
             settings,
             followed: self.followed(viewer, id).await?,
             to_read: self.in_to_read(viewer, id).await?,
+            collections: self.series_collections(id).await?,
             resume_volume_id,
             page_count,
             pages_read,

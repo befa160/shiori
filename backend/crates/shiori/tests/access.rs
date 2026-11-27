@@ -529,3 +529,150 @@ async fn an_admin_token_is_never_an_admin() {
         (StatusCode::FORBIDDEN, Some("password_change_required"))
     );
 }
+
+/// Collections (1.3d) : gérées par l'administrateur, lues par un lecteur dans ses bibliothèques.
+#[tokio::test]
+async fn collections_are_managed_by_the_admin_and_read_within_libraries() {
+    let f = fixture().await;
+    let (status, created) = call(
+        &f,
+        None,
+        "POST",
+        "/api/collections",
+        Some(json!({ "name": " Shōnen " })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    assert_eq!(created["name"], "Shōnen");
+    assert_eq!(created["series_ids"], json!([]));
+    let id = created["id"].as_i64().unwrap();
+    let (status, err) = call(
+        &f,
+        None,
+        "POST",
+        "/api/collections",
+        Some(json!({ "name": "shōnen" })),
+    )
+    .await;
+    assert_eq!(
+        (status, err["code"].as_str()),
+        (StatusCode::CONFLICT, Some("name_taken"))
+    );
+    let (status, err) = call(
+        &f,
+        None,
+        "POST",
+        "/api/collections",
+        Some(json!({ "name": "  " })),
+    )
+    .await;
+    assert_eq!(
+        (status, err["code"].as_str()),
+        (StatusCode::BAD_REQUEST, Some("invalid_name"))
+    );
+
+    let member = format!("/api/collections/{id}/series/{}", f.series);
+    let (status, filled) = call(&f, None, "PUT", &member, None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(filled["series_ids"], json!([f.series]));
+    let (status, renamed) = call(
+        &f,
+        None,
+        "PATCH",
+        &format!("/api/collections/{id}"),
+        Some(json!({ "name": "Nekketsu" })),
+    )
+    .await;
+    assert_eq!(
+        (status, renamed["name"].as_str()),
+        (StatusCode::OK, Some("Nekketsu"))
+    );
+    let (_, detail) = call(&f, None, "GET", &format!("/api/series/{}", f.series), None).await;
+    assert_eq!(
+        detail["collections"],
+        json!([{ "id": id, "name": "Nekketsu" }])
+    );
+
+    // Un lecteur la voit, sans pouvoir la changer ; sans la bibliothèque, il ne la voit plus.
+    let (bob, cookie) = reader(&f, "bob").await;
+    let (_, seen) = call(&f, Some(&cookie), "GET", "/api/collections", None).await;
+    assert_eq!(
+        seen,
+        json!([{ "id": id, "name": "Nekketsu", "series_ids": [f.series] }])
+    );
+    for (method, uri) in [
+        ("POST", "/api/collections".to_owned()),
+        ("PUT", member.clone()),
+        ("DELETE", format!("/api/collections/{id}")),
+    ] {
+        let body = (method == "POST").then(|| json!({ "name": "X" }));
+        let (status, err) = call(&f, Some(&cookie), method, &uri, body).await;
+        assert_eq!(
+            (status, err["code"].as_str()),
+            (StatusCode::FORBIDDEN, Some("forbidden")),
+            "{method} {uri}"
+        );
+    }
+    f.db.update_user(
+        bob,
+        shiori_db::UserChange {
+            libraries: Some(vec![]),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        call(&f, Some(&cookie), "GET", "/api/collections", None)
+            .await
+            .1,
+        json!([])
+    );
+
+    let (status, emptied) = call(&f, None, "DELETE", &member, None).await;
+    assert_eq!(
+        (status, emptied["series_ids"].clone()),
+        (StatusCode::OK, json!([]))
+    );
+    for (method, uri) in [
+        ("PUT", format!("/api/collections/{id}/series/999999")),
+        (
+            "PUT",
+            format!("/api/collections/999999/series/{}", f.series),
+        ),
+        (
+            "DELETE",
+            format!("/api/collections/999999/series/{}", f.series),
+        ),
+        ("DELETE", "/api/collections/999999".to_owned()),
+    ] {
+        let (status, err) = call(&f, None, method, &uri, None).await;
+        assert_eq!(
+            (status, err["code"].as_str()),
+            (StatusCode::NOT_FOUND, Some("not_found")),
+            "{method} {uri}"
+        );
+    }
+    let (status, err) = call(
+        &f,
+        None,
+        "PATCH",
+        "/api/collections/999999",
+        Some(json!({ "name": "Y" })),
+    )
+    .await;
+    assert_eq!(
+        (status, err["code"].as_str()),
+        (StatusCode::NOT_FOUND, Some("not_found"))
+    );
+    assert_eq!(
+        call(&f, None, "DELETE", &format!("/api/collections/{id}"), None)
+            .await
+            .0,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        call(&f, None, "GET", "/api/collections", None).await.1,
+        json!([])
+    );
+}
