@@ -32,7 +32,7 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 
 ## Prochaine phase (❓ à décider)
 
-La 1.4 est terminée : invitations (#159, #160), MangaUpdates (#161), Comic Vine (#162), séries incomplètes (#163), actualisation périodique (#164) ; plan et bilan dans l'historique. Version `1.4.0` ; prochaine étape proposée : le plan de la 1.5 (en-tête `Remote-User` d'un proxy d'authentification).
+La 1.4 est terminée : invitations (#159, #160), MangaUpdates (#161), Comic Vine (#162), séries incomplètes (#163), actualisation périodique (#164) ; plan et bilan dans l'historique. Version `1.4.1` (index alphabétique de la liste des séries, #166) ; prochaine étape proposée : le plan de la 1.5 (en-tête `Remote-User` d'un proxy d'authentification).
 
 ## Planning après la V1
 
@@ -169,4 +169,5 @@ Décisions assumées, chacune marquée `shortcut:` dans le code avec son seuil (
 - 2026-11-27 : séries incomplètes (1.4e) : nombre officiel `volume_count` dans la vue fusionnée (fichiers, puis sources dans l'ordre, éditable) ; `missing_volumes` dans la liste et le détail, `null` quand rien ne se compare (nombre inconnu, aucun numéro de tome : série en chapitres), une plage « T03-05 » couvre trois numéros, un hors-série décimal ou un chapitre aucun, nombre borné à 2 000 ; filtre « Incomplète » côté interface (terminée et manques), pas un statut de publication ; `<Count>` lu aux prochains scans des tomes (pas de rescan forcé), fiches web liées avant : bouton Actualiser ou actualisation périodique (1.4f).
 - 2026-11-27 : actualisation périodique (1.4f) : réglage `metadata_refresh_days` (0, 7, 30 ; 0 par défaut, Q80) ; une tâche relit chaque heure au plus 100 fiches liées plus vieilles que le réglage (`checked_at`, les plus anciennes d'abord), au débit de chaque source : assez pour 16 000 fiches par semaine et sous les 200 requêtes par heure de Comic Vine ; arrêt sur « trop de requêtes » ou source injoignable sans rien noter, autre échec noté (la fiche garde ses données et passe en fin de file).
 - 2026-11-27 : index alphabétique (hors plan, demande de l'utilisateur) : liste des séries triée par titre et page d'une bibliothèque, à partir de 30 séries ; colonne de lettres à la souris à partir de `lg`, poignée de défilement façon galerie photo au toucher (tablette comprise, quelle que soit l'orientation, d'où `pointer: coarse` plutôt qu'un breakpoint) ; tri par titre refait côté client (`Intl.Collator`, sans accents ni casse, nombres dans l'ordre) car le serveur trie octet par octet ; `#` d'abord pour chiffres, symboles et autres écritures ; pas de titre de tri (« The », « L' ») pour l'instant.
+- 2026-11-27 : version `1.4.1` (index alphabétique, #166) : correctif plutôt que mineure, 1.5 restant réservée à `Remote-User` (décision utilisateur).
 - 2026-11-27 : 1.4 terminée (invitations, MangaUpdates, Comic Vine, séries incomplètes, actualisation périodique) ; version `1.4.0`.
