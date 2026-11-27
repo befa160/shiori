@@ -21,6 +21,9 @@ export const useContinue = () =>
 export const useNewVolumes = () =>
   useQuery({ queryKey: ['new'], queryFn: ({ signal }) => api.newVolumes({ signal }), staleTime: 0 })
 
+export const useCollections = () =>
+  useQuery({ queryKey: ['collections'], queryFn: ({ signal }) => api.collections({ signal }) })
+
 export const useSeries = (id: number | null) =>
   useQuery({
     queryKey: ['series', id],

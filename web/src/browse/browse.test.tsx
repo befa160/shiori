@@ -41,6 +41,7 @@ const detail: SeriesDetail = {
   sources: [],
   followed: false,
   to_read: false,
+  collections: [],
   resume_volume_id: 'b',
   page_count: 392,
   pages_read: 245,

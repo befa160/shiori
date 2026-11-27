@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { EllipsisVertical } from 'lucide-react'
-import { useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/api/client'
 import type { ReadingStatus } from '@/api/types'
@@ -27,12 +27,15 @@ export function SeriesReadMenu({
   status,
   volumes,
   card = false,
+  extra,
 }: {
   id: number
   name: string
   status: ReadingStatus
   volumes: number
   card?: boolean
+  /** Entrées de plus, en fin de menu (page de la série). */
+  extra?: ReactNode
 }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -67,6 +70,7 @@ export function SeriesReadMenu({
         <DropdownMenuContent align="end">
           {status !== 'read' && <DropdownMenuItem onSelect={() => run(true)}>{t('series.markRead')}</DropdownMenuItem>}
           {status !== 'unread' && <DropdownMenuItem onSelect={() => setConfirm(true)}>{t('series.markUnread')}</DropdownMenuItem>}
+          {extra}
         </DropdownMenuContent>
       </DropdownMenu>
       <AlertDialog open={confirm} onOpenChange={setConfirm}>

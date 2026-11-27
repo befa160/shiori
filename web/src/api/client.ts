@@ -5,6 +5,7 @@ import type {
   AccountPatch,
   ApiToken,
   AuthState,
+  Collection,
   ContinueItem,
   NewVolume,
   Device,
@@ -90,6 +91,12 @@ export const api = {
   continueReading: (init?: RequestInit) => must<ContinueItem[]>('/continue', init),
   newVolumes: (init?: RequestInit) => must<NewVolume[]>('/me/new', init),
   markNewSeen: () => request<null>('/me/new/seen', { method: 'POST' }),
+  collections: (init?: RequestInit) => must<Collection[]>('/collections', init),
+  createCollection: (name: string) => must<Collection>('/collections', { method: 'POST', body: JSON.stringify({ name }) }),
+  renameCollection: (id: number, name: string) => must<Collection>(`/collections/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) }),
+  deleteCollection: (id: number) => request<null>(`/collections/${id}`, { method: 'DELETE' }),
+  collectionSeries: (id: number, seriesId: number, on: boolean) =>
+    must<Collection>(`/collections/${id}/series/${seriesId}`, { method: on ? 'PUT' : 'DELETE' }),
   toRead: (seriesId: number, on: boolean) => request<null>(`/series/${seriesId}/to-read`, { method: on ? 'PUT' : 'DELETE' }),
   follow: (seriesId: number, on: boolean) => request<null>(`/series/${seriesId}/follow`, { method: on ? 'PUT' : 'DELETE' }),
   /** Statistiques du compte sur `days` jours, « aujourd'hui » étant celui de l'appareil. */

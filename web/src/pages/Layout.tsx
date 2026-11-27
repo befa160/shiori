@@ -1,4 +1,4 @@
-import { BookCopy, BookOpen, ChartColumn, CircleUserRound, HardDriveDownload, House, Loader2, RefreshCw, Search, Settings, WifiOff } from 'lucide-react'
+import { BookCopy, BookOpen, ChartColumn, CircleUserRound, HardDriveDownload, Layers, House, Loader2, RefreshCw, Search, Settings, WifiOff } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link, NavLink, Outlet } from 'react-router'
 import { useLibraries } from '@/api/queries'
@@ -38,6 +38,7 @@ const NAV = [
   { to: '/account', label: 'nav.account', icon: CircleUserRound },
 ] as const
 // Sidebar seulement (barre d'onglets : 4 au plus) ; aussi dans la page du compte.
+const COLLECTIONS = { to: '/collections', label: 'nav.collections', icon: Layers } as const
 const STATS = { to: '/stats', label: 'nav.stats', icon: ChartColumn } as const
 const DOWNLOADS = { to: '/downloads', label: 'nav.downloads', icon: HardDriveDownload } as const
 const ADMIN = { to: '/admin', label: 'nav.admin', icon: Settings } as const
@@ -101,6 +102,7 @@ function AppSidebar() {
               {NAV.slice(0, 3).map((item) => (
                 <NavItem key={item.to} {...item} />
               ))}
+              <NavItem {...COLLECTIONS} />
               <NavItem {...STATS} />
             </SidebarMenu>
           </SidebarGroup>
@@ -177,7 +179,7 @@ function DocsItem() {
   )
 }
 
-function NavItem({ to, label, icon: Icon, name }: ((typeof NAV)[number] | typeof STATS | typeof DOWNLOADS | typeof ADMIN) & { name?: string }) {
+function NavItem({ to, label, icon: Icon, name }: ((typeof NAV)[number] | typeof COLLECTIONS | typeof STATS | typeof DOWNLOADS | typeof ADMIN) & { name?: string }) {
   const { t } = useTranslation()
   return (
     <SidebarMenuItem>

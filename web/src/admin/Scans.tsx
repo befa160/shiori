@@ -54,7 +54,7 @@ export function ScanWatcher() {
   return null
 }
 
-type T = ReturnType<typeof useTranslation>['t']
+type T = TFunction
 const countsText = (c: RunCounts, t: T) =>
   (['ok', 'warning', 'error'] as const).map((k) => t('scans.countItem', { label: t(`scans.counts.${k}`), value: c[k] })).join(' · ')
 
