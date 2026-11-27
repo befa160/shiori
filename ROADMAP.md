@@ -30,36 +30,9 @@ Légende : ✅ fait · 🚧 en cours · ⏳ à faire · ❓ décision attendue.
 
 ---
 
-## Version 1.4 : invitations, MangaUpdates et Comic Vine, actualisation périodique (plan validé le 2026-11-27)
+## Prochaine phase (❓ à décider)
 
-Six lots, dans cet ordre ; les séries incomplètes, notées au backlog le 2026-11-26, rejoignent la version (demande du 2026-11-27).
-
-### Ce qui existe
-
-- Comptes créés seulement par l'administrateur (Administration → Comptes, `shiori user add`) ou par la page d'installation ; routes `/api/auth/*` ouvertes sans session, limites de connexion par nom et par adresse.
-- Sources web derrière le trait `Source` (`shiori-meta`) : AniList, MangaDex, Wikipédia ; `series_sources` porte une contrainte `CHECK` sur la liste des sources (reconstruction de table, comme en 0022) ; ordre réglable (`metadata_sources`).
-- Une fiche liée se relit seulement à la demande (bouton Actualiser, `POST /api/series/{id}/metadata/refresh`) ; `checked_at` date la dernière lecture ; l'identification en tâche de fond s'arrête dès qu'une source demande d'attendre et reprend à la tâche suivante.
-
-### Lots
-
-| Lot | Contenu | Taille |
-|---|---|---|
-| 1.4a ✅ | **Invitations, API** : table `invites` (`token_hash`, rôle, bibliothèques, `created_by`, `expires_at`, `used_at`, `used_by`) ; jeton de 256 bits, seul son hash en base, usage unique, validité 1, 7 ou 30 jours (Q78) ; administrateur : `GET/POST /api/admin/invites`, `DELETE /api/admin/invites/{id}` (révocation) ; sans session : `GET /api/auth/invite/{token}` (valide ou non, rien d'autre), `POST /api/auth/invite/{token}` (nom, mot de passe : crée le compte avec le rôle et les bibliothèques prévus, ouvre la session), mêmes limites que la connexion ; aucune inscription libre | S |
-| 1.4b ✅ | **Invitations, interface** : page `/invite/:token` (nom, mot de passe, erreur claire si le lien est expiré, utilisé ou révoqué) ; Administration → Comptes : « Inviter » (rôle, bibliothèques, durée), lien affiché une seule fois avec bouton Copier, liste des invitations en attente avec révocation ; e2e + captures | S |
-| 1.4c ✅ | **Source MangaUpdates** (API publique v1, sans clé : recherche, fiche, couverture ; débit prudent, crédit de la source sur la fiche) ; migration : `CHECK` élargi, ajoutée à la fin d'un ordre déjà choisi (Q81) ; fenêtre Identifier et Administration → Métadonnées | S |
-| 1.4d ✅ | **Source Comic Vine** (volumes = séries ; usage non commercial, 200 requêtes par ressource et par heure) : clé d'API saisie dans Administration → Métadonnées, gardée en base, jamais renvoyée au navigateur (« clé enregistrée », Effacer), source inactive sans clé (Q79) ; ajoutée en fin d'ordre (Q81) ; lien vers la fiche Comic Vine | S |
-| 1.4e ✅ | **Séries incomplètes** : nombre de tomes officiel lu et gardé avec la fiche (AniList `volumes`, MangaDex `lastVolume`, MangaUpdates d'après son statut, ComicInfo `<Count>` ; Wikipédia et Comic Vine ne le donnent pas, ses `issues` ne sont pas des tomes), même priorité que les autres champs (fichiers locaux, puis sources dans l'ordre choisi) ; comparé aux numéros présents, trous compris ; une série terminée qui n'a pas tous ses tomes est incomplète ; « 12 / 15 » et tomes manquants sur la page de la série, filtre « Incomplètes » dans la liste des séries | M |
-| 1.4f ✅ | **Actualisation périodique** : réglage Jamais (par défaut, Q80) / chaque semaine / chaque mois ; la tâche de fond relit par petites tranches les fiches liées dont `checked_at` dépasse la durée, les plus anciennes d'abord, s'arrête quand une source demande d'attendre et reprend au tour suivant ; rien ne part si le réseau est désactivé ; version `1.4.0` dans une PR à part | S |
-
-Chaque lot : documentation FR/EN (installation, comptes, métadonnées, API), ROADMAP, Ponytail, captures 4 tailles pour l'UI, `backup/tests.rs` (`previous_version`) recalé à chaque migration. Conditions d'utilisation de MangaUpdates et Comic Vine relues au début de leur lot.
-
-### Décisions (2026-11-27)
-
-- **Q78** Lien d'invitation valable 1, 7 ou 30 jours au choix, 7 par défaut ; usage unique.
-- **Q79** Clé Comic Vine saisie dans l'interface, gardée en base, jamais renvoyée au navigateur.
-- **Q80** Actualisation périodique désactivée par défaut (Jamais / chaque semaine / chaque mois).
-- **Q81** MangaUpdates et Comic Vine ajoutées à la fin de l'ordre des sources (par défaut comme dans un ordre déjà choisi).
-- **Q82** (2026-11-27) Comic Vine seulement à la demande (fenêtre Identifier, actualisation des fiches liées), jamais à l'identification automatique : 200 requêtes par heure et par clé.
+La 1.4 est terminée : invitations (#159, #160), MangaUpdates (#161), Comic Vine (#162), séries incomplètes (#163), actualisation périodique (#164) ; plan et bilan dans l'historique. Version `1.4.0` ; prochaine étape proposée : le plan de la 1.5 (en-tête `Remote-User` d'un proxy d'authentification).
 
 ## Planning après la V1
 
@@ -70,7 +43,7 @@ Le backlog ci-dessous, rangé par version (S : une PR, M : 2 ou 3 PR, L : une ph
 | 1.1 ✅ | Statistiques de lecture (application Android abandonnée après essai) | M |
 | 1.2 ✅ | Lecteur : luminosité, marque-pages ; édition d'un tome dans l'interface | S + S + M |
 | 1.3 ✅ | Nouveautés suivies ; liste « À lire » par compte ; collections partagées (relations entre séries retirées) | M + S + M |
-| 1.4 🚧 | Liens d'invitation ; sources MangaUpdates et Comic Vine ; séries incomplètes ; actualisation périodique des fiches | M + M + M + S |
+| 1.4 ✅ | Liens d'invitation ; sources MangaUpdates et Comic Vine ; séries incomplètes ; actualisation périodique des fiches | M + M + M + S |
 | 1.5 | En-tête `Remote-User` (pour les autres installations, inutile ici) | S |
 | plus tard | OPDS (lecture et progression, sur les jetons d'API) | M |
 
@@ -195,3 +168,4 @@ Décisions assumées, chacune marquée `shortcut:` dans le code avec son seuil (
 - 2026-11-27 : source Comic Vine (1.4d) : clé relue des réglages avant chaque appel (`Source::set_key`), jamais sérialisée (`comicvine_key_set` seulement), masquée dans les erreurs ; 401 ou `status_code` 100 → `invalid_key`, pas de clé → `missing_key` sans requête, 420 compté comme « trop de requêtes » ; résumé court (`deck`) d'abord, l'article sinon ; pas d'auteurs (`person_credits` sans rôles) ; `plain` coupe aussi les lignes aux blocs HTML (paragraphes, listes).
 - 2026-11-27 : séries incomplètes (1.4e) : nombre officiel `volume_count` dans la vue fusionnée (fichiers, puis sources dans l'ordre, éditable) ; `missing_volumes` dans la liste et le détail, `null` quand rien ne se compare (nombre inconnu, aucun numéro de tome : série en chapitres), une plage « T03-05 » couvre trois numéros, un hors-série décimal ou un chapitre aucun, nombre borné à 2 000 ; filtre « Incomplète » côté interface (terminée et manques), pas un statut de publication ; `<Count>` lu aux prochains scans des tomes (pas de rescan forcé), fiches web liées avant : bouton Actualiser ou actualisation périodique (1.4f).
 - 2026-11-27 : actualisation périodique (1.4f) : réglage `metadata_refresh_days` (0, 7, 30 ; 0 par défaut, Q80) ; une tâche relit chaque heure au plus 100 fiches liées plus vieilles que le réglage (`checked_at`, les plus anciennes d'abord), au débit de chaque source : assez pour 16 000 fiches par semaine et sous les 200 requêtes par heure de Comic Vine ; arrêt sur « trop de requêtes » ou source injoignable sans rien noter, autre échec noté (la fiche garde ses données et passe en fin de file).
+- 2026-11-27 : 1.4 terminée (invitations, MangaUpdates, Comic Vine, séries incomplètes, actualisation périodique) ; version `1.4.0`.
