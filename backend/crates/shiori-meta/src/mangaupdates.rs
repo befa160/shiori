@@ -105,6 +105,17 @@ fn status(text: &str) -> Option<String> {
     Some(status.into())
 }
 
+/// Nombre de tomes d'après la première ligne du statut (« 7 Volumes (Complete) »).
+fn volume_count(text: &str) -> Option<u32> {
+    let first = text.lines().next()?.trim();
+    let (number, rest) = first.split_once(' ')?;
+    rest.to_ascii_lowercase()
+        .starts_with("volume")
+        .then(|| number.parse().ok())
+        .flatten()
+        .filter(|n| *n > 0)
+}
+
 impl Series {
     fn into_metadata(self, hit_title: Option<String>) -> WebMetadata {
         // Langue des titres inconnue : le principal est le plus souvent romanisé, les associés
@@ -148,6 +159,7 @@ impl Series {
             year: self.year.and_then(|y| y.trim().parse().ok()),
             status: self.status.as_deref().and_then(status),
             links: self.url.into_iter().collect(),
+            volume_count: self.status.as_deref().and_then(volume_count),
             cover_url: self.image.and_then(|i| i.url.original),
         }
     }

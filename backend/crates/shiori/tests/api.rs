@@ -711,6 +711,35 @@ async fn library_series_continue_and_publication_status() {
         .iter()
         .find(|s| s["id"] == serie_a["id"]);
     assert_eq!(listed.unwrap()["tags"], json!(["Comédie", "SF", "Cuisine"]));
+
+    // Nombre officiel de tomes (1.4e) : T01 et T02 présents, il en manque deux sur quatre.
+    let (status, detail) = call(&f.app, "PATCH", &uri, Some(r#"{"volume_count":4}"#)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        (
+            &detail["metadata"]["volume_count"],
+            &detail["missing_volumes"]
+        ),
+        (&json!(4), &json!([3, 4]))
+    );
+    let (_, all) = get(&f.app, "/api/series").await;
+    let listed = all
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["id"] == serie_a["id"]);
+    assert_eq!(listed.unwrap()["missing_volumes"], json!([3, 4]));
+    let (status, _) = call(&f.app, "PATCH", &uri, Some(r#"{"volume_count":-1}"#)).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    // Rendu aux sources : plus de nombre, plus de manques.
+    let (_, detail) = call(
+        &f.app,
+        "PATCH",
+        &uri,
+        Some(r#"{"unlock":["volume_count"]}"#),
+    )
+    .await;
+    assert_eq!(detail["missing_volumes"], Value::Null);
     for bad in [
         r#"{"publication_status":"fini"}"#,
         r#"{"statut":"completed"}"#,

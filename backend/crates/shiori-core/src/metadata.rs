@@ -64,6 +64,9 @@ pub struct LocalMetadata {
     /// `Some(true)` : manga lu de droite à gauche ; `Some(false)` : pas un manga. Une proposition.
     pub right_to_left: Option<bool>,
     pub links: Vec<String>,
+    /// Nombre de tomes de la série, d'après le fichier (`<Count>` de ComicInfo) ; sert à repérer
+    /// les tomes manquants (1.4e).
+    pub volume_count: Option<u32>,
 }
 
 /// Lit un fichier de métadonnées ; l'erreur est un message lisible (problème du tome).
@@ -209,6 +212,7 @@ struct ComicInfo {
     language_iso: Option<String>,
     manga: Option<String>,
     age_rating: Option<String>,
+    count: Option<String>,
 }
 
 fn comic_info(text: &str) -> Result<LocalMetadata, String> {
@@ -243,6 +247,10 @@ fn comic_info(text: &str) -> Result<LocalMetadata, String> {
             _ => None,
         },
         links: urls(info.web),
+        // ComicRack écrit `-1` (ou rien) pour « inconnu ».
+        volume_count: clean(info.count)
+            .and_then(|c| c.parse().ok())
+            .filter(|c| *c > 0),
     })
 }
 

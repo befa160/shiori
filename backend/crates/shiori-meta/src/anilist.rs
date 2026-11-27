@@ -11,7 +11,7 @@ use crate::{FetchError, Http, Source, SourceId, Text, WebMetadata, add_author, j
 
 pub const ANILIST_URL: &str = "https://graphql.anilist.co";
 
-const FIELDS: &str = "id title { romaji english native } synonyms startDate { year } status \
+const FIELDS: &str = "id title { romaji english native } synonyms startDate { year } status volumes \
     description(asHtml: false) genres tags { name isMediaSpoiler } siteUrl coverImage { large } \
     staff(perPage: 10) { edges { role node { name { full } } } }";
 
@@ -80,6 +80,8 @@ struct Media {
     synonyms: Vec<String>,
     start_date: Option<Year>,
     status: Option<String>,
+    /// Nombre de tomes, rempli surtout quand la série est finie.
+    volumes: Option<u32>,
     description: Option<String>,
     #[serde(default)]
     genres: Vec<String>,
@@ -203,6 +205,7 @@ impl From<Media> for WebMetadata {
             },
             links: m.site_url.into_iter().collect(),
             cover_url: m.cover_image.and_then(|c| c.large),
+            volume_count: m.volumes.filter(|v| *v > 0),
         }
     }
 }

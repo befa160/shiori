@@ -24,6 +24,7 @@ const detail: SeriesDetail = {
   to_read: false,
   collections: [],
   resume_volume_id: null,
+  missing_volumes: null,
   page_count: 4,
   pages_read: 0,
   settings,

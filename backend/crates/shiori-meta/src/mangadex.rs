@@ -72,6 +72,8 @@ struct Attributes {
     description: HashMap<String, String>,
     year: Option<i32>,
     status: Option<String>,
+    /// Numéro du dernier tome, en texte, souvent vide.
+    last_volume: Option<String>,
     #[serde(default)]
     tags: Vec<TagEntry>,
 }
@@ -197,6 +199,10 @@ impl From<Manga> for WebMetadata {
                 .filter(|s| ["ongoing", "completed", "hiatus", "cancelled"].contains(&s.as_str())),
             links: vec![format!("https://mangadex.org/title/{}", m.id)],
             cover_url: cover,
+            volume_count: a
+                .last_volume
+                .and_then(|v| v.trim().parse().ok())
+                .filter(|v| *v > 0),
             id: m.id,
         }
     }

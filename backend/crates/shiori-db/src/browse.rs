@@ -61,6 +61,9 @@ pub struct SeriesSummary {
     pub cover_image_id: Option<String>,
     /// Tome qu'ouvre « Lire » : voir [`resume`].
     pub resume_volume_id: Option<String>,
+    /// Numéros des tomes manquants d'après le nombre officiel : voir [`missing_volumes`] ;
+    /// `None` : rien à comparer.
+    pub missing_volumes: Option<Vec<u32>>,
 }
 
 /// Où en est la lecture d'une série, calculé d'après la progression de ses tomes.
@@ -129,6 +132,8 @@ pub struct SeriesDetail {
     /// Comme dans [`SeriesSummary`].
     pub page_count: i64,
     pub pages_read: i64,
+    /// Comme dans [`SeriesSummary`] ; le nombre officiel est `metadata.volume_count`.
+    pub missing_volumes: Option<Vec<u32>>,
     pub volumes: Vec<SeriesVolume>,
 }
 
@@ -149,6 +154,38 @@ pub struct SeriesVolume {
     /// Titre du tome (ComicInfo, `index.json` ou édité) ; rempli seulement dans le détail d'une série.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+}
+
+/// Plus grand nombre officiel de tomes pris en compte : une valeur absurde d'une source ne fait
+/// pas calculer des millions de numéros.
+const MAX_VOLUMES: u32 = 2000;
+
+/// Numéros de tome de 1 à `count` qu'aucun fichier ne couvre (un fichier « T01-03 » couvre trois
+/// numéros ; un numéro décimal, un hors-série, ne compte pas). `None` si le nombre est inconnu ou
+/// si aucun fichier n'a de numéro de tome (une série rangée en chapitres ne se compare pas).
+pub(crate) fn missing_volumes<'a>(
+    count: Option<u32>,
+    volumes: impl IntoIterator<Item = &'a SeriesVolume>,
+) -> Option<Vec<u32>> {
+    let count = count?.min(MAX_VOLUMES);
+    let mut present = vec![false; count as usize + 1];
+    let mut numbered = false;
+    for v in volumes {
+        let Some(start) = v
+            .number
+            .filter(|_| matches!(v.kind, NameKind::Volume | NameKind::Unknown))
+        else {
+            continue;
+        };
+        numbered = true;
+        let end = v.number_end.unwrap_or(start).min(f64::from(count));
+        let mut n = start.ceil().max(1.0);
+        while n <= end {
+            present[n as usize] = true;
+            n += 1.0;
+        }
+    }
+    numbered.then(|| (1..=count).filter(|n| !present[*n as usize]).collect())
 }
 
 #[derive(Debug, Serialize)]
@@ -511,6 +548,10 @@ impl Db {
                         .cover_page_id
                         .or_else(|| vols.first().and_then(|r| r.volume.cover_page_id.clone())),
                     resume_volume_id: resume(vols, &progress),
+                    missing_volumes: missing_volumes(
+                        meta.volume_count,
+                        vols.iter().map(|v| &v.volume),
+                    ),
                 })
             })
             .collect::<Result<Vec<_>, Error>>()?;
@@ -670,6 +711,7 @@ impl Db {
         let resume_volume_id = resume(&all, &progress);
         let (pages_read, page_count) = pages(&all, &progress);
         let (metadata, locked) = self.series_metadata(id, viewer.language).await?;
+        let metadata_count = metadata.volume_count;
         let settings = self.series_settings(viewer, id).await?.unwrap_or_default();
         let mut titles = self.volume_titles(id).await?;
         Ok(Some(SeriesDetail {
@@ -691,6 +733,7 @@ impl Db {
             resume_volume_id,
             page_count,
             pages_read,
+            missing_volumes: missing_volumes(metadata_count, rows.iter().map(|r| &r.volume)),
             volumes: rows
                 .into_iter()
                 .map(|r| SeriesVolume {

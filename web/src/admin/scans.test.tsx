@@ -262,6 +262,7 @@ describe('lien vers un tome', () => {
           to_read: false,
           collections: [],
           resume_volume_id: 'v1',
+          missing_volumes: null,
           settings: { reading_mode: 'rtl', page_layout: 'auto', page_turn: 'reading', reading_mode_override: null, page_layout_override: null, page_turn_override: null },
           volumes: [
             { ...volume, volume_id: 'v0', number: 0 },

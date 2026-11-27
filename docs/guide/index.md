@@ -19,7 +19,7 @@ Ce guide décrit Shiori écran par écran. Pour l'installer : [démarrage rapide
 - **Grand écran** : barre latérale (Accueil, Séries, Recherche, Collections, Statistiques, vos bibliothèques, Documentation, Téléchargés, Administration, Compte), repliable. Sur téléphone, la documentation s'ouvre depuis la page **Compte**.
 - **Téléphone et tablette en portrait** : barre d'onglets en bas (Accueil, Séries, Recherche, Compte).
 - **Accueil** : « Continuer la lecture » (le tome en cours de chaque série, ou le suivant quand un tome est fini), « Nouveautés » (les tomes ajoutés aux séries que vous suivez, jusqu'à ce que vous les ouvriez ou cliquiez « Tout marquer comme vu » ; absente quand il n'y en a pas), « À lire » (les séries que vous avez mises de côté, dans l'ordre d'ajout ; une série en part dès que vous la commencez), « Collections », puis une étagère par bibliothèque.
-- **Séries** : toutes les séries en couvertures, filtrables par lecture (non lu, en cours, lu), statut de publication, bibliothèque et **tags** (plusieurs tags cochés = séries qui les ont tous), triables par titre, dernière lecture ou ajout récent.
+- **Séries** : toutes les séries en couvertures, filtrables par lecture (non lu, en cours, lu), statut de publication (dont les séries **incomplètes**, voir [Métadonnées](./metadata.md#series-incompletes)), bibliothèque et **tags** (plusieurs tags cochés = séries qui les ont tous), triables par titre, dernière lecture ou ajout récent.
 - **Recherche** : par titre, titre alternatif, auteur ou tag, sans tenir compte des accents ni des majuscules.
 ![Page Séries : recherche, filtres (lecture, publication, tags, bibliothèque), tri et couvertures](/screens/fr/ecran_series.jpg)
 

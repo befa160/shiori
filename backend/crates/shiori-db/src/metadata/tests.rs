@@ -732,3 +732,42 @@ fn the_folder_name_beats_the_web_titles() {
     );
     assert_eq!(meta.title, None);
 }
+
+#[test]
+fn the_official_volume_count_comes_from_the_files_then_the_sources() {
+    let web = |count: Option<u32>| WebMetadata {
+        volume_count: count,
+        ..WebMetadata::default()
+    };
+    // Le plus grand `<Count>` des fichiers : celui du T01 date d'avant les tomes suivants.
+    let count = |n: u32| {
+        let (source, mut meta) = comic("One Piece", "r", "1997");
+        meta.volume_count = Some(n);
+        (source, meta)
+    };
+    assert_eq!(
+        from_locals("x", &[count(3), count(12), count(10)]).volume_count,
+        Some(12)
+    );
+    // Le fichier passe devant ; sans lui, la première fiche qui le connaît.
+    let local = from_locals("x", &[count(12)]);
+    let meta = with_web(local, "x", &[web(None), web(Some(15))], "fr", false);
+    assert_eq!(meta.volume_count, Some(12));
+    let meta = with_web(
+        SeriesMetadata::default(),
+        "x",
+        &[web(None), web(Some(15)), web(Some(9))],
+        "fr",
+        false,
+    );
+    assert_eq!(meta.volume_count, Some(15));
+    // Champ éditable comme les autres.
+    let mut edited_meta = Edited::new();
+    apply(
+        &mut edited_meta,
+        edited(json!({ "volume_count": 20 })),
+        SERIES_FIELDS,
+    )
+    .unwrap();
+    assert_eq!(overlay(meta, &edited_meta).unwrap().volume_count, Some(20));
+}

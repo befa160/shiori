@@ -17,6 +17,18 @@ import { STATUS_FILTERS, tagKey } from '@/library/filters'
 // shortcut: replié d'après la longueur du texte, pas sa hauteur affichée ; mesurer le débordement si un résumé court sur un écran étroit se retrouve coupé sans bouton.
 const LONG_SUMMARY = 240
 
+/** « 2, 6, 8–9 » : les numéros qui se suivent en plages. */
+function ranges(numbers: number[]): string {
+  const out: string[] = []
+  for (let i = 0; i < numbers.length; i++) {
+    let j = i
+    while (j + 1 < numbers.length && numbers[j + 1] === numbers[j] + 1) j++
+    out.push(j > i ? `${numbers[i]}–${numbers[j]}` : `${numbers[i]}`)
+    i = j
+  }
+  return out.join(', ')
+}
+
 /** Ce que l'on sait de la série : auteurs, repères, résumé repliable, genres et tags, autres titres, liens. */
 export function SeriesAbout({ series }: { series: SeriesDetail }) {
   const { t, i18n } = useTranslation()
@@ -26,8 +38,13 @@ export function SeriesAbout({ series }: { series: SeriesDetail }) {
     m.year?.toString(),
     m.publisher,
     m.publication_status && t(`browse.status.${m.publication_status}`),
+    // Tomes présents sur le nombre officiel, quand ils se comparent (1.4e).
+    m.volume_count !== null &&
+      series.missing_volumes !== null &&
+      t('series.volumesOf', { count: m.volume_count, have: m.volume_count - series.missing_volumes.length }),
     m.age_rating,
   ].filter(Boolean)
+  const missing = series.missing_volumes ?? []
   // Une puce par tag (« Comedy » et « Comédie » n'en font qu'une), dans la langue de l'interface.
   const chips = [...new Map([...m.genres, ...m.tags].map((tag) => [tagKey(tag), canonicalTag(tag)])).values()]
   const links = webLinks(m.links)
@@ -37,6 +54,7 @@ export function SeriesAbout({ series }: { series: SeriesDetail }) {
     <div className="max-w-prose space-y-3">
       {m.authors.length > 0 && <p className="text-muted-foreground">{m.authors.map((a) => a.name).join(', ')}</p>}
       {facts.length > 0 && <p className="text-sm text-muted-foreground">{facts.join(' · ')}</p>}
+      {missing.length > 0 && <p className="text-sm text-muted-foreground">{t('series.missingVolumes', { list: ranges(missing), count: missing.length })}</p>}
       {m.summary && (
         <div>
           <p id={summaryId} className={long && !open ? 'line-clamp-4 whitespace-pre-line' : 'whitespace-pre-line'}>
@@ -101,6 +119,7 @@ function formOf(m: SeriesMetadata): Form {
     genres: m.genres.join(', '),
     tags: m.tags.join(', '),
     year: m.year?.toString() ?? '',
+    volume_count: m.volume_count?.toString() ?? '',
     publisher: m.publisher ?? '',
     age_rating: m.age_rating ?? '',
     publication_status: m.publication_status ?? UNKNOWN,
@@ -120,10 +139,11 @@ function valueOf(field: keyof Form, text: string, authors: Author[]): SeriesPatc
     case 'authors':
       // Un nom déjà connu garde ses rôles (scénario, dessin) ; un nouveau nom n'en a pas.
       return lines(text).map((name) => authors.find((a) => a.name === name) ?? { name, story: false, art: false })
-    case 'year': {
+    case 'year':
+    case 'volume_count': {
       if (text.trim() === '') return null
-      const year = Number(text)
-      return Number.isInteger(year) && year >= 1 && year <= 9999 ? year : undefined
+      const n = Number(text)
+      return Number.isInteger(n) && n >= 1 && n <= 9999 ? n : undefined
     }
     case 'publication_status':
       return text === UNKNOWN ? null : (text as PublicationStatus)
@@ -170,6 +190,7 @@ export function EditSeriesDialog({ series, onDone }: { series: SeriesDetail; onD
   const initialMain = stored !== null && linked.includes(stored) ? stored : 'auto'
   const [main, setMain] = useState<SourceId | 'auto'>(initialMain)
   const yearError = valueOf('year', form.year, []) === undefined
+  const countError = valueOf('volume_count', form.volume_count, []) === undefined
   const set = (field: keyof Form) => (value: string) => setForm((f) => ({ ...f, [field]: value }))
 
   const restore = (field: keyof Form) =>
@@ -187,7 +208,7 @@ export function EditSeriesDialog({ series, onDone }: { series: SeriesDetail; onD
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
-    if (yearError) return
+    if (yearError || countError) return
     const patch: Record<string, unknown> = {}
     for (const field of Object.keys(form) as (keyof Form)[]) {
       if (form[field] !== initial[field]) patch[field] = valueOf(field, form[field], series.metadata.authors)
@@ -264,6 +285,12 @@ export function EditSeriesDialog({ series, onDone }: { series: SeriesDetail; onD
             undefined,
             yearError ? t('series.yearInvalid') : undefined,
           )}
+          {field(
+            'volume_count',
+            (props) => <Input {...props} inputMode="numeric" value={form.volume_count} onChange={(e) => set('volume_count')(e.target.value)} />,
+            t('series.volumeCountHelp'),
+            countError ? t('series.volumeCountInvalid') : undefined,
+          )}
           {field('publisher', text('publisher'))}
           {field('age_rating', text('age_rating'))}
           {field('publication_status', (props) => (
@@ -314,7 +341,7 @@ export function EditSeriesDialog({ series, onDone }: { series: SeriesDetail; onD
           <Button type="button" variant="ghost" onClick={onDone}>
             {t('series.cancel')}
           </Button>
-          <Button type="submit" disabled={save.isPending || yearError}>
+          <Button type="submit" disabled={save.isPending || yearError || countError}>
             {t('series.save')}
           </Button>
         </div>

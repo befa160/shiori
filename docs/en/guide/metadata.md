@@ -35,6 +35,15 @@ They are **off by default** (**Administration → Web metadata**). Only the seri
 
 ![Identify window: linked sources (AniList, Wikipedia) and possible entries from a MangaDex search](/screens/en/ecran_identifier.jpg)
 
+## Incomplete series
+
+Shiori compares a series' **official number of volumes** with the volumes you have. That number comes, in the usual order, from your files (`<Count>` in a `ComicInfo.xml`, read when the volume is scanned), then from the web sources that give it (AniList, MangaDex, MangaUpdates; neither Wikipedia nor Comic Vine); it can be corrected in **Edit** ("Number of volumes").
+
+- The series page shows the volumes present out of the total ("38 / 43 volumes") and the missing numbers, as ranges ("Missing volumes: 2, 6–8, 43"). A "T03-05" file counts as three volumes; a special (decimal number) or a chapter does not replace a volume.
+- A series stored in chapters, or whose official count is unknown, is not compared.
+- A **completed** series with missing volumes is **incomplete**: the "Incomplete (missing volumes)" filter of the series list shows them.
+- An entry linked before 1.4 does not have the number of volumes yet: "Refresh" (Identify window) fetches it.
+
 ## Cover
 
 A series' cover is the first page of its first volume, or the one you choose: any page, or a source's cover (kept by the server). Without a cover, Shiori draws one with the title and the author.
