@@ -1,4 +1,4 @@
-//! Clients AniList et MangaDex contre un faux serveur local qui rejoue des réponses de la forme
+//! Clients AniList, MangaDex, Wikipédia et MangaUpdates contre un faux serveur local qui rejoue des réponses de la forme
 //! des vraies (relevées le 2026-11-13, textes remplacés) : aucun appel réseau dans les tests.
 
 use std::io::{BufRead, BufReader, Read, Write};
@@ -7,7 +7,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use shiori_meta::{
-    Anilist, Author, FetchError, Mangadex, Source, SourceId, Text, WebMetadata, Wikipedia,
+    Anilist, Author, FetchError, Mangadex, Mangaupdates, Source, SourceId, Text, WebMetadata,
+    Wikipedia,
 };
 
 /// Faux serveur : une réponse par connexion, dans l'ordre ; garde chaque requête reçue.
@@ -454,4 +455,81 @@ fn a_wikipedia_article_in_one_language_only_still_links() {
     let server = mock(vec![(200, "", linked.into()), (200, "", gone.into())]);
     let data = Wikipedia::new(&server.url).fetch("fr:Akira").unwrap();
     assert_eq!((data.summaries.len(), data.links.len()), (1, 0));
+}
+
+#[test]
+fn mangaupdates_search_and_fetch_are_normalized() {
+    let server = mock(vec![
+        (200, "", fixture("mangaupdates_search.json")),
+        (200, "", fixture("mangaupdates_series.json")),
+        (404, "", r#"{"status":"exception","reason":"x"}"#.into()),
+    ]);
+    let source = Mangaupdates::new(&server.url);
+    let found = source.search("cagaster", false, "fr").unwrap();
+    assert_eq!(found.len(), 2);
+    assert_eq!(
+        found[0],
+        WebMetadata {
+            id: "39150200246".into(),
+            // Le titre qui a répondu à la recherche compte pour le rapprochement.
+            titles: vec![text(None, "Mushikago no Cagaster"), text(None, "Cagaster")],
+            summaries: vec![text(
+                Some("en"),
+                "Une peste & des insectes.\nDeux survivants.\n\n(Source: exemple)"
+            )],
+            authors: vec![],
+            genres: vec!["Action".into(), "Seinen".into()],
+            tags: vec![],
+            year: Some(2015),
+            status: None,
+            links: vec!["https://www.mangaupdates.com/series/hzh0nue/mushikago-no-cagaster".into()],
+            cover_url: Some("https://cdn.mangaupdates.com/image/i407606.jpg".into()),
+        }
+    );
+    // Résumé vide, année vide, pas d'image.
+    assert_eq!(
+        (
+            found[1].summaries.len(),
+            found[1].year,
+            found[1].cover_url.as_deref()
+        ),
+        (0, None, None)
+    );
+    let request = server.requests.lock().unwrap()[0].clone();
+    assert!(request.starts_with("POST /series/search "), "{request}");
+    assert!(
+        request.contains(r#""exclude_genre":["Adult","Hentai","Smut"]"#),
+        "{request}"
+    );
+    assert_discreet(&request, r#""search":"cagaster""#);
+
+    let series = source.fetch("39150200246").unwrap();
+    assert_eq!(series.titles.len(), 4);
+    assert_eq!(series.status.as_deref(), Some("completed"));
+    assert_eq!(
+        series.authors,
+        [
+            author("HASHIMOTO Kachou", true, true),
+            author("Dessinateur B", false, true)
+        ]
+    );
+    assert!(server.requests.lock().unwrap()[1].starts_with("GET /series/39150200246 "));
+    assert_eq!(source.fetch("1"), Err(FetchError::NotFound));
+    // Rien d'autre qu'un nombre ne part dans le chemin.
+    assert_eq!(source.fetch("../admin"), Err(FetchError::NotFound));
+    assert_eq!(source.fetch(""), Err(FetchError::NotFound));
+    assert_eq!(server.requests.lock().unwrap().len(), 3);
+    assert_eq!(source.id(), SourceId::Mangaupdates);
+}
+
+#[test]
+fn mangaupdates_adult_entries_only_when_allowed_and_covers_from_its_cdn() {
+    let server = mock(vec![(200, "", r#"{"results":[]}"#.into())]);
+    let source = Mangaupdates::new(&server.url);
+    source.search("x", true, "fr").unwrap();
+    assert!(!server.requests.lock().unwrap()[0].contains("exclude_genre"));
+    assert!(matches!(
+        source.image("https://evil.example/i.jpg"),
+        Err(FetchError::BadResponse(_))
+    ));
 }

@@ -28,7 +28,7 @@ flowchart LR
   DB[("SQLite<br/>shiori.db")]
   API["API JSON<br/>(axum)"]
   R["Rendu AVIF / JPEG<br/>+ cache disque"]
-  M["AniList / MangaDex / Wikipédia<br/>(si autorisés)"]
+  M["AniList / MangaDex / Wikipédia / MangaUpdates<br/>(si autorisés)"]
   UI["Application web<br/>(React, PWA)"]
   F -- événements --> W --> J
   F -- lecture, CRC --> J --> DB
@@ -55,7 +55,7 @@ backend/                   workspace cargo (toolchain stable, rust-toolchain.tom
                            ComicInfo / index.json / Info des PDF (sans base ni async)
   crates/shiori-db/        base SQLite (sqlx) : scans, bibliothèques, séries, progression, comptes,
                            réglages, métadonnées et leur fusion, santé ; migrations dans migrations/
-  crates/shiori-meta/      clients AniList, MangaDex et Wikipédia (ureq + rustls), débit limité
+  crates/shiori-meta/      clients AniList, MangaDex, Wikipédia et MangaUpdates (ureq + rustls), débit limité
   crates/shiori-testkit/   fixtures générées par du code (archives, images, cas tordus)
   crates/shiori/           le binaire : CLI, serveur axum, job de scan, surveillance des dossiers,
                            rendu des images, cache disque, métadonnées web, front embarqué

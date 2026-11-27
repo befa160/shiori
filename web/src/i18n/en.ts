@@ -60,7 +60,7 @@ export const en: Translations = {
     sourcesReset: 'Back to the default order',
     sourceUp: 'Move {{source}} up',
     sourceDown: 'Move {{source}} down',
-    sourceNames: { anilist: 'AniList', mangadex: 'MangaDex', wikipedia: 'Wikipedia' },
+    sourceNames: { anilist: 'AniList', mangadex: 'MangaDex', wikipedia: 'Wikipedia', mangaupdates: 'MangaUpdates' },
     identify: 'Identify series',
     identifyHelp: 'An identification also runs by itself at the end of each scan.',
     identifyStarted: 'Identification started',

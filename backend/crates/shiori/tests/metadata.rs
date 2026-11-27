@@ -249,10 +249,10 @@ async fn nothing_leaves_while_the_network_is_off() {
     );
     let (_, overview) = call(&f.app, "GET", "/api/admin/metadata", None).await;
     assert_eq!(overview["online"], false);
-    // Français par défaut : MangaDex d'abord, Wikipédia en repli.
+    // Français par défaut : MangaDex d'abord, Wikipédia en repli, MangaUpdates arrivée après (Q81).
     assert_eq!(
         overview["sources"],
-        json!(["mangadex", "anilist", "wikipedia"])
+        json!(["mangadex", "anilist", "wikipedia", "mangaupdates"])
     );
     assert!(f.anilist.calls().is_empty(), "{:?}", f.anilist.calls());
 
@@ -500,7 +500,7 @@ async fn errors_are_explicit_and_a_rate_limit_stops_the_identification() {
     let (_, overview) = call(&f.app, "GET", "/api/admin/metadata", None).await;
     assert_eq!(
         overview["sources"],
-        json!(["mangadex", "anilist", "wikipedia"])
+        json!(["mangadex", "anilist", "wikipedia", "mangaupdates"])
     );
     assert_eq!(
         overview["identify"]["total"], 1,
@@ -734,5 +734,38 @@ async fn an_automatic_wikipedia_match_is_read_in_full() {
             Some("Résumé de Wikipédia."),
             Some("wikipedia")
         )
+    );
+}
+
+/// MangaUpdates (1.4c) : ses résultats de recherche n'ont ni auteurs ni statut, la fiche
+/// rapprochée est relue entière, puis gardée en base sous son nom de source.
+#[tokio::test]
+async fn an_automatic_mangaupdates_match_is_read_in_full() {
+    let f = fixture_with(Duration::ZERO, SourceId::Mangaupdates).await;
+    let body = json!({ "metadata_online": true, "metadata_sources": ["mangaupdates"] });
+    assert_eq!(
+        call(&f.app, "PUT", "/api/settings", Some(body)).await.0,
+        StatusCode::OK
+    );
+    let mu = &f.anilist;
+    mu.search_gives(Ok(vec![]));
+    mu.search_gives(Ok(vec![fiche("123", "Gigant")]));
+    mu.fetch_gives(Ok(WebMetadata {
+        status: Some("completed".into()),
+        ..fiche("123", "Gigant")
+    }));
+    scan(&f).await;
+    assert_eq!(
+        mu.calls(),
+        ["search Blue Lock", "search Gigant", "fetch 123"]
+    );
+    let gigant = series_id(&f, "Gigant").await;
+    let (_, detail) = call(&f.app, "GET", &format!("/api/series/{gigant}"), None).await;
+    assert_eq!(
+        (
+            detail["metadata"]["publication_status"].as_str(),
+            detail["sources"][0]["source"].as_str()
+        ),
+        (Some("completed"), Some("mangaupdates"))
     );
 }

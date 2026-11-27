@@ -12,8 +12,8 @@ use std::sync::{Arc, Mutex, RwLock};
 use serde::Serialize;
 use shiori_db::{Db, Language, MatchedBy, Outcome, Settings};
 use shiori_meta::{
-    ANILIST_URL, Anilist, FetchError, MANGADEX_URL, Mangadex, Source, SourceId, WIKIPEDIA_URL,
-    WebMetadata, Wikipedia, auto_match,
+    ANILIST_URL, Anilist, FetchError, MANGADEX_URL, MANGAUPDATES_URL, Mangadex, Mangaupdates,
+    Source, SourceId, WIKIPEDIA_URL, WebMetadata, Wikipedia, auto_match,
 };
 use tokio::task::JoinHandle;
 
@@ -61,6 +61,7 @@ pub fn web_sources() -> Vec<Arc<dyn Source>> {
         Arc::new(Anilist::new(ANILIST_URL)),
         Arc::new(Mangadex::new(MANGADEX_URL)),
         Arc::new(Wikipedia::new(WIKIPEDIA_URL)),
+        Arc::new(Mangaupdates::new(MANGAUPDATES_URL)),
     ]
 }
 
@@ -269,9 +270,14 @@ impl Metadata {
                     let found = client.search(&names[0], adult, lang)?;
                     let names: Vec<&str> = names.iter().map(String::as_str).collect();
                     Ok(match auto_match(&names, &found) {
-                        // Un résultat de recherche Wikipédia n'a que sa langue : la fiche liée est
-                        // relue entière (l'autre langue par ses liens interlangues).
-                        Some(i) if client.id() == SourceId::Wikipedia => {
+                        // Un résultat de recherche Wikipédia n'a que sa langue, un résultat
+                        // MangaUpdates ni auteurs ni statut : la fiche liée est relue entière.
+                        Some(i)
+                            if matches!(
+                                client.id(),
+                                SourceId::Wikipedia | SourceId::Mangaupdates
+                            ) =>
+                        {
                             Ok(client.fetch(&found[i].id)?)
                         }
                         Some(i) => Ok(found[i].clone()),

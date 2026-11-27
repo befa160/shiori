@@ -336,11 +336,21 @@ async fn an_edited_field_beats_the_web_and_settings_round_trip() {
     assert!(!settings.metadata_online, "désactivé par défaut");
     assert_eq!(
         settings.source_order(),
-        [SourceId::Mangadex, SourceId::Anilist, SourceId::Wikipedia]
+        [
+            SourceId::Mangadex,
+            SourceId::Anilist,
+            SourceId::Wikipedia,
+            SourceId::Mangaupdates
+        ]
     );
     assert_eq!(
         settings.order_for(Language::En),
-        [SourceId::Anilist, SourceId::Mangadex, SourceId::Wikipedia]
+        [
+            SourceId::Anilist,
+            SourceId::Mangadex,
+            SourceId::Wikipedia,
+            SourceId::Mangaupdates
+        ]
     );
     assert!(db.set_metadata_online(true).await.unwrap().metadata_online);
     assert!(

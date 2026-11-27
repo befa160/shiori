@@ -184,6 +184,17 @@ describe('identifier une série', () => {
     expect(d.getByText(/textes sous licence CC BY-SA/)).toBeInTheDocument()
     expect(d.getByRole('link', { name: 'Wikipédia' })).toHaveAttribute('href', 'https://www.wikipedia.org')
   })
+
+  it('montre une source MangaUpdates : lien vers sa fiche (identifiant en base 36), crédit', async () => {
+    serve({ ...base, sources: [state({ source: 'mangaupdates', external_id: '39150200246', matched_by: 'user' })] })
+    renderAt('/series/7')
+    await userEvent.click(await main().findByRole('button', { name: 'Identifier' }))
+    const d = await dialog()
+    const item = within(within(d.getByRole('region', { name: 'Sources liées' })).getByRole('listitem'))
+    expect(item.getByRole('link', { name: 'Voir la fiche' })).toHaveAttribute('href', 'https://www.mangaupdates.com/series/hzh0nue')
+    expect(item.getByRole('button', { name: 'Utiliser sa couverture' })).toBeInTheDocument()
+    expect(d.getByRole('link', { name: 'MangaUpdates' })).toHaveAttribute('href', 'https://www.mangaupdates.com')
+  })
 })
 
 describe('source principale', () => {

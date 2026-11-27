@@ -1,6 +1,6 @@
 [package]
 name = "shiori-meta"
-description = "Métadonnées web de Shiori : clients AniList et MangaDex, normalisation, débit limité"
+description = "Métadonnées web de Shiori : clients AniList, MangaDex, Wikipédia et MangaUpdates, normalisation, débit limité"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

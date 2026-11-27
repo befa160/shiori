@@ -16,6 +16,7 @@ const CREDITS: [SourceId, string][] = [
   ['anilist', 'https://anilist.co'],
   ['mangadex', 'https://mangadex.org'],
   ['wikipedia', 'https://www.wikipedia.org'],
+  ['mangaupdates', 'https://www.mangaupdates.com'],
 ]
 
 /** Les sources créditées, comme leurs conditions le demandent ; Wikipédia avec la licence de ses
