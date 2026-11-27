@@ -8,6 +8,7 @@ import type { Library, SeriesSummary } from '@/api/types'
 import { useIsAdmin } from '@/auth/session'
 import { QueryState } from '@/browse/Parts'
 import { Button } from '@/components/ui/button'
+import { CollectionsShelf } from '@/collections/Collections'
 import { toastFailure } from '@/i18n/errors'
 import { ContinueCard, CoverSkeletons, NewCard, SeriesCard, Shelf } from './Covers'
 
@@ -15,7 +16,7 @@ import { ContinueCard, CoverSkeletons, NewCard, SeriesCard, Shelf } from './Cove
 const SHELF_SIZE = 20
 
 /** Accueil : « Continuer la lecture » (toujours en premier), nouveautés des séries suivies,
- * « À lire », puis les derniers ajouts de chaque bibliothèque. */
+ * « À lire », collections, puis les derniers ajouts de chaque bibliothèque. */
 export function HomePage() {
   const { t } = useTranslation()
   const libraries = useLibraries()
@@ -47,6 +48,7 @@ export function HomePage() {
       )}
       <NewShelf />
       <ToReadShelf series={series.data ?? []} />
+      <CollectionsShelf all={series.data ?? []} />
       <QueryState
         query={libraries}
         isEmpty={(list) => list.length === 0}

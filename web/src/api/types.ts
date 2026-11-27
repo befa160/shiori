@@ -211,6 +211,15 @@ export interface ReadingStats {
 }
 
 /** Une entrée de « Continuer la lecture » (`GET /api/continue`), une par série. */
+/** Collection partagée (1.3) : `series_ids` = les séries visibles du compte. */
+export interface Collection {
+  id: number
+  name: string
+  series_ids: number[]
+}
+
+export type CollectionRef = Pick<Collection, 'id' | 'name'>
+
 /** Tome nouveau d'une série suivie (`/api/me/new`), jamais ouvert par le compte. */
 export interface NewVolume {
   series_id: number
@@ -294,6 +303,8 @@ export interface SeriesDetail {
   followed: boolean
   /** Dans « À lire » pour le compte. */
   to_read: boolean
+  /** Collections partagées qui la contiennent, par nom. */
+  collections: CollectionRef[]
   /** Tome qu'ouvre « Lire » (même règle que dans `SeriesSummary`). */
   resume_volume_id: string | null
   /** Comme dans `SeriesSummary`. */

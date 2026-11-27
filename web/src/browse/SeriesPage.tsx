@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Bell, BellRing, BookmarkCheck, BookmarkPlus, Download, EllipsisVertical, Pencil, Play, ScanSearch, type LucideIcon } from 'lucide-react'
+import { Bell, BellRing, BookmarkCheck, BookmarkPlus, Download, Layers, EllipsisVertical, Pencil, Play, ScanSearch, type LucideIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation } from 'react-router'
@@ -23,6 +23,7 @@ import { LISTS } from './series'
 import { EditSeriesDialog, SeriesAbout } from './SeriesMetadata'
 import { EditVolumeDialog } from './EditVolumeDialog'
 import { SeriesBookmarks } from './SeriesBookmarks'
+import { SeriesCollectionsDialog } from '@/collections/Collections'
 
 export function SeriesPage({ id }: { id: number }) {
   const { t } = useTranslation()
@@ -88,6 +89,7 @@ function SeriesHeader({ series }: { series: SeriesDetail }) {
   const authors = series.metadata.authors.map((a) => a.name).join(', ')
   const [editing, setEditing] = useState(false)
   const [identifying, setIdentifying] = useState(false)
+  const [collecting, setCollecting] = useState(false)
   // Fiche commune à tous les comptes : seul l'administrateur la modifie (Q50).
   const admin = useIsAdmin()
   // « Identifier » n'a de sens que si le réseau est autorisé (Administration).
@@ -173,12 +175,34 @@ function SeriesHeader({ series }: { series: SeriesDetail }) {
                     : 'unread'
               }
               volumes={total}
+              extra={
+                admin && <DropdownMenuItem onSelect={() => setCollecting(true)}>{t('collections.manage')}</DropdownMenuItem>
+              }
             />
           )}
         </div>
+        {series.collections.length > 0 && (
+          <ul aria-label={t('collections.title')} className="flex flex-wrap gap-x-2 gap-y-3">
+            {series.collections.map((c) => (
+              <li key={c.id} className="max-w-full">
+                {/* Comme les puces des tags : 32 px, zone tactile de 44 px. */}
+                <Link
+                  to={`/collections/${c.id}`}
+                  className="relative flex h-8 max-w-full items-center gap-1.5 rounded-full bg-card px-3 text-sm after:absolute after:inset-x-0 after:-inset-y-1.5 hover:bg-accent"
+                >
+                  <Layers aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
+                  <span className="truncate">{c.name}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
         <SeriesAbout series={series} />
         <Dialog open={editing} onOpenChange={setEditing}>
           {editing && <EditSeriesDialog series={series} onDone={() => setEditing(false)} />}
+        </Dialog>
+        <Dialog open={collecting} onOpenChange={setCollecting}>
+          {collecting && <SeriesCollectionsDialog series={series} />}
         </Dialog>
         <Dialog open={identifying} onOpenChange={setIdentifying}>
           {identifying && <IdentifyDialog series={series} />}

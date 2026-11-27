@@ -28,6 +28,7 @@ export function mockApi(answers: Record<string, (init?: RequestInit) => Response
     '/api/me': () => json(me(ADMIN)),
     '/api/me/tokens': () => json([]),
     '/api/me/new': () => json([]),
+    '/api/collections': () => json([]),
     ...answers,
   }
   const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {

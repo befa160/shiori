@@ -1,3 +1,4 @@
+import type { TFunction } from 'i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Copy, Loader2, Plus } from 'lucide-react'
 import { type FormEvent, useId, useState } from 'react'
@@ -76,7 +77,7 @@ export function AccountsPage() {
   )
 }
 
-function summary(account: Account, libraries: Library[], t: ReturnType<typeof useTranslation>['t']): string {
+function summary(account: Account, libraries: Library[], t: TFunction): string {
   const parts = [t(`account.roles.${account.role}`)]
   if (account.role === 'admin') parts.push(t('accounts.allLibraries'))
   else if (libraries.length > 0 && libraries.every((l) => account.libraries.includes(l.id))) parts.push(t('accounts.allLibraries'))
